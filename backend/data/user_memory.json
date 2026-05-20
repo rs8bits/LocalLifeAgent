@@ -1,0 +1,130 @@
+[
+  {
+    "user_id": "user_001",
+    "name": "张先生",
+    "preferences": {
+      "home_location": "朝阳大悦城附近",
+      "home_lat": 39.9219,
+      "home_lng": 116.5096,
+      "child_age": 5,
+      "child_name": "小宝",
+      "spouse_diet": "减脂",
+      "max_distance_km": 10,
+      "max_queue_minutes": 30,
+      "preferred_tags": [
+        "亲子",
+        "健康",
+        "室内"
+      ],
+      "cuisine_likes": [
+        "健康轻食",
+        "日料",
+        "粤菜"
+      ],
+      "cuisine_dislikes": [
+        "重油",
+        "重辣"
+      ],
+      "default_transport": "打车",
+      "budget_per_person": 180,
+      "avoid_waiting_without_ticket": true,
+      "privacy_level": "mock_only"
+    },
+    "history": [
+      {
+        "action": "visited",
+        "poi_id": "act_001",
+        "timestamp": "2026-05-10",
+        "rating": 5
+      },
+      {
+        "action": "booked",
+        "poi_id": "rest_007",
+        "timestamp": "2026-05-12",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "user_id": "user_002",
+    "name": "李女士",
+    "preferences": {
+      "home_location": "三里屯附近",
+      "home_lat": 39.9337,
+      "home_lng": 116.4551,
+      "child_age": null,
+      "spouse_diet": null,
+      "max_distance_km": 8,
+      "max_queue_minutes": 45,
+      "preferred_tags": [
+        "拍照",
+        "约会",
+        "美食",
+        "艺术"
+      ],
+      "cuisine_likes": [
+        "日料",
+        "云南菜",
+        "咖啡甜品"
+      ],
+      "cuisine_dislikes": [],
+      "default_transport": "打车",
+      "budget_per_person": 260,
+      "avoid_waiting_without_ticket": true,
+      "privacy_level": "mock_only"
+    },
+    "history": [
+      {
+        "action": "visited",
+        "poi_id": "act_003",
+        "timestamp": "2026-05-08",
+        "rating": 5
+      },
+      {
+        "action": "booked",
+        "poi_id": "rest_005",
+        "timestamp": "2026-05-15",
+        "rating": 4
+      }
+    ]
+  },
+  {
+    "user_id": "user_003",
+    "name": "王同学",
+    "preferences": {
+      "home_location": "五道口附近",
+      "home_lat": 39.9932,
+      "home_lng": 116.3379,
+      "child_age": null,
+      "spouse_diet": null,
+      "max_distance_km": 5,
+      "max_queue_minutes": 20,
+      "preferred_tags": [
+        "桌游",
+        "聚会",
+        "社交",
+        "性价比"
+      ],
+      "cuisine_likes": [
+        "火锅",
+        "烤肉",
+        "快餐"
+      ],
+      "cuisine_dislikes": [
+        "素食"
+      ],
+      "default_transport": "地铁",
+      "budget_per_person": 120,
+      "avoid_waiting_without_ticket": true,
+      "privacy_level": "mock_only"
+    },
+    "history": [
+      {
+        "action": "visited",
+        "poi_id": "act_006",
+        "timestamp": "2026-05-18",
+        "rating": 5
+      }
+    ]
+  }
+]

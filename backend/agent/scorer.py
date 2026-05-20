@@ -1,0 +1,320 @@
+"""评分器 - 对候选方案进行可解释评分"""
+
+from typing import Any
+
+from backend.agent.schemas import Intent
+
+
+def score_plan(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
+    """对单个方案评分，返回带分值的方案"""
+    if intent.scene == "family":
+        return _score_family(plan, intent)
+    else:
+        return _score_friends(plan, intent)
+
+
+def _score_family(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
+    """家庭场景评分"""
+    activity = plan.get("activity") or {}
+    restaurant = plan.get("restaurant") or {}
+
+    reasons: list[str] = []
+
+    # 1. 儿童适配 (0.30)
+    child_fit = _score_child_fit(activity, intent, reasons)
+
+    # 2. 距离 (0.20)
+    distance = _score_distance(activity, restaurant, intent, reasons)
+
+    # 3. 餐厅健康 (0.20)
+    health = _score_restaurant_health(restaurant, intent, reasons)
+
+    # 4. 排队 (0.15)
+    queue = _score_queue(activity, restaurant, intent, reasons)
+
+    # 5. 时间适配 (0.10)
+    time_fit = _score_time_fit(activity, restaurant, reasons)
+
+    # 6. 价格 (0.05)
+    price = _score_price(activity, restaurant, intent, reasons)
+
+    score = round(
+        child_fit * 0.30
+        + distance * 0.20
+        + health * 0.20
+        + queue * 0.15
+        + time_fit * 0.10
+        + price * 0.05,
+        3,
+    )
+
+    plan["score"] = score
+    plan["score_reasons"] = reasons
+    return plan
+
+
+def _score_friends(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
+    """朋友场景评分"""
+    activity = plan.get("activity") or {}
+    restaurant = plan.get("restaurant") or {}
+
+    reasons: list[str] = []
+
+    # 1. 社交属性 (0.25)
+    social = _score_social(activity, restaurant, reasons)
+
+    # 2. 拍照 (0.20)
+    photo = _score_photo(activity, restaurant, intent, reasons)
+
+    # 3. 美食 (0.20)
+    food = _score_food(restaurant, reasons)
+
+    # 4. 距离 (0.15)
+    distance = _score_distance(activity, restaurant, intent, reasons)
+
+    # 5. 时间适配 (0.10)
+    time_fit = _score_time_fit(activity, restaurant, reasons)
+
+    # 6. 价格 (0.10)
+    price = _score_price(activity, restaurant, intent, reasons)
+
+    score = round(
+        social * 0.25
+        + photo * 0.20
+        + food * 0.20
+        + distance * 0.15
+        + time_fit * 0.10
+        + price * 0.10,
+        3,
+    )
+
+    plan["score"] = score
+    plan["score_reasons"] = reasons
+    return plan
+
+
+# ── 各维度评分函数 (0.0 ~ 1.0) ─────────────────────────────
+
+def _score_child_fit(activity: dict, intent: Intent, reasons: list[str]) -> float:
+    if not activity:
+        reasons.append("无活动信息，儿童适配默认0.5")
+        return 0.5
+
+    child_friendly = activity.get("child_friendly", False)
+    child_age = intent.child_age
+
+    if not child_age:
+        reasons.append("未提供儿童年龄，儿童适配默认0.6")
+        return 0.6 if child_friendly else 0.3
+
+    age_min = activity.get("suitable_age_min", 0)
+    age_max = activity.get("suitable_age_max", 99)
+
+    if age_min <= child_age <= age_max and child_friendly:
+        reasons.append(f"活动适合{child_age}岁儿童，且亲子友好 (+0.30)")
+        return 1.0
+    elif age_min <= child_age <= age_max:
+        reasons.append(f"活动适合{child_age}岁儿童 (+0.23)")
+        return 0.75
+    elif child_friendly:
+        reasons.append("活动标注为亲子友好 (+0.15)")
+        return 0.5
+    else:
+        reasons.append(f"活动不适合{child_age}岁儿童 (+0.0)")
+        return 0.0
+
+
+def _score_distance(
+    activity: dict, restaurant: dict, intent: Intent, reasons: list[str]
+) -> float:
+    act_dist = activity.get("distance_km", 0)
+    rest_dist = restaurant.get("distance_km", 0)
+    max_dist = max(act_dist, rest_dist)
+    radius = intent.radius_km
+
+    if max_dist <= radius:
+        reasons.append(f"距离{max_dist}km在范围内 (+0.20)")
+        return 1.0
+    elif max_dist <= radius * 1.5:
+        reasons.append(f"距离{max_dist}km稍超范围 (+0.12)")
+        return 0.6
+    elif max_dist <= radius * 2:
+        reasons.append(f"距离{max_dist}km较远 (+0.06)")
+        return 0.3
+    else:
+        reasons.append(f"距离{max_dist}km过远 (+0.0)")
+        return 0.1
+
+
+def _score_restaurant_health(
+    restaurant: dict, intent: Intent, reasons: list[str]
+) -> float:
+    if not restaurant:
+        reasons.append("无餐厅信息，健康分默认0.5")
+        return 0.5
+
+    if not intent.needs_low_calorie:
+        reasons.append("无特殊饮食需求 (+0.20)")
+        return 1.0
+
+    score = 0.0
+    if restaurant.get("low_calorie_options"):
+        score += 0.5
+        reasons.append("餐厅提供低卡选项 (+0.10)")
+    tags = restaurant.get("tags", [])
+    if any(t in tags for t in ["健康", "轻食", "低卡", "减脂"]):
+        score += 0.3
+        reasons.append("餐厅标签含健康/轻食 (+0.06)")
+    if restaurant.get("cuisine") in ["健康轻食", "素食"]:
+        score += 0.2
+        reasons.append("餐厅类型为健康轻食/素食 (+0.04)")
+
+    return min(score, 1.0)
+
+
+def _score_queue(
+    activity: dict, restaurant: dict, intent: Intent, reasons: list[str]
+) -> float:
+    act_queue = activity.get("queue_minutes", 0)
+    rest_queue = restaurant.get("queue_minutes", 0)
+    total_queue = act_queue + rest_queue
+
+    threshold = intent.avoid_queue_minutes
+
+    if total_queue <= threshold:
+        reasons.append(f"总排队{total_queue}分钟，可接受 (+0.15)")
+        return 1.0
+    elif total_queue <= threshold * 2:
+        reasons.append(f"总排队{total_queue}分钟，稍长 (+0.08)")
+        return 0.5
+    else:
+        reasons.append(f"总排队{total_queue}分钟，过长 (+0.0)")
+        return 0.1
+
+
+def _score_time_fit(activity: dict, restaurant: dict, reasons: list[str]) -> float:
+    act_dur = activity.get("recommended_duration_min", 90) if activity else 90
+    rest_dur = restaurant.get("recommended_duration_min", 60) if restaurant else 60
+    total = act_dur + rest_dur
+
+    if 180 <= total <= 360:
+        reasons.append(f"总时长{total}分钟适合4-6小时出行 (+0.10)")
+        return 1.0
+    elif total < 180:
+        reasons.append(f"总时长{total}分钟偏短 (+0.05)")
+        return 0.5
+    else:
+        reasons.append(f"总时长{total}分钟偏长 (+0.03)")
+        return 0.3
+
+
+def _score_price(
+    activity: dict, restaurant: dict, intent: Intent, reasons: list[str]
+) -> float:
+    act_price = activity.get("avg_price", 0)
+    rest_price = restaurant.get("avg_price", 0)
+    total = act_price + rest_price
+    people = intent.people_count or 2
+    per_person = total  # avg_price 已经是人均
+
+    if intent.budget_per_person and per_person > intent.budget_per_person:
+        reasons.append(f"人均{per_person}元超出预算{intent.budget_per_person}元 (+0.0)")
+        return 0.2
+
+    if per_person <= 100:
+        reasons.append(f"人均{per_person}元经济实惠 (+0.05)")
+        return 1.0
+    elif per_person <= 200:
+        reasons.append(f"人均{per_person}元适中 (+0.04)")
+        return 0.8
+    elif per_person <= 300:
+        reasons.append(f"人均{per_person}元中等偏上 (+0.02)")
+        return 0.5
+    else:
+        reasons.append(f"人均{per_person}元较贵 (+0.01)")
+        return 0.3
+
+
+def _score_social(activity: dict, restaurant: dict, reasons: list[str]) -> float:
+    score = 0.0
+    act_tags = activity.get("tags", [])
+    rest_tags = restaurant.get("tags", [])
+
+    social_tags = {"社交", "聚会", "桌游", "互动"}
+    if any(t in social_tags for t in act_tags):
+        score += 0.15
+        reasons.append("活动有社交标签 (+0.04)")
+    if any(t in social_tags for t in rest_tags):
+        score += 0.1
+        reasons.append("餐厅有聚会标签 (+0.03)")
+
+    if activity.get("scene") == "friends":
+        score += 0.2
+        reasons.append("活动适合朋友场景 (+0.05)")
+    if restaurant.get("scene") == "friends":
+        score += 0.2
+        reasons.append("餐厅适合朋友场景 (+0.05)")
+
+    # 人数适配
+    party_max = restaurant.get("party_size_max", 4)
+    if party_max >= 4:
+        score += 0.2
+        reasons.append("餐厅支持4人以上 (+0.05)")
+    else:
+        score += 0.05
+
+    return min(score, 1.0)
+
+
+def _score_photo(
+    activity: dict, restaurant: dict, intent: Intent, reasons: list[str]
+) -> float:
+    if not intent.needs_photo_spot:
+        reasons.append("无拍照需求 (+0.20)")
+        return 1.0
+
+    score = 0.0
+    act_tags = activity.get("tags", [])
+    rest_tags = restaurant.get("tags", [])
+
+    if any(t in act_tags for t in ["拍照", "打卡", "颜值"]):
+        score += 0.4
+        reasons.append("活动适合拍照 (+0.08)")
+    if any(t in rest_tags for t in ["拍照", "约会", "出片"]):
+        score += 0.4
+        reasons.append("餐厅适合拍照 (+0.08)")
+    score += 0.2  # base
+    reasons.append("拍照评分基础分 (+0.04)")
+    return min(score, 1.0)
+
+
+def _score_food(restaurant: dict, reasons: list[str]) -> float:
+    if not restaurant:
+        reasons.append("无餐厅信息，美食评分默认0.5")
+        return 0.5
+
+    rating = restaurant.get("rating", 4.0)
+    popularity = restaurant.get("popularity_score", 50)
+    tags = restaurant.get("tags", [])
+
+    score = 0.0
+    if rating >= 4.5:
+        score += 0.35
+        reasons.append(f"评分{rating}高 (+0.07)")
+    else:
+        score += 0.2
+        reasons.append(f"评分{rating}中等 (+0.04)")
+
+    if popularity >= 80:
+        score += 0.2
+        reasons.append(f"热度{popularity}高 (+0.04)")
+    else:
+        score += 0.1
+
+    if any(t in tags for t in ["美食", "好吃", "品质", "网红"]):
+        score += 0.25
+        reasons.append("餐厅有美食/品质标签 (+0.05)")
+    else:
+        score += 0.1
+
+    return min(score, 1.0)
