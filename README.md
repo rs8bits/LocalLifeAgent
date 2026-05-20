@@ -11,6 +11,8 @@
 - **阶段 2**：Tool Interface 与基础规划（BaseTool、Intent Parser、Planner、Scorer）
 - **阶段 3**：Agent API 与 Human-in-the-loop（`/api/agent/plan`、`/api/agent/confirm`、Session 管理）
 - **阶段 4**：最小可演示前端 Demo（Next.js 页面、方案卡片、确认交互、执行结果）
+- **阶段 5**：LangGraph 多 Agent 结构（7 个节点、流式 SSE 输出）
+- **阶段 6**：Reflection、Guardrails 与 Memory（质量检查、安全边界校验、用户记忆读取）
 
 ## 技术栈
 
@@ -203,9 +205,66 @@ npm run dev
 2. 新终端启动前端：`cd frontend && npm run dev`
 3. 浏览器打开 `http://127.0.0.1:3000`
 4. 点击"家庭场景示例"或"朋友场景示例"
-5. 点击"开始规划"→ 看到工具调用日志和候选方案卡片
-6. 点击某个方案的"确认并安排"→ 看到执行结果和转发消息
-7. 可复制转发消息
+5. 点击"开始规划"→ 看到实时流式过程（意图解析→工具调用→质量检查→安全校验）
+6. 查看候选方案卡片（含分数、推荐理由、风险提示）
+7. 点击某个方案的"确认并安排"→ 看到确认流式过程（预约→订位→订单）
+8. 查看执行结果和转发消息，可复制
+
+## LangGraph 多 Agent 结构
+
+系统使用 LangGraph 编排 7 个 Agent 节点，流程如下：
+
+```
+Memory → Intent → Planner → Reflection → Guardrails → (确认阶段) Executor → Message
+```
+
+| 节点 | 职责 | 流式事件 |
+|------|------|----------|
+| Memory Node | 读取用户长期记忆（位置/孩子年龄/饮食偏好/距离偏好） | `memory_loaded` |
+| Intent Node | 解析自然语言意图（LLM 优先 + 规则兜底） | `intent_start`, `intent_done` |
+| Planner Node | 调用工具查询天气/活动/餐厅/路线/团购券，组合方案 | `tool_start`, `tool_done`, `planner_start`, `plan_delta` |
+| Reflection Node | 检查方案质量（儿童适配/距离/排队/健康/天气/路线等 10 项） | `reflection_start`, `reflection_done` |
+| Guardrails Node | 安全校验（POI 来源/阶段检查/支付承诺/儿童安全） | `guardrails_start`, `guardrails_done` |
+| Executor Node | 确认阶段执行预约+订位+Mock 订单 | `booking_start`, `booking_done`, `order_start`, `order_done` |
+| Message Node | 生成可转发消息 | `message_done` |
+
+## Reflection 检查项
+
+规划完成后对每个方案自动检查（代码规则，不依赖 LLM）：
+
+1. 是否包含活动和餐厅
+2. 总时长是否适合 4～6 小时
+3. 距离是否超过用户偏好半径（1.5 倍阈值）
+4. 家庭场景是否适合儿童年龄
+5. 减脂/低卡需求是否被满足
+6. 排队是否过久（超过容忍上限 2 倍）
+7. 天气不佳时是否优先室内
+8. 是否存在路线
+9. 活动/餐厅是否可预约/有位
+10. 不可执行环节 → 写入风险提示
+
+## Guardrails 检查项
+
+安全边界校验（显式代码检查，不依赖 prompt）：
+
+1. 所有 POI ID 必须存在于对应 JSON 数据文件
+2. 规划阶段不得出现 booking_id / order_id
+3. share_message 不得包含"真实支付成功"等违规内容
+4. 家庭场景必须满足儿童年龄要求
+
+检查不通过 → `blocked: true`，方案不返回给用户。
+
+## 流式 API (SSE)
+
+### POST /api/agent/plan/stream
+
+规划流式事件序列：`intent_start` → `intent_done` → `memory_loaded` → `tool_start`/`tool_done` → `planner_start` → `plan_delta` → `reflection_start`/`reflection_done` → `guardrails_start`/`guardrails_done` → `plan_done`
+
+### POST /api/agent/confirm/stream
+
+确认流式事件序列：`confirm_start` → `booking_start`/`booking_done` → `order_start`/`order_done` → `message_done` → `confirm_done`
+
+前端使用 `fetch()` + `ReadableStream` 读取 SSE，每个事件实时展示在"实时过程"区域。
 
 ## 数据文件说明
 
@@ -226,6 +285,4 @@ npm run dev
 
 ## 下一阶段计划
 
-- **阶段 5**：LangGraph 多 Agent 编排
-- **阶段 6**：Reflection、Guardrails 与 Memory
 - **阶段 7**：测试与演示打磨

@@ -25,6 +25,7 @@ Thumbs.db
 TEMP_TASK_*.md
 
 # Frontend
+.next/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
