@@ -9,6 +9,8 @@
 - **阶段 0**：项目骨架（FastAPI 后端、基础前端配置、启动脚本）
 - **阶段 1**：Mock Data 与 Mock API（8 类业务数据、7 个查询/写入接口）
 - **阶段 2**：Tool Interface 与基础规划（BaseTool、Intent Parser、Planner、Scorer）
+- **阶段 3**：Agent API 与 Human-in-the-loop（`/api/agent/plan`、`/api/agent/confirm`、Session 管理）
+- **阶段 4**：最小可演示前端 Demo（Next.js 页面、方案卡片、确认交互、执行结果）
 
 ## 技术栈
 
@@ -146,6 +148,65 @@ DEEPSEEK_MODEL=v4flash
 
 Planner 不会调用预约、订位或下单工具。
 
+## Agent API
+
+基础 URL: `http://127.0.0.1:8000`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/agent/plan` | 规划阶段：生成候选方案（不预约/不下单） |
+| POST | `/api/agent/confirm` | 确认阶段：执行预约、订位、Mock 订单 |
+| GET | `/api/agent/session/{session_id}` | 查询 session 详情 |
+
+### 规划示例
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/agent/plan \
+  -H "Content-Type: application/json" \
+  -d '{"user_id":"user_001","message":"下午带老婆孩子去亲子乐园，孩子5岁，老婆减肥"}'
+```
+
+响应包含：`session_id`、`intent`、`plans`（2~3个方案）、`tool_logs`、`errors`。
+
+### 确认示例
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/agent/confirm \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"<session_id>","plan_id":"plan_001"}'
+```
+
+确认后生成活动预约、餐厅订位和团购券 Mock 订单，返回 `share_message` 可转发消息。
+
+### 约束
+
+- `/api/agent/plan` 不写入 `bookings.json` / `orders.json`
+- `/api/agent/confirm` 才会执行预约和下单
+- 所有订单为 Mock 订单，不涉及真实支付
+- 重复确认同一 session 不会重复写入
+
+## 前端 Demo 启动
+
+前端是 MVP 演示版本，使用 Next.js + Tailwind CSS。
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+访问 `http://127.0.0.1:3000`。
+
+## 完整 Demo 操作步骤
+
+1. 启动后端：`./scripts/run_backend.sh`
+2. 新终端启动前端：`cd frontend && npm run dev`
+3. 浏览器打开 `http://127.0.0.1:3000`
+4. 点击"家庭场景示例"或"朋友场景示例"
+5. 点击"开始规划"→ 看到工具调用日志和候选方案卡片
+6. 点击某个方案的"确认并安排"→ 看到执行结果和转发消息
+7. 可复制转发消息
+
 ## 数据文件说明
 
 所有业务数据存放在 `backend/data/`，为本地 JSON 文件：
@@ -165,8 +226,6 @@ Planner 不会调用预约、订位或下单工具。
 
 ## 下一阶段计划
 
-- **阶段 3**：Agent API 与 Human-in-the-loop（`/api/agent/plan`、`/api/agent/confirm`）
-- **阶段 4**：前端 Demo（Next.js 页面、方案卡片、确认交互）
 - **阶段 5**：LangGraph 多 Agent 编排
 - **阶段 6**：Reflection、Guardrails 与 Memory
 - **阶段 7**：测试与演示打磨

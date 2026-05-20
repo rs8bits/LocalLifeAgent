@@ -38,3 +38,8 @@ app.include_router(weather_router)
 app.include_router(deals_router)
 app.include_router(bookings_router)
 app.include_router(orders_router)
+
+# 注册 Agent API 路由
+from backend.agent.api import router as agent_router
+
+app.include_router(agent_router)
