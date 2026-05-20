@@ -63,7 +63,8 @@
       "stroller_friendly": true,
       "kids_meal": true,
       "restroom": true
-    }
+    },
+    "domain": "play"
   },
   {
     "id": "act_002",
@@ -126,7 +127,8 @@
       "stroller_friendly": false,
       "kids_meal": false,
       "restroom": true
-    }
+    },
+    "domain": "play"
   },
   {
     "id": "act_003",
@@ -192,7 +194,8 @@
       "stroller_friendly": false,
       "kids_meal": false,
       "restroom": true
-    }
+    },
+    "domain": "play"
   },
   {
     "id": "act_004",
@@ -252,7 +255,8 @@
       "stroller_friendly": true,
       "kids_meal": true,
       "restroom": true
-    }
+    },
+    "domain": "play"
   },
   {
     "id": "act_005",
@@ -313,7 +317,8 @@
       "stroller_friendly": false,
       "kids_meal": false,
       "restroom": true
-    }
+    },
+    "domain": "play"
   },
   {
     "id": "act_006",
@@ -379,7 +384,8 @@
       "stroller_friendly": false,
       "kids_meal": false,
       "restroom": true
-    }
+    },
+    "domain": "play"
   },
   {
     "id": "act_007",
@@ -441,7 +447,8 @@
       "stroller_friendly": false,
       "kids_meal": false,
       "restroom": true
-    }
+    },
+    "domain": "play"
   },
   {
     "id": "act_008",
@@ -508,6 +515,409 @@
       "stroller_friendly": true,
       "kids_meal": false,
       "restroom": true
-    }
+    },
+    "domain": "play"
+  },
+  {
+    "id": "act_009",
+    "name": "纯K KTV",
+    "category": "KTV",
+    "area": "三里屯商圈",
+    "address": "朝阳区工体北路甲2号3层",
+    "lat": 39.9345,
+    "lng": 116.456,
+    "distance_km": 4.0,
+    "avg_price": 120,
+    "tags": [
+      "唱歌",
+      "聚会",
+      "社交",
+      "拍照",
+      "音乐"
+    ],
+    "scene": "friends",
+    "indoor": true,
+    "suitable_age_min": 16,
+    "suitable_age_max": 99,
+    "child_friendly": false,
+    "has_nursing_room": false,
+    "has_kids_meal": false,
+    "queue_minutes": 15,
+    "available_slots": [
+      "13:00",
+      "14:00",
+      "15:00",
+      "19:00",
+      "20:00",
+      "21:00"
+    ],
+    "bookable": true,
+    "risk": null,
+    "description": "高品质KTV连锁，曲库全音响好，适合4-10人聚会，可点酒水和简餐",
+    "poi_type": "activity",
+    "meituan_poi_id": "mt_act_009",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "friends",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "12:00-06:00",
+    "rating": 4.6,
+    "review_count": 4520,
+    "monthly_sales": 2100,
+    "popularity_score": 88,
+    "recommended_duration_min": 180,
+    "stock_remaining": 15,
+    "booking_required": true,
+    "reservation_notice": "支持在线预约包厢，周末建议提前1天",
+    "peak_hours": [
+      "19:00-02:00"
+    ],
+    "refund_policy": "开场前2小时可退",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": true,
+      "nursing_room": false,
+      "stroller_friendly": false,
+      "kids_meal": false,
+      "restroom": true
+    },
+    "domain": "play"
+  },
+  {
+    "id": "act_010",
+    "name": "猫空·撸猫咖啡馆",
+    "category": "撸猫馆",
+    "area": "鼓楼商圈",
+    "address": "东城区鼓楼东大街55号",
+    "lat": 39.9425,
+    "lng": 116.4045,
+    "distance_km": 2.5,
+    "avg_price": 68,
+    "tags": [
+      "撸猫",
+      "治愈",
+      "拍照",
+      "约会",
+      "咖啡"
+    ],
+    "scene": "friends",
+    "indoor": true,
+    "suitable_age_min": 6,
+    "suitable_age_max": 99,
+    "child_friendly": true,
+    "has_nursing_room": false,
+    "has_kids_meal": false,
+    "queue_minutes": 10,
+    "available_slots": [
+      "11:00",
+      "12:30",
+      "14:00",
+      "15:30",
+      "17:00"
+    ],
+    "bookable": true,
+    "risk": "对猫毛过敏者慎入",
+    "description": "撸猫+咖啡二合一，20+只品种猫咪，适合闺蜜打卡和亲子体验",
+    "poi_type": "activity",
+    "meituan_poi_id": "mt_act_010",
+    "city": "北京",
+    "district": "东城区",
+    "suitable_scenes": [
+      "friends",
+      "family",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "10:30-21:00",
+    "rating": 4.8,
+    "review_count": 3280,
+    "monthly_sales": 1420,
+    "popularity_score": 86,
+    "recommended_duration_min": 90,
+    "stock_remaining": 12,
+    "booking_required": true,
+    "reservation_notice": "支持在线预约时段，每场限流15人",
+    "peak_hours": [
+      "14:00-17:00"
+    ],
+    "refund_policy": "开场前1小时可退",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": false,
+      "nursing_room": false,
+      "stroller_friendly": true,
+      "kids_meal": false,
+      "restroom": true
+    },
+    "domain": "play"
+  },
+  {
+    "id": "act_011",
+    "name": "X先生密室逃脱",
+    "category": "密室逃脱",
+    "area": "望京商圈",
+    "address": "朝阳区望京街9号望京国际商业中心B1",
+    "lat": 40.003,
+    "lng": 116.483,
+    "distance_km": 6.5,
+    "avg_price": 158,
+    "tags": [
+      "密室",
+      "聚会",
+      "社交",
+      "解谜",
+      "沉浸"
+    ],
+    "scene": "friends",
+    "indoor": true,
+    "suitable_age_min": 12,
+    "suitable_age_max": 99,
+    "child_friendly": false,
+    "has_nursing_room": false,
+    "has_kids_meal": false,
+    "queue_minutes": 20,
+    "available_slots": [
+      "10:00",
+      "13:00",
+      "14:30",
+      "16:00",
+      "19:00"
+    ],
+    "bookable": true,
+    "risk": "密室逃脱需2人起订，不适合幽闭恐惧症者",
+    "description": "沉浸式密室逃脱，多个主题房间，适合2-8人组队解谜",
+    "poi_type": "activity",
+    "meituan_poi_id": "mt_act_011",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "friends",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "10:00-22:00",
+    "rating": 4.7,
+    "review_count": 2180,
+    "monthly_sales": 890,
+    "popularity_score": 83,
+    "recommended_duration_min": 120,
+    "stock_remaining": 8,
+    "booking_required": true,
+    "reservation_notice": "需至少提前2小时预约，2人起订",
+    "peak_hours": [
+      "14:00-18:00",
+      "19:00-21:00"
+    ],
+    "refund_policy": "开场前24小时可退",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": true,
+      "nursing_room": false,
+      "stroller_friendly": false,
+      "kids_meal": false,
+      "restroom": true
+    },
+    "domain": "play"
+  },
+  {
+    "id": "act_012",
+    "name": "电竞开黑基地",
+    "category": "电竞馆",
+    "area": "五道口商圈",
+    "address": "海淀区成府路28号五道口购物中心B2",
+    "lat": 39.9935,
+    "lng": 116.3385,
+    "distance_km": 4.8,
+    "avg_price": 60,
+    "tags": [
+      "游戏",
+      "电竞",
+      "聚会",
+      "社交"
+    ],
+    "scene": "friends",
+    "indoor": true,
+    "suitable_age_min": 12,
+    "suitable_age_max": 99,
+    "child_friendly": false,
+    "has_nursing_room": false,
+    "has_kids_meal": false,
+    "queue_minutes": 5,
+    "available_slots": [],
+    "bookable": false,
+    "risk": null,
+    "description": "专业电竞设备+高速网络，支持LOL/Valorant/APEX，可包房开黑",
+    "poi_type": "activity",
+    "meituan_poi_id": "mt_act_012",
+    "city": "北京",
+    "district": "海淀区",
+    "suitable_scenes": [
+      "friends",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "10:00-02:00",
+    "rating": 4.4,
+    "review_count": 1650,
+    "monthly_sales": 980,
+    "popularity_score": 75,
+    "recommended_duration_min": 120,
+    "stock_remaining": null,
+    "booking_required": false,
+    "reservation_notice": "到店即可，无需预约",
+    "peak_hours": [
+      "18:00-23:00"
+    ],
+    "refund_policy": "到店消费",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": true,
+      "nursing_room": false,
+      "stroller_friendly": false,
+      "kids_meal": false,
+      "restroom": true
+    },
+    "domain": "play"
+  },
+  {
+    "id": "act_013",
+    "name": "MAO LiveHouse",
+    "category": "LiveHouse",
+    "area": "鼓楼商圈",
+    "address": "东城区鼓楼东大街111号",
+    "lat": 39.9422,
+    "lng": 116.4038,
+    "distance_km": 3.2,
+    "avg_price": 180,
+    "tags": [
+      "音乐",
+      "现场",
+      "乐队",
+      "社交",
+      "拍照",
+      "演出"
+    ],
+    "scene": "friends",
+    "indoor": true,
+    "suitable_age_min": 16,
+    "suitable_age_max": 99,
+    "child_friendly": false,
+    "has_nursing_room": false,
+    "has_kids_meal": false,
+    "queue_minutes": 30,
+    "available_slots": [
+      "20:00"
+    ],
+    "bookable": true,
+    "risk": "演出时间固定为20:00，不可改期；音量较大不推荐儿童",
+    "description": "北京最知名的LiveHouse之一，每晚独立乐队和音乐人现场演出",
+    "poi_type": "activity",
+    "meituan_poi_id": "mt_act_013",
+    "city": "北京",
+    "district": "东城区",
+    "suitable_scenes": [
+      "friends",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "19:00-02:00",
+    "rating": 4.8,
+    "review_count": 5620,
+    "monthly_sales": 3200,
+    "popularity_score": 91,
+    "recommended_duration_min": 180,
+    "stock_remaining": 30,
+    "booking_required": true,
+    "reservation_notice": "需提前购票，不支持当天预约",
+    "peak_hours": [
+      "20:00-23:00"
+    ],
+    "refund_policy": "演出前72小时可退票",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": false,
+      "nursing_room": false,
+      "stroller_friendly": false,
+      "kids_meal": false,
+      "restroom": true
+    },
+    "domain": "play"
+  },
+  {
+    "id": "act_014",
+    "name": "弹力猩球蹦床公园",
+    "category": "运动馆",
+    "area": "合生汇商圈",
+    "address": "朝阳区西大望路21号合生汇B2",
+    "lat": 39.8952,
+    "lng": 116.472,
+    "distance_km": 5.8,
+    "avg_price": 128,
+    "tags": [
+      "运动",
+      "蹦床",
+      "亲子",
+      "拍照",
+      "聚会"
+    ],
+    "scene": "general",
+    "indoor": true,
+    "suitable_age_min": 4,
+    "suitable_age_max": 99,
+    "child_friendly": true,
+    "has_nursing_room": true,
+    "has_kids_meal": true,
+    "queue_minutes": 10,
+    "available_slots": [
+      "10:00",
+      "12:00",
+      "14:00",
+      "16:00"
+    ],
+    "bookable": true,
+    "risk": "需穿着防滑袜（可现场购买），心脏病/高血压者不宜",
+    "description": "大型室内蹦床公园，含自由蹦跳区、扣篮区、海绵池和亲子专区",
+    "poi_type": "activity",
+    "meituan_poi_id": "mt_act_014",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "family",
+      "friends",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "10:00-21:00",
+    "rating": 4.5,
+    "review_count": 1870,
+    "monthly_sales": 1320,
+    "popularity_score": 79,
+    "recommended_duration_min": 120,
+    "stock_remaining": 45,
+    "booking_required": true,
+    "reservation_notice": "支持在线预约时段，每场限流40人",
+    "peak_hours": [
+      "10:00-12:00",
+      "14:00-17:00"
+    ],
+    "refund_policy": "开场前2小时可退",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": true,
+      "nursing_room": true,
+      "stroller_friendly": true,
+      "kids_meal": true,
+      "restroom": true
+    },
+    "domain": "play"
   }
 ]

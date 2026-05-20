@@ -7,6 +7,7 @@ from pydantic import BaseModel
 class BookingRequest(BaseModel):
     activity_id: Optional[str] = None
     restaurant_id: Optional[str] = None
+    drink_id: Optional[str] = None
     user_id: str
     people: int
     time: str

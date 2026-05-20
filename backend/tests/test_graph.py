@@ -41,7 +41,7 @@ class TestPlanningGraph:
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
         result = await run_planning_graph(
             user_id="user_001",
-            message="下午出去玩",
+            message="下午带老婆孩子出去玩",
         )
         assert result["intent"].get("child_age") == 5
         assert result["intent"].get("needs_low_calorie") is True

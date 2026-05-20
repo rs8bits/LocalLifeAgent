@@ -9,6 +9,7 @@ router = APIRouter(prefix="/api/mock/bookings", tags=["bookings"])
 
 ACTIVITIES_FILE = "activities.json"
 RESTAURANTS_FILE = "restaurants.json"
+DRINKS_FILE = "drinks.json"
 BOOKINGS_FILE = "bookings.json"
 
 
@@ -148,5 +149,61 @@ async def book_restaurant(req: BookingRequest):
         success=True,
         booking_id=booking_id,
         message=f"已成功订位「{target['name']}」{req.people}人，时间 {req.time}",
+        detail=record,
+    )
+
+
+@router.post("/drink", response_model=BookingResponse)
+async def book_drink(req: BookingRequest):
+    """预约饮品"""
+    if not req.drink_id:
+        raise HTTPException(status_code=400, detail="缺少 drink_id")
+
+    drinks = read_json(DRINKS_FILE)
+    target = None
+    for d in drinks:
+        if d.get("id") == req.drink_id:
+            target = d
+            break
+
+    if target is None:
+        raise HTTPException(status_code=404, detail=f"饮品不存在: {req.drink_id}")
+
+    if not target.get("bookable", False):
+        return BookingResponse(
+            success=False,
+            message=f"饮品「{target['name']}」不可预约",
+            detail={"reason": "该饮品店不支持在线预约", "drink_id": req.drink_id},
+        )
+
+    if not _check_time_slot(target.get("available_slots", []), req.time):
+        return BookingResponse(
+            success=False,
+            message=f"饮品「{target['name']}」在 {req.time} 无可用时段",
+            detail={
+                "reason": "请求时段不可用",
+                "drink_id": req.drink_id,
+                "requested_time": req.time,
+                "available_slots": target.get("available_slots", []),
+            },
+        )
+
+    booking_id = generate_booking_id("drink")
+    record = {
+        "booking_id": booking_id,
+        "type": "drink",
+        "poi_id": req.drink_id,
+        "poi_name": target["name"],
+        "user_id": req.user_id,
+        "people": req.people,
+        "time": req.time,
+        "status": "confirmed",
+    }
+    append_to_json(BOOKINGS_FILE, record)
+
+    return BookingResponse(
+        success=True,
+        booking_id=booking_id,
+        message=f"已成功预约「{target['name']}」{req.people}人，时间 {req.time}",
         detail=record,
     )

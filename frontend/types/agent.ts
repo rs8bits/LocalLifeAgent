@@ -19,6 +19,7 @@ export interface Plan {
   timeline: TimelineItem[];
   activity: Record<string, unknown> | null;
   restaurant: Record<string, unknown> | null;
+  drink?: Record<string, unknown> | null;
   route: Record<string, unknown> | null;
   deals: Record<string, unknown>[];
   budget: { total: number; per_person: number; currency: string };

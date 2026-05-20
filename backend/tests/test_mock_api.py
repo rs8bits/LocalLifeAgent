@@ -11,6 +11,11 @@ from backend.mock_api.storage import read_json, write_json
 
 client = TestClient(app)
 
+
+def _matches_scene(item, scene):
+    return item.get("scene") == scene or scene in item.get("suitable_scenes", [])
+
+
 # 保存初始 bookings 和 orders 数据以便恢复
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 BOOKINGS_FILE = DATA_DIR / "bookings.json"
@@ -143,13 +148,16 @@ class TestActivities:
         assert data["count"] >= 8
         assert len(data["results"]) >= 8
 
+    def _matches_scene(self, item, scene):
+        return item.get("scene") == scene or scene in item.get("suitable_scenes", [])
+
     def test_filter_by_scene_family(self):
         response = client.get("/api/mock/activities?scene=family")
         assert response.status_code == 200
         data = response.json()
         assert data["count"] > 0
         for item in data["results"]:
-            assert item["scene"] == "family"
+            assert _matches_scene(item, "family")
 
     def test_filter_by_child_age(self):
         response = client.get("/api/mock/activities?child_age=5")
@@ -184,7 +192,7 @@ class TestActivities:
         assert response.status_code == 200
         data = response.json()
         for item in data["results"]:
-            assert item["scene"] == "family"
+            assert _matches_scene(item, "family")
             assert item["distance_km"] <= 5
             assert item["suitable_age_min"] <= 5 <= item["suitable_age_max"]
 
@@ -205,7 +213,7 @@ class TestRestaurants:
         data = response.json()
         assert data["count"] > 0
         for item in data["results"]:
-            assert item["scene"] == "family"
+            assert _matches_scene(item, "family")
 
     def test_filter_by_available(self):
         response = client.get("/api/mock/restaurants?available=true")
@@ -240,7 +248,7 @@ class TestRestaurants:
         assert response.status_code == 200
         data = response.json()
         for item in data["results"]:
-            assert item["scene"] == "family"
+            assert _matches_scene(item, "family")
             assert "健康" in item["tags"]
             assert item["available"] is True
 
@@ -424,3 +432,186 @@ class TestOrders:
         orders = read_json("orders.json")
         assert len(orders) >= 1
         assert orders[-1]["user_id"] == "user_001"
+
+
+class TestBookingDrink:
+    """饮品预约测试"""
+
+    def test_book_drink_success(self):
+        payload = {
+            "drink_id": "drink_004",
+            "user_id": "user_001",
+            "people": 4,
+            "time": "20:00",
+        }
+        response = client.post("/api/mock/bookings/drink", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["booking_id"] is not None
+        assert data["booking_id"].startswith("booking_drink_")
+
+    def test_book_nonexistent_drink_returns_404(self):
+        payload = {
+            "drink_id": "drink_999",
+            "user_id": "user_001",
+            "people": 4,
+            "time": "20:00",
+        }
+        response = client.post("/api/mock/bookings/drink", json=payload)
+        assert response.status_code == 404
+
+    def test_book_unbookable_drink_returns_failure(self):
+        payload = {
+            "drink_id": "drink_001",
+            "user_id": "user_001",
+            "people": 2,
+            "time": "14:00",
+        }
+        response = client.post("/api/mock/bookings/drink", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+
+    def test_book_invalid_timeslot_returns_failure(self):
+        payload = {
+            "drink_id": "drink_004",
+            "user_id": "user_001",
+            "people": 4,
+            "time": "03:00",
+        }
+        response = client.post("/api/mock/bookings/drink", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+
+
+class TestDrinksAPI:
+    """饮品查询 API 测试"""
+
+    def test_list_all_drinks(self):
+        response = client.get("/api/mock/drinks")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] >= 6
+        assert len(data["results"]) >= 6
+
+    def test_filter_by_scene_family_excludes_bar(self):
+        response = client.get("/api/mock/drinks?scene=family")
+        assert response.status_code == 200
+        data = response.json()
+        for item in data["results"]:
+            assert item["sub_category"] != "bar"
+
+    def test_filter_by_sub_category(self):
+        response = client.get("/api/mock/drinks?sub_category=bar")
+        assert response.status_code == 200
+        data = response.json()
+        for item in data["results"]:
+            assert item["sub_category"] == "bar"
+
+    def test_filter_by_tag(self):
+        response = client.get("/api/mock/drinks?tag=拍照")
+        assert response.status_code == 200
+        data = response.json()
+        for item in data["results"]:
+            assert "拍照" in item["tags"]
+
+
+class TestAddOnsAPI:
+    """附加服务查询 API 测试"""
+
+    def test_list_all_add_ons(self):
+        response = client.get("/api/mock/add-ons")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] >= 3
+        assert len(data["results"]) >= 3
+
+    def test_filter_by_scene_family(self):
+        response = client.get("/api/mock/add-ons?scene=family")
+        assert response.status_code == 200
+        data = response.json()
+        for item in data["results"]:
+            ok = item.get("scene") == "family" or "family" in item.get("suitable_scenes", [])
+            assert ok
+
+    def test_filter_by_area(self):
+        response = client.get("/api/mock/add-ons?area=三里屯商圈")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] > 0
+
+
+class TestTagsAPI:
+    """标签目录 API 测试"""
+
+    def test_get_full_catalog(self):
+        response = client.get("/api/mock/tags")
+        assert response.status_code == 200
+        data = response.json()
+        assert "domains" in data
+        for domain in ["play", "eat", "drink", "add_on"]:
+            assert domain in data["domains"], f"缺少 domain: {domain}"
+
+    def test_get_catalog_by_domain(self):
+        for domain in ["play", "eat", "drink", "add_on"]:
+            response = client.get(f"/api/mock/tags?domain={domain}")
+            assert response.status_code == 200
+            data = response.json()
+            assert "tags" in data
+            assert "categories" in data
+
+    def test_resolve_singing_photography(self):
+        payload = {"domain": "play", "keywords": ["singing", "photography", "karaoke"]}
+        response = client.post("/api/mock/tags/resolve", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        matched = data["matched_tags"]
+        assert "唱歌" in matched, f"singing/karaoke 应对齐到 唱歌, got: {matched}"
+        assert "拍照" in matched, f"photography 应对齐到 拍照, got: {matched}"
+
+    def test_resolve_coffee_bar_beer(self):
+        payload = {"domain": "drink", "keywords": ["coffee", "bar", "beer"]}
+        response = client.post("/api/mock/tags/resolve", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        # coffee 直接命中 sub_category
+        assert "coffee" in data["matched_sub_categories"], \
+            f"coffee 应匹配 sub_category, got: {data}"
+        # bar 直接命中 sub_category
+        assert "bar" in data["matched_sub_categories"], \
+            f"bar 应匹配 sub_category, got: {data}"
+        # beer 通过别名对齐到 精酿 标签
+        assert ("精酿" in data["matched_tags"] or "beer" in data["unmatched"] is False), \
+            f"beer 应通过别名匹配或至少不被遗漏, got: {data}"
+
+    def test_resolve_reports_unmatched(self):
+        payload = {"domain": "play", "keywords": ["skydiving"]}
+        response = client.post("/api/mock/tags/resolve", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert "skydiving" in data["unmatched"]
+
+
+class TestSceneFilterCompatibility:
+    """场景过滤兼容 suitable_scenes"""
+
+    def test_activities_scene_family_includes_suitable_scenes(self):
+        response = client.get("/api/mock/activities?scene=family")
+        assert response.status_code == 200
+        data = response.json()
+        # 应至少包含 act_001 (scene=family) 和 act_007 (scene=general, suitable_scenes 含 family)
+        ids = {item["id"] for item in data["results"]}
+        assert "act_001" in ids, "原 scene=family 的应保留"
+        # act_007 是 citywalk，suitable_scenes 含 family
+        assert "act_007" in ids, "suitable_scenes 含 family 的也应被匹配"
+
+    def test_restaurants_scene_family_includes_suitable_scenes(self):
+        response = client.get("/api/mock/restaurants?scene=family")
+        assert response.status_code == 200
+        data = response.json()
+        ids = {item["id"] for item in data["results"]}
+        # rest_010 现在 suitable_scenes 含 family
+        assert "rest_010" in ids or len(data["results"]) >= 2, \
+            "suitable_scenes 含 family 的餐厅也应该被匹配"

@@ -71,6 +71,20 @@ class TestPlanStreaming:
         })
         assert resp.status_code == 400
 
+    def test_plan_stream_includes_tag_events(self, monkeypatch):
+        """新流程 SSE 应包含标签对齐和场所搜索事件"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        resp = client.post("/api/agent/plan/stream", json={
+            "user_id": "user_002",
+            "message": "下午想去唱歌拍照，晚上喝酒",
+        })
+        assert resp.status_code == 200
+        body = resp.text
+        assert "tag_catalog_done" in body, "SSE 应包含 tag_catalog_done 事件"
+        assert "place_search_start" in body, "SSE 应包含 place_search_start 事件"
+        assert "plan_done" in body
+
 
 class TestConfirmStreaming:
     """流式确认 API"""

@@ -13,6 +13,7 @@ class AgentState(TypedDict, total=False):
 
     candidate_activities: list[dict[str, Any]]
     candidate_restaurants: list[dict[str, Any]]
+    candidate_drinks: list[dict[str, Any]]
     candidate_routes: list[dict[str, Any]]
     candidate_deals: list[dict[str, Any]]
     weather: dict[str, Any] | None
@@ -20,6 +21,7 @@ class AgentState(TypedDict, total=False):
     plans: list[dict[str, Any]]
     selected_plan_id: str | None
 
+    tag_resolve_result: dict[str, Any]
     tool_logs: list[dict[str, Any]]
     reflection_result: dict[str, Any]
     guardrail_result: dict[str, Any]

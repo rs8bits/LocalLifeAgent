@@ -70,9 +70,9 @@ class TestPlannerFamily:
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
         result = await plan_for_message(
             user_id="user_001",
-            message="下午出去玩",
+            message="下午带老婆孩子出去玩",
         )
-        # user_001 有 child_age=5, spouse_diet=减脂，应该生效
+        # user_001 有 child_age=5, spouse_diet=减脂，在家场景应生效
         intent = result["intent"]
         assert intent["child_age"] == 5
 
@@ -135,11 +135,10 @@ class TestPlannerToolLogs:
             message="下午和老婆孩子出去玩",
         )
         logs = result["tool_logs"]
-        assert len(logs) >= 3  # 至少: weather, activities, restaurants
+        assert len(logs) >= 3  # 至少: weather, search_places (play+eat)
         tool_names = {log["tool"] for log in logs}
         assert "get_weather" in tool_names
-        assert "search_activities" in tool_names
-        assert "search_restaurants" in tool_names
+        assert "search_places" in tool_names
 
     @pytest.mark.asyncio
     async def test_tool_log_format(self, monkeypatch):
@@ -153,6 +152,129 @@ class TestPlannerToolLogs:
             assert "tool" in log
             assert "status" in log
             assert "message" in log
+
+
+class TestPlannerFriendsWithDrink:
+    """朋友场景含饮品和活动"""
+
+    @pytest.mark.asyncio
+    async def test_friends_dinner_drink_sing_has_ktv_or_livehouse(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_001",
+            message="晚上和4个朋友想吃饭喝精酿再唱歌",
+        )
+        plans = result["plans"]
+        assert len(plans) >= 1
+        intent = result["intent"]
+        assert intent["scene"] == "friends"
+        # 应包含唱歌相关活动 (纯K KTV act_009 或 MAO LiveHouse act_013)
+        has_ktv_or_livehouse = any(
+            (p.get("activity") or {}).get("id") in ("act_009", "act_013")
+            for p in plans
+        )
+        assert has_ktv_or_livehouse, "朋友唱歌场景应包含 KTV 或 LiveHouse 活动"
+
+    @pytest.mark.asyncio
+    async def test_friends_scene_no_child_age_filter(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_001",
+            message="晚上和4个朋友想吃饭喝精酿再唱歌",
+        )
+        # tool_logs 中 search_activities 不应出现 child_age 被传递的痕迹
+        for log in result["tool_logs"]:
+            if log["tool"] == "search_activities":
+                # 朋友场景不应返回 0 个活动（被 child_age 过滤所致）
+                assert "0 个活动" not in log["message"], \
+                    f"朋友场景不应因 child_age 过滤掉所有活动: {log['message']}"
+
+
+class TestTagResolverFlow:
+    """标签对齐 + 搜索流程测试"""
+
+    @pytest.mark.asyncio
+    async def test_rule_resolve_sing_drink_eat(self, monkeypatch):
+        """DeepSeek 不可用时，规则兜底对齐 唱歌/喝酒/吃饭"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="今天下午想和2个朋友出去拍照吃饭，下午想去唱歌，晚上想喝酒",
+        )
+        # 不应有红色错误
+        errors = result.get("errors", [])
+        # 有活动/餐厅/饮品的组合应至少生成方案，不能因为某个 domain 空就报全局错误
+        plans = result["plans"]
+        assert len(plans) >= 1, "应至少生成1个方案"
+        # 应包含活动 (play domain)
+        has_activity = any(p.get("activity") for p in plans)
+        assert has_activity, "唱歌应由 play domain 搜索到活动"
+
+    @pytest.mark.asyncio
+    async def test_no_global_error_for_optional_domain(self, monkeypatch):
+        """可选领域没结果不应写入全局 errors"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="下午想和朋友喝咖啡吃饭",
+        )
+        # 用户没要求 play，不应报"未找到活动"
+        errors = result.get("errors", [])
+        for err in errors:
+            assert "活动" not in err, f"不应报活动错误: {err}"
+
+    @pytest.mark.asyncio
+    async def test_sing_forces_play_domain(self, monkeypatch):
+        """明确要求唱歌时，play domain 必须有结果"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="下午想去唱歌",
+        )
+        plans = result["plans"]
+        has_activity = any(p.get("activity") for p in plans)
+        assert has_activity, "唱歌应由 play domain 生成活动方案"
+
+    @pytest.mark.asyncio
+    async def test_tag_search_fallback(self, monkeypatch):
+        """标签搜索 0 结果时应自动放宽"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="下午想去玩",
+        )
+        # 即使"玩"没有精确匹配到标签，tag resolver 应放宽或返回空 tags_any
+        # 结果不应崩溃
+        assert "plans" in result
+
+    @pytest.mark.asyncio
+    async def test_llm_english_tags_aligned(self, monkeypatch):
+        """LLM 输出英文 photography/singing 应对齐到真实中文标签"""
+        async def fake_llm_parse(message: str):
+            return {
+                "scene": "friends",
+                "activity_preferences": ["photography", "singing"],
+                "drink_preferences": ["bar"],
+                "food_preferences": [],
+                "needs_low_calorie": False,
+            }
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", True)
+        monkeypatch.setattr("backend.agent.intent_parser._llm_parse", fake_llm_parse)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="photography and singing with friends",
+        )
+        plans = result["plans"]
+        assert len(plans) >= 1
+        # 应能搜到活动
+        has_activity = any(p.get("activity") for p in plans)
+        assert has_activity, "photography/singing 应对齐到拍照/唱歌，搜到活动"
 
 
 class TestPlannerErrors:

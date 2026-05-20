@@ -189,3 +189,49 @@ class TestScorerFriends:
         }
         result = score_plan(plan, intent)
         assert result["score"] > 0.3  # 拍照无需求时不应惩罚
+
+
+class TestScorerWithDrink:
+    """含饮品方案的评分"""
+
+    def test_drink_scores_nonzero(self):
+        intent = _make_friends_intent(drink_preferences=["bar"])
+        plan = {
+            "plan_id": "test_drink_001",
+            "activity": {
+                "name": "LiveHouse", "distance_km": 3.0,
+                "tags": ["音乐", "社交"], "scene": "friends",
+                "avg_price": 150, "queue_minutes": 10, "recommended_duration_min": 120,
+            },
+            "restaurant": {
+                "name": "火锅店", "distance_km": 3.0,
+                "tags": ["聚会", "社交"], "scene": "friends",
+                "rating": 4.5, "popularity_score": 85, "party_size_max": 6,
+                "avg_price": 120, "queue_minutes": 15, "recommended_duration_min": 75,
+            },
+            "drink": {
+                "name": "京A精酿啤酒", "distance_km": 3.0,
+                "sub_category": "bar", "rating": 4.6,
+                "popularity_score": 85, "avg_price": 85,
+                "tags": ["聚会", "拍照"], "bookable": True,
+            },
+        }
+        result = score_plan(plan, intent)
+        assert result["score"] > 0.0, "含饮品方案评分不应为0"
+        assert len(result["score_reasons"]) > 0, "应有评分理由"
+
+    def test_drink_bar_matches_preference(self):
+        intent = _make_friends_intent(drink_preferences=["bar"])
+        plan = {
+            "plan_id": "test_drink_002",
+            "drink": {
+                "name": "京A精酿啤酒", "distance_km": 2.0,
+                "sub_category": "bar", "rating": 4.6,
+                "popularity_score": 85, "avg_price": 85,
+                "tags": ["聚会"], "bookable": True,
+            },
+            "activity": None,
+            "restaurant": None,
+        }
+        result = score_plan(plan, intent)
+        assert result["score"] > 0.0

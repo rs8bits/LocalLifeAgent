@@ -7,7 +7,10 @@ from backend.tools.mock_tools import (
     EstimateRouteTool,
     GetWeatherTool,
     GetDealsTool,
+    SearchDrinksTool,
+    SearchPlacesTool,
 )
+from backend.tools.tag_tools import GetTagCatalogTool, ResolveTagsTool
 
 # 全局工具实例
 _search_activities = SearchActivitiesTool()
@@ -15,6 +18,10 @@ _search_restaurants = SearchRestaurantsTool()
 _estimate_route = EstimateRouteTool()
 _get_weather = GetWeatherTool()
 _get_deals = GetDealsTool()
+_search_drinks = SearchDrinksTool()
+_search_places = SearchPlacesTool()
+_get_tag_catalog = GetTagCatalogTool()
+_resolve_tags = ResolveTagsTool()
 
 # 工具名 → 实例映射
 TOOLS: dict[str, BaseTool] = {
@@ -23,6 +30,10 @@ TOOLS: dict[str, BaseTool] = {
     _estimate_route.name: _estimate_route,
     _get_weather.name: _get_weather,
     _get_deals.name: _get_deals,
+    _search_drinks.name: _search_drinks,
+    _search_places.name: _search_places,
+    _get_tag_catalog.name: _get_tag_catalog,
+    _resolve_tags.name: _resolve_tags,
 }
 
 

@@ -66,7 +66,8 @@
       "private_room": false,
       "parking": true,
       "nursing_room": true
-    }
+    },
+    "domain": "eat"
   },
   {
     "id": "rest_002",
@@ -135,7 +136,8 @@
       "private_room": true,
       "parking": true,
       "nursing_room": false
-    }
+    },
+    "domain": "eat"
   },
   {
     "id": "rest_003",
@@ -200,7 +202,8 @@
       "private_room": true,
       "parking": true,
       "nursing_room": false
-    }
+    },
+    "domain": "eat"
   },
   {
     "id": "rest_004",
@@ -266,7 +269,8 @@
       "private_room": false,
       "parking": true,
       "nursing_room": false
-    }
+    },
+    "domain": "eat"
   },
   {
     "id": "rest_005",
@@ -332,7 +336,8 @@
       "private_room": false,
       "parking": true,
       "nursing_room": false
-    }
+    },
+    "domain": "eat"
   },
   {
     "id": "rest_006",
@@ -365,6 +370,7 @@
     "bookable": false,
     "risk": null,
     "description": "精品咖啡连锁，招牌拿铁和芝士蛋糕，下午茶好去处",
+    "meal_suitable": false,
     "poi_type": "restaurant",
     "meituan_poi_id": "mt_rest_006",
     "city": "北京",
@@ -393,7 +399,8 @@
       "private_room": false,
       "parking": true,
       "nursing_room": true
-    }
+    },
+    "domain": "eat"
   },
   {
     "id": "rest_007",
@@ -452,7 +459,7 @@
     "queue_status": "short",
     "supports_queue_ticket": true,
     "reservation_notice": "亲子包间建议提前1天预约",
-    "low_calorie_options": false,
+    "low_calorie_options": true,
     "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
     "facilities": {
       "high_chair": true,
@@ -460,7 +467,8 @@
       "private_room": true,
       "parking": true,
       "nursing_room": true
-    }
+    },
+    "domain": "eat"
   },
   {
     "id": "rest_008",
@@ -524,7 +532,8 @@
       "private_room": false,
       "parking": true,
       "nursing_room": false
-    }
+    },
+    "domain": "eat"
   },
   {
     "id": "rest_009",
@@ -584,7 +593,8 @@
       "private_room": true,
       "parking": true,
       "nursing_room": false
-    }
+    },
+    "domain": "eat"
   },
   {
     "id": "rest_010",
@@ -631,7 +641,8 @@
     "district": "朝阳区",
     "suitable_scenes": [
       "friends",
-      "general"
+      "general",
+      "family"
     ],
     "source": "mock_meituan_local_life",
     "poi_status": "open",
@@ -653,6 +664,7 @@
       "private_room": false,
       "parking": false,
       "nursing_room": false
-    }
+    },
+    "domain": "eat"
   }
 ]

@@ -10,6 +10,7 @@ build/
 # IDE
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 
@@ -29,3 +30,4 @@ TEMP_TASK_*.md
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+frontend/tsconfig.tsbuildinfo

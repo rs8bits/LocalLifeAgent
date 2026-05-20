@@ -201,3 +201,167 @@ class GetDealsTool(BaseTool):
             return ToolResult(
                 tool=self.name, status="error", message="查询团购券失败", error=str(e)
             )
+
+
+class SearchDrinksTool(BaseTool):
+    name = "search_drinks"
+    description = "搜索饮品店，可按场景、距离、品类（奶茶/咖啡/酒吧/茶饮）、标签等过滤"
+
+    async def run(
+        self,
+        scene: Optional[str] = None,
+        radius_km: Optional[float] = None,
+        tag: Optional[str] = None,
+        sub_category: Optional[str] = None,
+        max_queue_minutes: Optional[int] = None,
+    ) -> ToolResult:
+        try:
+            data = read_json("drinks.json")
+            results = data
+
+            if scene:
+                # 家庭场景自动排除酒吧
+                if scene == "family":
+                    results = [d for d in results if d.get("sub_category") != "bar"]
+                results = [d for d in results if _matches_scene(d, scene)]
+
+            if radius_km is not None:
+                results = [d for d in results if d.get("distance_km", float("inf")) <= radius_km]
+
+            if tag:
+                results = [d for d in results if tag in d.get("tags", [])]
+
+            if sub_category:
+                results = [d for d in results if d.get("sub_category") == sub_category]
+
+            if max_queue_minutes is not None:
+                results = [d for d in results if d.get("queue_minutes", 0) <= max_queue_minutes]
+
+            return ToolResult(
+                tool=self.name,
+                status="ok",
+                message=f"找到 {len(results)} 个饮品店",
+                data=results,
+            )
+        except Exception as e:
+            return ToolResult(
+                tool=self.name, status="error", message="查询饮品失败", error=str(e)
+            )
+
+
+# ── 统一场所搜索 ───────────────────────────────────────────────
+
+_SOURCE_FILES = {
+    "play": "activities.json",
+    "eat": "restaurants.json",
+    "drink": "drinks.json",
+    "add_on": "add_ons.json",
+}
+
+
+class SearchPlacesTool(BaseTool):
+    name = "search_places"
+    description = "统一场所搜索，按领域(play/eat/drink/add_on)搜索，支持多标签 OR 匹配和自动放宽"
+
+    async def run(
+        self,
+        domain: str,
+        scene: Optional[str] = None,
+        radius_km: Optional[float] = None,
+        tags_any: Optional[list[str]] = None,
+        tags_all: Optional[list[str]] = None,
+        sub_category: Optional[str] = None,
+        party_size: Optional[int] = None,
+        child_age: Optional[int] = None,
+        indoor: Optional[bool] = None,
+        available: Optional[bool] = None,
+        max_queue_minutes: Optional[int] = None,
+    ) -> ToolResult:
+        try:
+            source = _SOURCE_FILES.get(domain)
+            if not source:
+                return ToolResult(
+                    tool=self.name, status="error",
+                    message=f"未知领域: {domain}，支持: {list(_SOURCE_FILES.keys())}",
+                )
+            data = read_json(source)
+            results = data
+
+            # 场景过滤
+            if scene:
+                if domain == "drink" and scene == "family":
+                    results = [d for d in results if d.get("sub_category") != "bar"]
+                results = [d for d in results if _matches_scene(d, scene)]
+
+            # 距离
+            if radius_km is not None:
+                results = [r for r in results if r.get("distance_km", float("inf")) <= radius_km]
+
+            # 子品类
+            if sub_category:
+                results = [r for r in results if r.get("sub_category") == sub_category]
+
+            # 人数
+            if party_size is not None:
+                results = [
+                    r for r in results
+                    if r.get("party_size_min", 0) <= party_size <= r.get("party_size_max", 99)
+                ]
+
+            # 儿童年龄
+            if child_age is not None:
+                results = [
+                    r for r in results
+                    if r.get("suitable_age_min", 0) <= child_age <= r.get("suitable_age_max", 99)
+                ]
+
+            # 室内
+            if indoor is not None:
+                results = [r for r in results if r.get("indoor") == indoor]
+
+            # 可用性
+            if available is not None:
+                results = [r for r in results if r.get("available") == available]
+
+            # 排队
+            if max_queue_minutes is not None:
+                results = [r for r in results if r.get("queue_minutes", 0) <= max_queue_minutes]
+
+            # 标签过滤 (OR 匹配)
+            tag_warnings: list[str] = []
+            if tags_any:
+                tagged = [r for r in results if any(t in r.get("tags", []) for t in tags_any)]
+                if tagged:
+                    for item in tagged:
+                        item["_match_score"] = sum(
+                            1 for t in tags_any if t in item.get("tags", [])
+                        )
+                    results = sorted(
+                        tagged,
+                        key=lambda r: (
+                            r.get("_match_score", 0),
+                            r.get("rating", 0),
+                            -r.get("distance_km", 0),
+                        ),
+                        reverse=True,
+                    )
+                elif len(results) > 0 and tags_any:
+                    tag_warnings.append(f"标签 {tags_any} 无匹配，已放宽标签条件")
+                    # 不缩小结果
+
+            if tags_all:
+                tagged = [r for r in results if all(t in r.get("tags", []) for t in tags_all)]
+                if tagged:
+                    results = tagged
+
+            return ToolResult(
+                tool=self.name,
+                status="ok",
+                message=f"找到 {len(results)} 个场所 ({domain})",
+                data=results,
+                error="; ".join(tag_warnings) if tag_warnings else None,
+            )
+        except Exception as e:
+            return ToolResult(
+                tool=self.name, status="error", message=f"搜索失败 ({domain})", error=str(e),
+            )

@@ -234,3 +234,42 @@ class TestGuardrails:
         )
         result = await guardrails_node(state)
         assert result["guardrail_result"]["blocked"] is True
+
+    @pytest.mark.asyncio
+    async def test_valid_drink_passes(self):
+        valid_act = read_json("activities.json")[0]
+        valid_rest = read_json("restaurants.json")[0]
+        state = _make_state(
+            plans=[{
+                "plan_id": "g_drink_1",
+                "title": "test",
+                "activity": {"id": valid_act["id"], "name": valid_act["name"],
+                             "suitable_age_min": 2, "suitable_age_max": 12},
+                "restaurant": {"id": valid_rest["id"], "name": valid_rest["name"]},
+                "drink": {"id": "drink_004", "name": "京A精酿啤酒"},
+                "deals": [],
+                "risk_tips": [],
+            }],
+        )
+        result = await guardrails_node(state)
+        assert result["guardrail_result"]["passed"] is True
+
+    @pytest.mark.asyncio
+    async def test_invalid_drink_id_blocked(self):
+        valid_act = read_json("activities.json")[0]
+        valid_rest = read_json("restaurants.json")[0]
+        state = _make_state(
+            plans=[{
+                "plan_id": "g_drink_2",
+                "title": "test",
+                "activity": {"id": valid_act["id"], "name": valid_act["name"],
+                             "suitable_age_min": 2, "suitable_age_max": 12},
+                "restaurant": {"id": valid_rest["id"], "name": valid_rest["name"]},
+                "drink": {"id": "drink_fake_999", "name": "假饮品"},
+                "deals": [],
+                "risk_tips": [],
+            }],
+        )
+        result = await guardrails_node(state)
+        assert result["guardrail_result"]["blocked"] is True
+        assert any("drink" in i.lower() for i in result["guardrail_result"]["issues"])

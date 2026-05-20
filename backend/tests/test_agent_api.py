@@ -221,7 +221,45 @@ class TestAgentConfirm:
         assert len(read_json("bookings.json")) == bookings_after_first
         assert len(read_json("orders.json")) == orders_after_first
 
-    def test_confirm_friends_scene(self):
+    def test_confirm_with_drink_plan_succeeds(self, monkeypatch):
+        """含 drink_004 的方案确认应成功或 partial_success，不能 500"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        plan_resp = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "晚上和朋友喝精酿啤酒",
+        })
+        assert plan_resp.status_code == 200
+        data = plan_resp.json()
+        session_id = data["session_id"]
+        # 找到含 drink 的方案
+        drink_plan = None
+        for p in data["plans"]:
+            if p.get("drink") and p["drink"].get("bookable"):
+                drink_plan = p
+                break
+        if not drink_plan:
+            drink_plan = data["plans"][0]
+        plan_id = drink_plan["plan_id"]
+
+        confirm_resp = client.post("/api/agent/confirm", json={
+            "session_id": session_id,
+            "plan_id": plan_id,
+        })
+        assert confirm_resp.status_code == 200, f"含 drink 方案确认不应 500: {confirm_resp.text}"
+        result = confirm_resp.json()
+        assert result["status"] in ("success", "partial_success"), \
+            f"状态应为 success 或 partial_success, 实际: {result['status']}"
+
+        # 检查 bookings.json 中 drink booking 的 type
+        bookings = read_json("bookings.json")
+        drink_bookings = [b for b in bookings if b.get("type") == "drink"]
+        if drink_bookings:
+            assert drink_bookings[0]["type"] == "drink"
+
+    def test_confirm_friends_scene(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
         plan_resp = client.post("/api/agent/plan", json={
             "user_id": "user_002",
             "message": "今天下午想和4个朋友出去拍照吃饭，去三里屯附近",

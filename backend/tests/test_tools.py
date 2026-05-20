@@ -7,7 +7,9 @@ from backend.tools.mock_tools import (
     EstimateRouteTool,
     GetWeatherTool,
     GetDealsTool,
+    SearchDrinksTool,
 )
+from backend.tools.tag_tools import GetTagCatalogTool, ResolveTagsTool
 from backend.tools.registry import get_tool, list_tools
 
 
@@ -172,17 +174,115 @@ class TestGetDeals:
         assert len(result.data) == 0
 
 
+class TestSearchDrinks:
+    """饮品搜索工具"""
+
+    @pytest.mark.asyncio
+    async def test_search_all(self):
+        tool = SearchDrinksTool()
+        result = await tool.run()
+        assert result.status == "ok"
+        assert len(result.data) >= 6
+
+    @pytest.mark.asyncio
+    async def test_search_bar(self):
+        tool = SearchDrinksTool()
+        result = await tool.run(sub_category="bar")
+        assert result.status == "ok"
+        for item in result.data:
+            assert item["sub_category"] == "bar"
+
+    @pytest.mark.asyncio
+    async def test_search_family_excludes_bar(self):
+        tool = SearchDrinksTool()
+        result = await tool.run(scene="family")
+        for item in result.data:
+            assert item["sub_category"] != "bar"
+
+
+class TestTagCatalogTool:
+    """标签目录工具测试"""
+
+    @pytest.mark.asyncio
+    async def test_get_full_catalog(self):
+        tool = GetTagCatalogTool()
+        result = await tool.run()
+        assert result.status == "ok"
+        domains = result.data.get("domains", {})
+        for d in ["play", "eat", "drink", "add_on"]:
+            assert d in domains
+
+    @pytest.mark.asyncio
+    async def test_get_catalog_by_domain(self):
+        tool = GetTagCatalogTool()
+        result = await tool.run(domain="play")
+        assert result.status == "ok"
+        assert "tags" in result.data
+        assert "categories" in result.data
+
+    @pytest.mark.asyncio
+    async def test_get_catalog_unknown_domain(self):
+        tool = GetTagCatalogTool()
+        result = await tool.run(domain="unknown")
+        assert result.status == "error"
+
+
+class TestResolveTagsTool:
+    """标签解析工具测试"""
+
+    @pytest.mark.asyncio
+    async def test_resolve_singing_photography(self):
+        tool = ResolveTagsTool()
+        result = await tool.run(domain="play", keywords=["singing", "photography", "karaoke"])
+        assert result.status == "ok"
+        assert "唱歌" in result.data["matched_tags"]
+        assert "拍照" in result.data["matched_tags"]
+
+    @pytest.mark.asyncio
+    async def test_resolve_coffee_bar_beer(self):
+        tool = ResolveTagsTool()
+        result = await tool.run(domain="drink", keywords=["coffee", "bar", "beer"])
+        assert result.status == "ok"
+        # coffee 直接命中 sub_category
+        assert "coffee" in result.data["matched_sub_categories"]
+        # bar 直接命中 sub_category
+        assert "bar" in result.data["matched_sub_categories"]
+
+    @pytest.mark.asyncio
+    async def test_resolve_reports_unmatched(self):
+        tool = ResolveTagsTool()
+        result = await tool.run(domain="play", keywords=["skydiving"])
+        assert result.status == "ok"
+        assert "skydiving" in result.data["unmatched"]
+
+    @pytest.mark.asyncio
+    async def test_resolve_unknown_domain(self):
+        tool = ResolveTagsTool()
+        result = await tool.run(domain="unknown", keywords=["test"])
+        assert result.status == "error"
+
+
 class TestRegistry:
     """工具注册表测试"""
 
     def test_list_tools(self):
         tools = list_tools()
-        assert len(tools) >= 5
+        assert len(tools) >= 8
 
     def test_get_tool(self):
         tool = get_tool("search_activities")
         assert tool is not None
         assert tool.name == "search_activities"
+
+    def test_get_tag_catalog_tool(self):
+        tool = get_tool("get_tag_catalog")
+        assert tool is not None
+        assert tool.name == "get_tag_catalog"
+
+    def test_get_resolve_tags_tool(self):
+        tool = get_tool("resolve_tags")
+        assert tool is not None
+        assert tool.name == "resolve_tags"
 
     def test_get_nonexistent_tool(self):
         tool = get_tool("nonexistent")

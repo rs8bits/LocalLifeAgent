@@ -109,6 +109,17 @@ def _rule_parse(message: str) -> Intent:
         activity_preferences.append("拍照")
     if any(kw in message for kw in ["户外", "公园", "散步"]):
         activity_preferences.append("户外")
+    if any(kw in message for kw in ["KTV", "唱歌", "密室", "撸猫", "电竞", "蹦床", "LiveHouse", "livehouse", "演出"]):
+        activity_preferences.append("社交")
+    if any(kw in message for kw in ["电影", "看电影", "影院", "电影院"]):
+        activity_preferences.append("观影")
+
+    # 饮品偏好
+    drink_preferences = []
+    if any(kw in message for kw in ["咖啡", "喝咖啡", "奶茶", "茶饮", "果茶", "奶盖", "奈雪", "喜茶", "星巴克", "瑞幸"]):
+        drink_preferences.append("coffee_tea")
+    if any(kw in message for kw in ["精酿", "啤酒", "酒吧", "喝酒", "小酌", "清吧"]):
+        drink_preferences.append("bar")
 
     # 低卡需求
     needs_low_calorie = any(
@@ -145,6 +156,7 @@ def _rule_parse(message: str) -> Intent:
         budget_per_person=budget_per_person,
         food_preferences=food_preferences,
         activity_preferences=activity_preferences,
+        drink_preferences=drink_preferences,
         child_age=child_age,
         needs_low_calorie=needs_low_calorie,
         needs_photo_spot=needs_photo_spot,
@@ -186,6 +198,7 @@ INTENT_SYSTEM_PROMPT = """你是一个意图解析器。根据用户输入，提
   "budget_per_person": int | null,
   "food_preferences": [string],
   "activity_preferences": [string],
+  "drink_preferences": [string],
   "child_age": int | null,
   "needs_low_calorie": bool,
   "needs_photo_spot": bool,
@@ -196,6 +209,7 @@ INTENT_SYSTEM_PROMPT = """你是一个意图解析器。根据用户输入，提
 - scene: 提到老婆/孩子/亲子 → family；朋友/同学/聚会 → friends
 - child_age: 从"孩子X岁"中提取
 - needs_low_calorie: 提到减肥/减脂/清淡/低卡 → true
+- drink_preferences: 提到咖啡/奶茶 → ["coffee_tea"]，精酿/啤酒/酒吧 → ["bar"]
 - avoid_queue_minutes: 默认为30，提到不想排队→10，网红/排队久→60
 """
 
@@ -247,13 +261,17 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
                 intent.food_preferences = intent_dict["food_preferences"]
             if "activity_preferences" in intent_dict and intent_dict["activity_preferences"]:
                 intent.activity_preferences = intent_dict["activity_preferences"]
+            if "drink_preferences" in intent_dict and intent_dict["drink_preferences"]:
+                intent.drink_preferences = intent_dict["drink_preferences"]
         except Exception:
             pass  # LLM 部分字段解析失败，保留规则结果
 
     # 合并用户记忆（用户输入优先，记忆仅作为默认值）
+    # 家庭/个人属性仅在家场景或用户明确提到家庭成员时合并
     if user_memory:
         prefs = user_memory.get("preferences", {})
-        if not intent.child_age and prefs.get("child_age"):
+        is_family_context = intent.scene == "family"
+        if not intent.child_age and prefs.get("child_age") and is_family_context:
             intent.child_age = prefs["child_age"]
         if intent.radius_km == 5.0 and prefs.get("max_distance_km"):
             intent.radius_km = float(prefs["max_distance_km"])
@@ -261,8 +279,15 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
             intent.avoid_queue_minutes = prefs["max_queue_minutes"]
         if not intent.food_preferences and prefs.get("cuisine_likes"):
             intent.food_preferences = [tag for tag in prefs.get("cuisine_likes", [])]
-        if prefs.get("spouse_diet") == "减脂":
+        if prefs.get("spouse_diet") == "减脂" and is_family_context:
             intent.needs_low_calorie = True
+
+        # companions: 朋友场景不加入 child/spouse
+        if is_family_context and not intent.companions:
+            if prefs.get("child_age") and prefs.get("child_name"):
+                intent.companions.append({"role": "child", "age": prefs["child_age"]})
+            if prefs.get("spouse_diet"):
+                intent.companions.append({"role": "spouse", "diet_preference": prefs["spouse_diet"]})
 
     _normalize_preferences(intent)
     return intent
@@ -280,15 +305,24 @@ def _normalize_preferences(intent: Intent) -> None:
         "沙拉": "健康",
     }
     activity_map = {
-        "室内活动": "室内",
-        "室内游玩": "室内",
-        "适合小孩": "亲子",
-        "适合孩子": "亲子",
-        "儿童": "亲子",
-        "小孩": "亲子",
-        "宝宝": "亲子",
-        "拍照打卡": "拍照",
-        "打卡": "拍照",
+        "室内活动": "室内", "室内游玩": "室内",
+        "适合小孩": "亲子", "适合孩子": "亲子", "儿童": "亲子",
+        "小孩": "亲子", "宝宝": "亲子",
+        "拍照打卡": "拍照", "打卡": "拍照",
+        # LLM 可能输出的英文/类别词
+        "amusement_park": "亲子", "amusement park": "亲子",
+        "playground": "亲子", "trampoline": "运动",
+        "KTV": "唱歌", "ktv": "唱歌", "karaoke": "唱歌",
+        "cat_cafe": "撸猫", "cat cafe": "撸猫",
+        "escape_room": "密室", "escape room": "密室",
+        "live_house": "音乐", "live house": "音乐",
+        "cinema": "观影", "movie": "观影", "电影": "观影",
+        "esports": "电竞", "gaming": "电竞",
+        "board_game": "桌游", "board game": "桌游",
+        "park": "户外", "shopping": "购物",
+        "coffee_shop": "咖啡", "cafe": "咖啡",
+        "exhibition": "艺术", "museum": "艺术",
+        "citywalk": "散步", "hiking": "户外",
     }
 
     def normalize(values: list[str], mapping: dict[str, str]) -> list[str]:
@@ -301,3 +335,9 @@ def _normalize_preferences(intent: Intent) -> None:
 
     intent.food_preferences = normalize(intent.food_preferences, food_map)
     intent.activity_preferences = normalize(intent.activity_preferences, activity_map)
+    # 饮品偏好映射
+    drink_map = {
+        "喝咖啡": "coffee_tea", "咖啡": "coffee_tea", "奶茶": "coffee_tea",
+        "喝酒": "bar", "啤酒": "bar", "精酿": "bar", "酒吧": "bar",
+    }
+    intent.drink_preferences = normalize(intent.drink_preferences, drink_map)

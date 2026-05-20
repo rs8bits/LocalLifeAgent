@@ -30,6 +30,9 @@ from backend.mock_api.weather import router as weather_router
 from backend.mock_api.deals import router as deals_router
 from backend.mock_api.bookings import router as bookings_router
 from backend.mock_api.orders import router as orders_router
+from backend.mock_api.drinks import router as drinks_router
+from backend.mock_api.add_ons import router as add_ons_router
+from backend.mock_api.tags import router as tags_router
 
 app.include_router(activities_router)
 app.include_router(restaurants_router)
@@ -38,6 +41,9 @@ app.include_router(weather_router)
 app.include_router(deals_router)
 app.include_router(bookings_router)
 app.include_router(orders_router)
+app.include_router(drinks_router)
+app.include_router(add_ons_router)
+app.include_router(tags_router)
 
 # 注册 Agent API 路由
 from backend.agent.api import router as agent_router

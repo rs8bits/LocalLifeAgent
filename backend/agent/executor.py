@@ -1,6 +1,6 @@
 """执行器 - 在确认阶段执行预约、订位和 Mock 订单"""
 
-from backend.mock_api.bookings import book_activity, book_restaurant
+from backend.mock_api.bookings import book_activity, book_restaurant, book_drink
 from backend.mock_api.orders import create_order
 from backend.schemas.booking import BookingRequest
 from backend.schemas.order import OrderRequest
@@ -122,7 +122,51 @@ async def execute_plan(session: dict, plan_id: str) -> dict:
             "skipped": True,
         })
 
-    # 3. Mock 团购券订单
+    # 3. 饮品预约
+    drink = selected.get("drink")
+    if drink and drink.get("bookable"):
+        slots = drink.get("available_slots", [])
+        preferred = "16:00"
+        for t in (selected.get("timeline") or []):
+            if t.get("type") == "drink":
+                preferred = t.get("time", "16:00")
+                break
+        chosen = choose_available_slot(preferred, slots)
+        if chosen:
+            req = BookingRequest(
+                drink_id=drink["id"],
+                user_id=user_id,
+                people=people,
+                time=chosen,
+            )
+            result = await book_drink(req)
+            bookings.append({
+                "type": "drink",
+                "poi_name": drink.get("name", ""),
+                "success": result.success,
+                "booking_id": result.booking_id,
+                "message": result.message,
+            })
+            if not result.success:
+                errors.append(f"饮品预约失败: {result.message}")
+        else:
+            bookings.append({
+                "type": "drink",
+                "poi_name": drink.get("name", ""),
+                "success": False,
+                "message": "该饮品店不支持在线预约，已跳过",
+                "skipped": True,
+            })
+    elif drink:
+        bookings.append({
+            "type": "drink",
+            "poi_name": drink.get("name", ""),
+            "success": False,
+            "message": "该饮品店不支持在线预约，已跳过",
+            "skipped": True,
+        })
+
+    # 4. Mock 团购券订单
     deals = selected.get("deals", [])
     for deal in deals:
         req = OrderRequest(

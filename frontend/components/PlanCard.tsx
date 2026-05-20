@@ -11,9 +11,10 @@ export default function PlanCard({
   onConfirm: (planId: string) => void;
   disabled: boolean;
 }) {
-  const activity = plan.activity as Record<string, unknown> | null;
-  const restaurant = plan.restaurant as Record<string, unknown> | null;
-  const route = plan.route as Record<string, unknown> | null;
+  const activity = plan.activity;
+  const restaurant = plan.restaurant;
+  const drink = plan.drink;
+  const route = plan.route;
 
   return (
     <div className="border rounded-lg p-4 bg-white shadow-sm flex flex-col gap-3">
@@ -21,9 +22,6 @@ export default function PlanCard({
       <div className="flex justify-between items-start">
         <div>
           <h3 className="font-semibold text-base">{plan.title}</h3>
-          <span className="text-xs text-gray-500">
-            评分: {plan.score.toFixed(2)}
-          </span>
         </div>
         <span
           className={`text-xs px-2 py-0.5 rounded ${
@@ -44,13 +42,21 @@ export default function PlanCard({
 
       {/* 时间线 */}
       {plan.timeline.length > 0 && (
-        <div className="text-sm text-gray-700">
-          {plan.timeline.map((t, i) => (
-            <span key={i}>
-              {t.time} {t.title}
-              {i < plan.timeline.length - 1 && " → "}
-            </span>
-          ))}
+        <div className="text-sm space-y-0.5">
+          {plan.timeline.map((t, i) => {
+            const isTransit = t.type === "transit";
+            const isDrink = t.type === "drink";
+            return (
+              <div key={i} className={`flex items-center gap-2 ${isTransit ? "text-gray-400 text-xs" : ""}`}>
+                <span className="font-mono text-xs w-12 shrink-0">{t.time}</span>
+                <span className={isDrink ? "text-purple-600 font-medium" : isTransit ? "" : "font-medium"}>
+                  {isTransit ? "🚶 " : isDrink ? "🥤 " : "📍 "}
+                  {t.title}
+                </span>
+                <span className="text-gray-400 text-xs">{t.duration_min}min</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -65,6 +71,17 @@ export default function PlanCard({
           {(activity.indoor as boolean) && (
             <span className="text-blue-600 text-xs ml-1">室内</span>
           )}
+        </div>
+      )}
+
+      {/* 饮品 */}
+      {drink && (
+        <div className="text-sm">
+          <span className="text-gray-500">饮品: </span>
+          <span className="font-medium text-purple-600">{drink.name as string}</span>
+          <span className="text-gray-400 ml-2">
+            {(drink.avg_price as number) ?? 0}元/人
+          </span>
         </div>
       )}
 

@@ -137,7 +137,7 @@ class TestUserMemoryMerge:
                 "cuisine_likes": ["日料"],
             },
         }
-        intent = await parse_intent("下午想出去玩", user_memory=memory)
+        intent = await parse_intent("下午带老婆孩子出去玩", user_memory=memory)
         assert intent.child_age == 5
         assert intent.radius_km == 8.0
         assert intent.avoid_queue_minutes == 20
@@ -154,3 +154,31 @@ class TestUserMemoryMerge:
         intent = await parse_intent("孩子3岁，去3公里内的活动", user_memory=memory)
         assert intent.child_age == 3
         assert intent.radius_km == 3.0
+
+
+class TestFriendsMemoryIsolation:
+    """朋友场景不应被家庭记忆污染"""
+
+    @pytest.mark.asyncio
+    async def test_friends_scene_ignores_child_age_from_memory(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        memory = {
+            "user_id": "user_001",
+            "preferences": {
+                "child_age": 5,
+                "child_name": "小宝",
+                "spouse_diet": "减脂",
+                "max_distance_km": 8,
+                "max_queue_minutes": 30,
+                "cuisine_likes": ["日料"],
+            },
+        }
+        intent = await parse_intent("晚上和4个朋友想吃饭喝精酿再唱歌", user_memory=memory)
+        assert intent.scene == "friends"
+        assert intent.child_age is None, "朋友场景不应继承 child_age"
+        assert intent.needs_low_calorie is False, "朋友场景不应继承配偶减脂偏好"
+        # companions 不应包含 child/spouse
+        roles = [c.get("role") for c in intent.companions]
+        assert "child" not in roles, "朋友场景 companions 不应包含 child"
+        assert "spouse" not in roles, "朋友场景 companions 不应包含 spouse"

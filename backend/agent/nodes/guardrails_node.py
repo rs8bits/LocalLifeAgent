@@ -19,10 +19,12 @@ async def guardrails_node(state: AgentState) -> AgentState:
     valid_activity_ids = {a["id"] for a in read_json("activities.json")}
     valid_restaurant_ids = {r["id"] for r in read_json("restaurants.json")}
     valid_deal_ids = {d["id"] for d in read_json("deals.json")}
+    valid_drink_ids = {d["id"] for d in read_json("drinks.json")}
 
     for plan in plans:
         activity = plan.get("activity") or {}
         restaurant = plan.get("restaurant") or {}
+        drink = plan.get("drink") or {}
         deals = plan.get("deals", [])
 
         # 1. POI 来源校验
@@ -34,6 +36,11 @@ async def guardrails_node(state: AgentState) -> AgentState:
         rest_id = restaurant.get("id", "")
         if rest_id and rest_id not in valid_restaurant_ids:
             issues.append(f"餐厅 ID {rest_id} 不在合法数据中")
+            blocked = True
+
+        drink_id = drink.get("id", "")
+        if drink_id and drink_id not in valid_drink_ids:
+            issues.append(f"饮品 ID {drink_id} 不在合法数据中")
             blocked = True
 
         for deal in deals:

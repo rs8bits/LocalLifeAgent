@@ -8,6 +8,13 @@ from backend.mock_api.storage import read_json
 router = APIRouter(prefix="/api/mock", tags=["activities"])
 
 
+def _matches_scene(item: dict, scene: str) -> bool:
+    if item.get("scene") == scene:
+        return True
+    suitable = item.get("suitable_scenes", [])
+    return scene in suitable
+
+
 @router.get("/activities")
 async def list_activities(
     scene: Optional[str] = Query(None, description="场景过滤: family / friends / general"),
@@ -21,7 +28,7 @@ async def list_activities(
     results = data
 
     if scene:
-        results = [a for a in results if a.get("scene") == scene]
+        results = [a for a in results if _matches_scene(a, scene)]
 
     if radius_km is not None:
         results = [a for a in results if a.get("distance_km", float("inf")) <= radius_km]
