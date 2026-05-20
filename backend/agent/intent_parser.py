@@ -264,4 +264,40 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
         if prefs.get("spouse_diet") == "减脂":
             intent.needs_low_calorie = True
 
+    _normalize_preferences(intent)
     return intent
+
+
+def _normalize_preferences(intent: Intent) -> None:
+    """将 LLM 的自然语言偏好归一化到 Mock Data 标签体系"""
+    food_map = {
+        "清淡": "健康",
+        "低脂": "健康",
+        "低卡": "健康",
+        "减脂": "健康",
+        "健康餐": "健康",
+        "轻食": "健康",
+        "沙拉": "健康",
+    }
+    activity_map = {
+        "室内活动": "室内",
+        "室内游玩": "室内",
+        "适合小孩": "亲子",
+        "适合孩子": "亲子",
+        "儿童": "亲子",
+        "小孩": "亲子",
+        "宝宝": "亲子",
+        "拍照打卡": "拍照",
+        "打卡": "拍照",
+    }
+
+    def normalize(values: list[str], mapping: dict[str, str]) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            mapped = mapping.get(value, value)
+            if mapped not in normalized:
+                normalized.append(mapped)
+        return normalized
+
+    intent.food_preferences = normalize(intent.food_preferences, food_map)
+    intent.activity_preferences = normalize(intent.activity_preferences, activity_map)

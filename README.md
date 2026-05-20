@@ -109,7 +109,7 @@ cp .env.example .env
 ```bash
 DEEPSEEK_API_KEY=your_deepseek_api_key
 DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=v4flash
+DEEPSEEK_MODEL=deepseek-v4-flash
 ```
 
 `.env` 已被 `.gitignore` 忽略，不会提交到仓库。

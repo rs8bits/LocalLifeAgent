@@ -97,6 +97,29 @@ class TestIntentWithoutAPIKey:
         assert intent.child_age == 5
 
 
+class TestIntentPreferenceNormalization:
+    """LLM 自然语言偏好归一化"""
+
+    @pytest.mark.asyncio
+    async def test_llm_natural_preferences_map_to_mock_tags(self, monkeypatch):
+        async def fake_llm_parse(message: str):
+            return {
+                "scene": "family",
+                "food_preferences": ["清淡"],
+                "activity_preferences": ["室内活动", "适合小孩"],
+                "needs_low_calorie": True,
+            }
+
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", True)
+        monkeypatch.setattr("backend.agent.intent_parser._llm_parse", fake_llm_parse)
+
+        intent = await parse_intent("我们三口想找个室内活动，吃清淡点")
+
+        assert intent.food_preferences == ["健康"]
+        assert intent.activity_preferences == ["室内", "亲子"]
+        assert intent.needs_low_calorie is True
+
+
 class TestUserMemoryMerge:
     """用户记忆合并"""
 
