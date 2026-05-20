@@ -117,6 +117,8 @@ async def agent_confirm(req: AgentConfirmRequest):
         "user_profile": {},
         "candidate_activities": [],
         "candidate_restaurants": [],
+        "candidate_drinks": [],
+        "candidate_delivery_items": [],
         "plans": plans,
         "selected_plan_id": req.plan_id,
         "tool_logs": session.get("tool_logs", []),

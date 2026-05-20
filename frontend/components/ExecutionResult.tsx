@@ -46,7 +46,7 @@ export default function ExecutionResult({
           <p className="text-sm font-medium text-gray-600 mb-1">Mock 订单:</p>
           {orders.map((o, i) => (
             <div key={i} className="text-xs bg-blue-50 text-blue-800 px-2 py-1 rounded mb-1">
-              {o.deal_title}: {o.order_id}
+              {o.deal_title || o.item_name || o.order_type || "Mock订单"}: {o.order_id}
             </div>
           ))}
         </div>

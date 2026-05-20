@@ -11,6 +11,8 @@ async def reflection_node(state: AgentState) -> AgentState:
     intent = state.get("intent", {})
     plans = state.get("plans", [])
     weather = state.get("weather")
+    tag_result = state.get("tag_resolve_result", {})
+    required_domains = tag_result.get("domain_required", {})
 
     all_passed = True
     plan_results = []
@@ -20,14 +22,15 @@ async def reflection_node(state: AgentState) -> AgentState:
         suggestions: list[str] = []
         activity = plan.get("activity") or {}
         restaurant = plan.get("restaurant") or {}
+        delivery_items = plan.get("delivery_items") or []
 
         # 1. 是否包含活动
-        if not activity:
+        if required_domains.get("play") and not activity:
             issues.append("方案缺少活动")
             suggestions.append("请确保至少包含一个活动")
 
         # 2. 是否包含餐厅
-        if not restaurant:
+        if required_domains.get("eat") and not restaurant:
             issues.append("方案缺少餐厅")
             suggestions.append("请确保至少包含一个餐厅")
 
@@ -35,7 +38,7 @@ async def reflection_node(state: AgentState) -> AgentState:
         act_dur = activity.get("recommended_duration_min", 0)
         rest_dur = restaurant.get("recommended_duration_min", 0)
         total_dur = act_dur + rest_dur
-        if total_dur < 120:
+        if (activity or restaurant) and total_dur < 120:
             issues.append(f"总时长{total_dur}分钟偏短")
             suggestions.append("建议增加活动或延长停留时间")
         elif total_dur > 480:
@@ -97,6 +100,12 @@ async def reflection_node(state: AgentState) -> AgentState:
             issues.append(f"活动「{activity.get('name', '')}」不支持在线预约")
         if restaurant and not restaurant.get("available", True):
             issues.append(f"餐厅「{restaurant.get('name', '')}」当前无位")
+        if required_domains.get("delivery") and not delivery_items:
+            issues.append("方案缺少外卖/闪送商品")
+            suggestions.append("请补充可下单的配送商品")
+        for item in delivery_items:
+            if item.get("estimated_delivery_min", 0) > 90:
+                issues.append(f"配送商品「{item.get('name', '')}」预计送达时间较长")
 
         passed = len(issues) == 0
         if not passed:

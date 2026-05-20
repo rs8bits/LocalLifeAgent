@@ -9,6 +9,8 @@ from backend.tools.mock_tools import (
     GetDealsTool,
     SearchDrinksTool,
     SearchPlacesTool,
+    SearchDeliveryItemsTool,
+    EstimateDeliveryTool,
 )
 from backend.tools.tag_tools import GetTagCatalogTool, ResolveTagsTool
 
@@ -20,6 +22,8 @@ _get_weather = GetWeatherTool()
 _get_deals = GetDealsTool()
 _search_drinks = SearchDrinksTool()
 _search_places = SearchPlacesTool()
+_search_delivery_items = SearchDeliveryItemsTool()
+_estimate_delivery = EstimateDeliveryTool()
 _get_tag_catalog = GetTagCatalogTool()
 _resolve_tags = ResolveTagsTool()
 
@@ -32,6 +36,8 @@ TOOLS: dict[str, BaseTool] = {
     _get_deals.name: _get_deals,
     _search_drinks.name: _search_drinks,
     _search_places.name: _search_places,
+    _search_delivery_items.name: _search_delivery_items,
+    _estimate_delivery.name: _estimate_delivery,
     _get_tag_catalog.name: _get_tag_catalog,
     _resolve_tags.name: _resolve_tags,
 }

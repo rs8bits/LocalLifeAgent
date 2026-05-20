@@ -5,6 +5,7 @@ from typing import Any, Optional
 from backend.agent.schemas import Intent, PlannerOutput
 from backend.agent.intent_parser import parse_intent
 from backend.agent.tag_resolver import resolve_domain_tags
+from backend.agent.plan_composer import compose_plan_specs_with_llm
 from backend.agent.scorer import score_plan
 from backend.tools.registry import get_tool
 from backend.mock_api.storage import read_json
@@ -50,6 +51,7 @@ async def plan_for_message(
     activities: list[dict] = []
     restaurants: list[dict] = []
     drinks: list[dict] = []
+    delivery_items: list[dict] = []
 
     for domain_name in domains:
         params: dict[str, Any] = {
@@ -81,7 +83,16 @@ async def plan_for_message(
             if tags:
                 params["tags_any"] = tags
 
-        result = await _run_tool("search_places", tool_logs, **params)
+        if domain_name == "delivery":
+            sub_cats = tag_result.get("domain_sub_categories", {}).get("delivery", [])
+            delivery_params: dict[str, Any] = {"scene": scene}
+            if tags:
+                delivery_params["tags_any"] = tags
+            if sub_cats:
+                delivery_params["sub_category"] = sub_cats[0]
+            result = await _run_tool("search_delivery_items", tool_logs, **delivery_params)
+        else:
+            result = await _run_tool("search_places", tool_logs, **params)
 
         if result and result.status == "ok":
             data = result.data or []
@@ -91,6 +102,8 @@ async def plan_for_message(
                 restaurants = data
             elif domain_name == "drink":
                 drinks = data
+            elif domain_name == "delivery":
+                delivery_items = data
             if result.error:
                 warnings.append(f"[{domain_name}] {result.error}")
 
@@ -103,14 +116,52 @@ async def plan_for_message(
         if fallback and fallback.status == "ok":
             restaurants = _dedupe_by_id(restaurants, fallback.data)
 
-    # 6. 组合方案
-    plans = _build_diverse_plans(intent, activities, restaurants, drinks, tool_logs)
+    # 6. 组合方案：LLM 输出方案 JSON，本地规则作为兜底
+    fallback_plans = _build_diverse_plans(intent, activities, restaurants, drinks, tool_logs)
+    if not fallback_plans and delivery_items:
+        fallback_plans = _build_delivery_only_plans(intent, delivery_items)
+    _attach_delivery_to_plans(fallback_plans, delivery_items, intent)
+
+    weather_data = weather_result.data[0] if weather_result and weather_result.status == "ok" and weather_result.data else None
+    llm_specs, composer_warning = await compose_plan_specs_with_llm(
+        message=message,
+        intent=intent,
+        user_memory=user_memory,
+        tag_result=tag_result,
+        weather=weather_data,
+        candidates={
+            "activities": activities,
+            "restaurants": restaurants,
+            "drinks": drinks,
+            "delivery_items": delivery_items,
+        },
+    )
+    if composer_warning:
+        tool_logs.append({
+            "tool": "llm_plan_composer",
+            "status": "fallback",
+            "message": composer_warning,
+        })
+    plans = [
+        _make_plan_from_composer_spec(i, spec, intent, activities, restaurants, drinks, delivery_items)
+        for i, spec in enumerate(llm_specs)
+    ] if llm_specs else fallback_plans
 
     # 7. 错误/警告语义：有可用方案时，领域缺失进入风险提示；无方案才进入 errors。
     for domain_name in domains:
         is_required = domain_required.get(domain_name, False)
-        count = {"play": len(activities), "eat": len(restaurants), "drink": len(drinks)}.get(domain_name, 0)
-        label_cn = {"play": "活动", "eat": "餐厅", "drink": "饮品"}.get(domain_name, domain_name)
+        count = {
+            "play": len(activities),
+            "eat": len(restaurants),
+            "drink": len(drinks),
+            "delivery": len(delivery_items),
+        }.get(domain_name, 0)
+        label_cn = {
+            "play": "活动",
+            "eat": "餐厅",
+            "drink": "饮品",
+            "delivery": "外卖/闪送商品",
+        }.get(domain_name, domain_name)
         if count == 0:
             if plans:
                 suffix = "用户明确要求，已作为风险提示" if is_required else "该领域非必须"
@@ -130,6 +181,7 @@ async def plan_for_message(
     # 8. 丰富方案 + 评分
     for plan in plans:
         await _enrich_plan(plan, tool_logs)
+        _ensure_plan_actions(plan, intent)
     for plan in plans:
         score_plan(plan, intent)
 
@@ -414,7 +466,7 @@ def _align_to_slot(preferred_min: int, available_slots: list[str]) -> int | None
     return None
 
 
-_MIN_DURATION = {"activity": 45, "restaurant": 45, "drink": 10}
+_MIN_DURATION = {"activity": 45, "restaurant": 45, "drink": 10, "delivery": 5}
 
 
 def _resolve_poi_start_time(timeline: list[dict], slot_type: str) -> str | None:
@@ -527,7 +579,7 @@ def _schedule_slots(
 
 
 def _default_duration(slot_type: str) -> int:
-    return {"activity": 120, "restaurant": 75, "drink": 25}.get(slot_type, 60)
+    return {"activity": 120, "restaurant": 75, "drink": 25, "delivery": 5}.get(slot_type, 60)
 
 
 def _make_plan_with_timeline(
@@ -642,6 +694,8 @@ def _make_plan_with_timeline(
         "activity": activity,
         "restaurant": restaurant,
         "drink": drink,
+        "delivery_items": [],
+        "actions": [],
         "route": None,
         "deals": [],
         "budget": {
@@ -655,6 +709,305 @@ def _make_plan_with_timeline(
         "recommend_reasons": recommend_reasons,
         "score": 0.0,
         "score_reasons": [],
+    }
+
+
+def _attach_delivery_to_plans(
+    plans: list[dict],
+    delivery_items: list[dict],
+    intent: Intent,
+) -> None:
+    """本地兜底：把最合适的外卖/闪送商品挂到方案上。"""
+    if not plans or not delivery_items:
+        return
+    sorted_items = sorted(delivery_items, key=_delivery_key(intent), reverse=True)
+    for idx, plan in enumerate(plans):
+        if plan.get("delivery_items"):
+            continue
+        item = sorted_items[min(idx, len(sorted_items) - 1)]
+        plan["delivery_items"] = [item]
+        target = plan.get("restaurant") or plan.get("activity") or plan.get("drink") or {}
+        delivery_time = _delivery_time_for_plan(plan, item)
+        plan.setdefault("timeline", []).append({
+            "time": delivery_time,
+            "type": "delivery",
+            "title": f"{item.get('name', '')}送达{target.get('name', '目的地')}",
+            "poi_id": item.get("id", ""),
+            "duration_min": 5,
+        })
+        plan["timeline"] = _sort_timeline(plan["timeline"])
+        plan.setdefault("recommend_reasons", []).append("可叠加外卖/闪送服务")
+        if item.get("risk"):
+            plan.setdefault("risk_tips", []).append(item["risk"])
+        _recalculate_budget(plan, intent)
+
+
+def _build_delivery_only_plans(intent: Intent, delivery_items: list[dict]) -> list[dict]:
+    """用户只要求外卖/闪送时生成可执行的配送方案。"""
+    plans = []
+    for idx, item in enumerate(sorted(delivery_items, key=_delivery_key(intent), reverse=True)[:3]):
+        delivery_time = "15:30" if intent.time_window != "evening" else "18:00"
+        plan = {
+            "plan_id": f"plan_{idx + 1:03d}",
+            "title": f"配送方案{idx + 1}：{item.get('name', '')}",
+            "scene": intent.scene,
+            "timeline": [{
+                "time": delivery_time,
+                "type": "delivery",
+                "title": f"{item.get('name', '')}送达指定地点",
+                "poi_id": item.get("id", ""),
+                "duration_min": 5,
+            }],
+            "activity": None,
+            "restaurant": None,
+            "drink": None,
+            "delivery_items": [item],
+            "actions": [],
+            "route": None,
+            "deals": [],
+            "budget": {},
+            "queue_minutes": 0,
+            "booking_status": "available",
+            "risk_tips": [item["risk"]] if item.get("risk") else [],
+            "recommend_reasons": ["可直接创建外卖/闪送 Mock 订单"],
+            "score": 0.0,
+            "score_reasons": [],
+        }
+        _recalculate_budget(plan, intent)
+        plans.append(plan)
+    return plans
+
+
+def _delivery_key(intent: Intent):
+    def key(item: dict) -> float:
+        tags = item.get("tags", [])
+        score = item.get("_match_score", 0) * 3.0
+        for pref in intent.delivery_preferences or []:
+            if pref in tags or pref == item.get("sub_category"):
+                score += 4.0
+        if intent.scene == "family" and "亲子" in tags:
+            score += 2.0
+        if intent.needs_low_calorie and any(t in tags for t in ["健康", "低卡", "轻食"]):
+            score += 3.0
+        score -= item.get("estimated_delivery_min", 60) * 0.02
+        return score
+    return key
+
+
+def _delivery_time_for_plan(plan: dict, item: dict) -> str:
+    restaurant_time = _timeline_time_for(plan, "restaurant")
+    if restaurant_time:
+        return restaurant_time
+    activity_time = _timeline_time_for(plan, "activity")
+    if activity_time:
+        return _minutes_to_time(_time_to_minutes(activity_time) + 60)
+    return "15:30"
+
+
+def _make_plan_from_composer_spec(
+    index: int,
+    spec: dict,
+    intent: Intent,
+    activities: list[dict],
+    restaurants: list[dict],
+    drinks: list[dict],
+    delivery_items: list[dict],
+) -> dict:
+    """将 LLM 输出的引用 JSON 转换为前端/执行器使用的完整 Plan。"""
+    refs = spec.get("selected_refs", {})
+    activity = _find_by_id(activities, refs.get("activity_id"))
+    restaurant = _find_by_id(restaurants, refs.get("restaurant_id"))
+    drink = _find_by_id(drinks, refs.get("drink_id"))
+    deliveries = [
+        item for item_id in refs.get("delivery_item_ids", [])
+        if (item := _find_by_id(delivery_items, item_id))
+    ]
+
+    base = _make_plan_with_timeline(index, intent, activity, restaurant, drink)
+    if spec.get("title"):
+        base["title"] = str(spec["title"])
+    timeline = _timeline_from_spec(spec.get("timeline", []), activity, restaurant, drink, deliveries)
+    if timeline:
+        base["timeline"] = timeline
+    base["delivery_items"] = deliveries
+    base["actions"] = _normalize_actions_from_spec(spec.get("actions", []))
+    for reason in spec.get("recommend_reasons") or []:
+        if reason not in base["recommend_reasons"]:
+            base["recommend_reasons"].append(str(reason))
+    for risk in spec.get("risk_tips") or []:
+        if risk not in base["risk_tips"]:
+            base["risk_tips"].append(str(risk))
+    _recalculate_budget(base, intent)
+    return base
+
+
+def _timeline_from_spec(
+    raw_timeline: list[dict],
+    activity: dict | None,
+    restaurant: dict | None,
+    drink: dict | None,
+    delivery_items: list[dict],
+) -> list[dict]:
+    item_map = {}
+    for item in [activity, restaurant, drink, *delivery_items]:
+        if item:
+            item_map[item.get("id")] = item
+
+    timeline = []
+    for raw in raw_timeline:
+        ref_id = raw.get("ref_id") or raw.get("poi_id") or ""
+        poi = item_map.get(ref_id, {})
+        title = raw.get("title") or poi.get("name", "")
+        step_type = _normalize_timeline_type(raw.get("type") or _type_from_id(ref_id))
+        timeline.append({
+            "time": raw.get("time") or "",
+            "type": step_type,
+            "title": title,
+            "poi_id": ref_id,
+            "duration_min": int(raw.get("duration_min") or _default_duration(step_type)),
+        })
+    return _sort_timeline(timeline)
+
+
+def _normalize_actions_from_spec(raw_actions: list[dict]) -> list[dict]:
+    actions = []
+    for idx, action in enumerate(raw_actions):
+        if not isinstance(action, dict):
+            continue
+        actions.append({
+            "action_id": action.get("action_id") or f"action_{idx + 1}",
+            "type": action.get("type", ""),
+            "ref_id": action.get("ref_id", ""),
+            "scheduled_time": action.get("scheduled_time") or "",
+            "quantity": int(action.get("quantity") or 1),
+            "target_ref_id": action.get("target_ref_id"),
+        })
+    return actions
+
+
+def _ensure_plan_actions(plan: dict, intent: Intent) -> None:
+    """为前端确认页和执行器补齐可执行动作 JSON。"""
+    existing = plan.get("actions") or []
+    seen = {(a.get("type"), a.get("ref_id")) for a in existing}
+    actions = list(existing)
+
+    activity = plan.get("activity")
+    if activity and activity.get("bookable") and ("book_activity", activity.get("id")) not in seen:
+        actions.append({
+            "action_id": f"book_{activity.get('id')}",
+            "type": "book_activity",
+            "ref_id": activity.get("id"),
+            "scheduled_time": _timeline_time_for(plan, "activity") or "14:00",
+            "quantity": intent.people_count or 1,
+            "target_ref_id": None,
+        })
+
+    restaurant = plan.get("restaurant")
+    if restaurant and restaurant.get("bookable") and restaurant.get("available") and ("book_restaurant", restaurant.get("id")) not in seen:
+        actions.append({
+            "action_id": f"book_{restaurant.get('id')}",
+            "type": "book_restaurant",
+            "ref_id": restaurant.get("id"),
+            "scheduled_time": _timeline_time_for(plan, "restaurant") or "17:30",
+            "quantity": intent.people_count or 1,
+            "target_ref_id": None,
+        })
+
+    drink = plan.get("drink")
+    if drink and drink.get("bookable") and ("book_drink", drink.get("id")) not in seen:
+        actions.append({
+            "action_id": f"book_{drink.get('id')}",
+            "type": "book_drink",
+            "ref_id": drink.get("id"),
+            "scheduled_time": _timeline_time_for(plan, "drink") or "16:00",
+            "quantity": intent.people_count or 1,
+            "target_ref_id": None,
+        })
+
+    for item in plan.get("delivery_items") or []:
+        if ("order_delivery", item.get("id")) in seen:
+            continue
+        target = plan.get("restaurant") or plan.get("activity") or plan.get("drink") or {}
+        actions.append({
+            "action_id": f"order_{item.get('id')}",
+            "type": "order_delivery",
+            "ref_id": item.get("id"),
+            "scheduled_time": _timeline_time_for(plan, "delivery") or _delivery_time_for_plan(plan, item),
+            "quantity": 1,
+            "target_ref_id": target.get("id"),
+        })
+
+    for deal in plan.get("deals") or []:
+        if ("order_deal", deal.get("id")) in seen:
+            continue
+        actions.append({
+            "action_id": f"deal_{deal.get('id')}",
+            "type": "order_deal",
+            "ref_id": deal.get("id"),
+            "scheduled_time": "",
+            "quantity": 1,
+            "target_ref_id": deal.get("poi_id"),
+        })
+
+    plan["actions"] = actions
+
+
+def _find_by_id(items: list[dict], item_id: str | None) -> dict | None:
+    if not item_id:
+        return None
+    return next((item for item in items if item.get("id") == item_id), None)
+
+
+def _type_from_id(ref_id: str) -> str:
+    if ref_id.startswith("act_"):
+        return "activity"
+    if ref_id.startswith("rest_"):
+        return "restaurant"
+    if ref_id.startswith("drink_"):
+        return "drink"
+    if ref_id.startswith("delivery_"):
+        return "delivery"
+    return "transit"
+
+
+def _normalize_timeline_type(value: str) -> str:
+    return {
+        "play": "activity",
+        "activity": "activity",
+        "eat": "restaurant",
+        "restaurant": "restaurant",
+        "drink": "drink",
+        "delivery": "delivery",
+        "flash": "delivery",
+        "takeout": "delivery",
+        "transit": "transit",
+    }.get(value, "activity")
+
+
+def _timeline_time_for(plan: dict, slot_type: str) -> str | None:
+    for item in plan.get("timeline") or []:
+        if item.get("type") == slot_type:
+            return item.get("time")
+    return None
+
+
+def _sort_timeline(timeline: list[dict]) -> list[dict]:
+    return sorted(timeline, key=lambda item: item.get("time") or "99:99")
+
+
+def _recalculate_budget(plan: dict, intent: Intent) -> None:
+    people = intent.people_count or (3 if intent.scene == "family" else 4)
+    per_person = 0
+    for key in ["activity", "restaurant", "drink"]:
+        if plan.get(key):
+            per_person += plan[key].get("avg_price", 0)
+    delivery_total = 0
+    for item in plan.get("delivery_items") or []:
+        delivery_total += item.get("avg_price", 0) + item.get("delivery_fee", 0)
+    plan["budget"] = {
+        "total": per_person * people + delivery_total,
+        "per_person": per_person + (delivery_total // max(people, 1) if delivery_total else 0),
+        "currency": "CNY",
     }
 
 

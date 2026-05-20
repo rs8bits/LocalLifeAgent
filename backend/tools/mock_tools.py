@@ -256,6 +256,7 @@ _SOURCE_FILES = {
     "eat": "restaurants.json",
     "drink": "drinks.json",
     "add_on": "add_ons.json",
+    "delivery": "delivery_items.json",
 }
 
 
@@ -364,4 +365,121 @@ class SearchPlacesTool(BaseTool):
         except Exception as e:
             return ToolResult(
                 tool=self.name, status="error", message=f"搜索失败 ({domain})", error=str(e),
+            )
+
+
+class SearchDeliveryItemsTool(BaseTool):
+    name = "search_delivery_items"
+    description = "搜索可外卖/闪送商品，支持场景、配送商圈、标签、子品类和预计配送时间过滤"
+
+    async def run(
+        self,
+        scene: Optional[str] = None,
+        area: Optional[str] = None,
+        tag: Optional[str] = None,
+        tags_any: Optional[list[str]] = None,
+        sub_category: Optional[str] = None,
+        max_eta_min: Optional[int] = None,
+    ) -> ToolResult:
+        try:
+            results = read_json("delivery_items.json")
+
+            if scene:
+                results = [item for item in results if _matches_scene(item, scene)]
+            if area:
+                results = [item for item in results if area in item.get("available_areas", [])]
+            if tag:
+                results = [item for item in results if tag in item.get("tags", [])]
+            if sub_category:
+                results = [item for item in results if item.get("sub_category") == sub_category]
+            if max_eta_min is not None:
+                results = [
+                    item for item in results
+                    if item.get("estimated_delivery_min", 999) <= max_eta_min
+                ]
+
+            tag_warnings: list[str] = []
+            if tags_any:
+                tagged = [r for r in results if any(t in r.get("tags", []) for t in tags_any)]
+                if tagged:
+                    for item in tagged:
+                        item["_match_score"] = sum(
+                            1 for t in tags_any if t in item.get("tags", [])
+                        )
+                    results = sorted(
+                        tagged,
+                        key=lambda r: (
+                            r.get("_match_score", 0),
+                            -r.get("estimated_delivery_min", 999),
+                            r.get("stock_remaining", 0),
+                        ),
+                        reverse=True,
+                    )
+                elif results:
+                    tag_warnings.append(f"标签 {tags_any} 无匹配，已放宽标签条件")
+
+            results = [
+                item for item in results
+                if item.get("available") and item.get("stock_remaining", 0) > 0
+            ]
+            return ToolResult(
+                tool=self.name,
+                status="ok",
+                message=f"找到 {len(results)} 个配送商品",
+                data=results,
+                error="; ".join(tag_warnings) if tag_warnings else None,
+            )
+        except Exception as e:
+            return ToolResult(
+                tool=self.name, status="error", message="查询配送商品失败", error=str(e)
+            )
+
+
+class EstimateDeliveryTool(BaseTool):
+    name = "estimate_delivery"
+    description = "估算外卖/闪送商品配送费用和时效"
+
+    async def run(
+        self,
+        item_id: str,
+        quantity: int = 1,
+        target_area: Optional[str] = None,
+    ) -> ToolResult:
+        try:
+            items = read_json("delivery_items.json")
+            item = next((i for i in items if i.get("id") == item_id), None)
+            if item is None:
+                return ToolResult(
+                    tool=self.name,
+                    status="error",
+                    message=f"配送商品不存在: {item_id}",
+                )
+            if target_area and target_area not in item.get("available_areas", []):
+                return ToolResult(
+                    tool=self.name,
+                    status="error",
+                    message=f"商品暂不支持配送到 {target_area}",
+                    data={"available_areas": item.get("available_areas", [])},
+                )
+            total_price = item.get("avg_price", 0) * max(quantity, 1) + item.get("delivery_fee", 0)
+            data = {
+                "item_id": item_id,
+                "item_name": item.get("name"),
+                "merchant_name": item.get("merchant_name"),
+                "quantity": quantity,
+                "target_area": target_area,
+                "total_price": total_price,
+                "estimated_delivery_min": item.get("estimated_delivery_min", 0),
+                "prep_time_min": item.get("prep_time_min", 0),
+                "delivery_fee": item.get("delivery_fee", 0),
+            }
+            return ToolResult(
+                tool=self.name,
+                status="ok",
+                message=f"预计 {data['estimated_delivery_min']} 分钟送达，费用 {total_price} 元",
+                data=data,
+            )
+        except Exception as e:
+            return ToolResult(
+                tool=self.name, status="error", message="估算配送失败", error=str(e)
             )

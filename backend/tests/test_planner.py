@@ -2,6 +2,7 @@
 
 import pytest
 from backend.agent.planner import plan_for_message
+from backend.llm.deepseek_client import LLMResult
 
 
 class TestPlannerFamily:
@@ -252,6 +253,89 @@ class TestTagResolverFlow:
         # 即使"玩"没有精确匹配到标签，tag resolver 应放宽或返回空 tags_any
         # 结果不应崩溃
         assert "plans" in result
+
+
+class TestDeliveryPlanner:
+    """外卖/闪送规划"""
+
+    @pytest.mark.asyncio
+    async def test_delivery_domain_generates_actions_without_llm(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="今天下午和朋友唱歌吃饭，帮我闪送一束鲜花到餐厅",
+        )
+        plans = result["plans"]
+        assert len(plans) >= 1
+        assert result["intent"]["delivery_preferences"], "应识别外卖/闪送偏好"
+        assert any(p.get("delivery_items") for p in plans), "方案应包含配送商品"
+        assert any(
+            action.get("type") == "order_delivery"
+            for plan in plans
+            for action in plan.get("actions", [])
+        ), "确认阶段应有配送下单 action"
+
+    @pytest.mark.asyncio
+    async def test_delivery_only_generates_plan(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="帮我闪送一个生日蛋糕到餐厅",
+        )
+        plans = result["plans"]
+        assert len(plans) >= 1
+        assert plans[0].get("delivery_items")
+        assert any(a["type"] == "order_delivery" for a in plans[0].get("actions", []))
+
+    @pytest.mark.asyncio
+    async def test_llm_composer_output_is_used_and_validated(self, monkeypatch):
+        async def fake_llm_parse(message: str):
+            return None
+
+        async def fake_llm_resolve(message: str, intent_dict: dict, catalog: dict):
+            return None
+
+        async def fake_chat_json(messages, temperature=0.2):
+            return LLMResult(json_data={
+                "plans": [{
+                    "plan_id": "plan_001",
+                    "title": "LLM鲜花聚会方案",
+                    "selected_refs": {
+                        "activity_id": "act_009",
+                        "restaurant_id": "rest_002",
+                        "drink_id": None,
+                        "delivery_item_ids": ["delivery_004"],
+                    },
+                    "timeline": [
+                        {"time": "14:00", "type": "activity", "ref_id": "act_009", "title": "唱歌", "duration_min": 120},
+                        {"time": "17:30", "type": "restaurant", "ref_id": "rest_002", "title": "吃饭", "duration_min": 75},
+                        {"time": "17:30", "type": "delivery", "ref_id": "delivery_004", "title": "鲜花送达餐厅", "duration_min": 5},
+                    ],
+                    "actions": [
+                        {"action_id": "a1", "type": "book_activity", "ref_id": "act_009", "scheduled_time": "14:00", "quantity": 4},
+                        {"action_id": "a2", "type": "book_restaurant", "ref_id": "rest_002", "scheduled_time": "17:30", "quantity": 4},
+                        {"action_id": "a3", "type": "order_delivery", "ref_id": "delivery_004", "scheduled_time": "17:30", "quantity": 1, "target_ref_id": "rest_002"},
+                    ],
+                    "recommend_reasons": ["LLM 根据候选组合了唱歌、晚餐和鲜花闪送"],
+                    "risk_tips": [],
+                }]
+            })
+
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", True)
+        monkeypatch.setattr("backend.agent.intent_parser._llm_parse", fake_llm_parse)
+        monkeypatch.setattr("backend.agent.tag_resolver._llm_resolve", fake_llm_resolve)
+        monkeypatch.setattr("backend.agent.plan_composer.deepseek_client.chat_json", fake_chat_json)
+
+        result = await plan_for_message(
+            user_id="user_002",
+            message="今天下午和4个朋友去唱歌吃饭，再闪送一束鲜花到餐厅",
+        )
+        plans = result["plans"]
+        assert plans[0]["title"] == "LLM鲜花聚会方案"
+        assert plans[0]["delivery_items"][0]["id"] == "delivery_004"
+        assert any(a["type"] == "order_delivery" for a in plans[0]["actions"])
 
     @pytest.mark.asyncio
     async def test_llm_english_tags_aligned(self, monkeypatch):

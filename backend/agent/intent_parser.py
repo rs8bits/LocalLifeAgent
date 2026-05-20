@@ -121,6 +121,21 @@ def _rule_parse(message: str) -> Intent:
     if any(kw in message for kw in ["精酿", "啤酒", "酒吧", "喝酒", "小酌", "清吧"]):
         drink_preferences.append("bar")
 
+    # 外卖/闪送偏好
+    delivery_preferences = []
+    if any(kw in message for kw in ["外卖", "点个", "送餐", "送到餐厅", "送到", "配送"]):
+        delivery_preferences.append("外卖")
+    if any(kw in message for kw in ["闪送", "跑腿", "急送", "同城送"]):
+        delivery_preferences.append("闪送")
+    if any(kw in message for kw in ["蛋糕", "生日蛋糕"]):
+        delivery_preferences.append("蛋糕")
+    if any(kw in message for kw in ["花", "鲜花", "花束"]):
+        delivery_preferences.append("鲜花")
+    if any(kw in message for kw in ["礼物", "礼盒", "气球", "惊喜"]):
+        delivery_preferences.append("儿童礼物" if scene == "family" else "惊喜")
+    if any(kw in message for kw in ["水果", "水果拼盘"]):
+        delivery_preferences.append("水果")
+
     # 低卡需求
     needs_low_calorie = any(
         kw in message for kw in ["减肥", "减脂", "清淡", "低卡", "轻食", "健康餐"]
@@ -157,6 +172,7 @@ def _rule_parse(message: str) -> Intent:
         food_preferences=food_preferences,
         activity_preferences=activity_preferences,
         drink_preferences=drink_preferences,
+        delivery_preferences=delivery_preferences,
         child_age=child_age,
         needs_low_calorie=needs_low_calorie,
         needs_photo_spot=needs_photo_spot,
@@ -199,6 +215,7 @@ INTENT_SYSTEM_PROMPT = """你是一个意图解析器。根据用户输入，提
   "food_preferences": [string],
   "activity_preferences": [string],
   "drink_preferences": [string],
+  "delivery_preferences": [string],
   "child_age": int | null,
   "needs_low_calorie": bool,
   "needs_photo_spot": bool,
@@ -210,6 +227,7 @@ INTENT_SYSTEM_PROMPT = """你是一个意图解析器。根据用户输入，提
 - child_age: 从"孩子X岁"中提取
 - needs_low_calorie: 提到减肥/减脂/清淡/低卡 → true
 - drink_preferences: 提到咖啡/奶茶 → ["coffee_tea"]，精酿/啤酒/酒吧 → ["bar"]
+- delivery_preferences: 提到外卖/闪送/蛋糕/鲜花/礼物/送到餐厅 → 提取对应商品或配送偏好
 - avoid_queue_minutes: 默认为30，提到不想排队→10，网红/排队久→60
 """
 
@@ -263,6 +281,8 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
                 intent.activity_preferences = intent_dict["activity_preferences"]
             if "drink_preferences" in intent_dict and intent_dict["drink_preferences"]:
                 intent.drink_preferences = intent_dict["drink_preferences"]
+            if "delivery_preferences" in intent_dict and intent_dict["delivery_preferences"]:
+                intent.delivery_preferences = intent_dict["delivery_preferences"]
         except Exception:
             pass  # LLM 部分字段解析失败，保留规则结果
 
@@ -341,3 +361,20 @@ def _normalize_preferences(intent: Intent) -> None:
         "喝酒": "bar", "啤酒": "bar", "精酿": "bar", "酒吧": "bar",
     }
     intent.drink_preferences = normalize(intent.drink_preferences, drink_map)
+    delivery_map = {
+        "takeout": "外卖",
+        "delivery": "外卖",
+        "food delivery": "外卖",
+        "flash delivery": "闪送",
+        "courier": "闪送",
+        "cake": "蛋糕",
+        "birthday cake": "蛋糕",
+        "flower": "鲜花",
+        "flowers": "鲜花",
+        "gift": "儿童礼物",
+        "present": "儿童礼物",
+        "balloon": "儿童礼物",
+        "fruit": "水果",
+        "salad": "轻食",
+    }
+    intent.delivery_preferences = normalize(intent.delivery_preferences, delivery_map)

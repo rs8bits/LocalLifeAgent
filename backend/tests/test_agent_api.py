@@ -16,6 +16,7 @@ def reset_all():
     reset_sessions()
     write_json("bookings.json", [])
     write_json("orders.json", [])
+    write_json("delivery_orders.json", [])
 
 
 class TestAgentPlan:
@@ -256,6 +257,27 @@ class TestAgentConfirm:
         drink_bookings = [b for b in bookings if b.get("type") == "drink"]
         if drink_bookings:
             assert drink_bookings[0]["type"] == "drink"
+
+    def test_confirm_delivery_action_writes_delivery_order(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        plan_resp = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "下午和朋友唱歌吃饭，闪送一束鲜花到餐厅",
+        })
+        assert plan_resp.status_code == 200
+        data = plan_resp.json()
+        plan = next((p for p in data["plans"] if p.get("delivery_items")), data["plans"][0])
+        confirm_resp = client.post("/api/agent/confirm", json={
+            "session_id": data["session_id"],
+            "plan_id": plan["plan_id"],
+        })
+        assert confirm_resp.status_code == 200
+        result = confirm_resp.json()
+        assert result["status"] in ("success", "partial_success")
+        delivery_orders = read_json("delivery_orders.json")
+        assert len(delivery_orders) >= 1
+        assert any(o.get("order_type") == "delivery" for o in read_json("orders.json"))
 
     def test_confirm_friends_scene(self, monkeypatch):
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")

@@ -1,0 +1,267 @@
+"""LLM 方案组合器 - 基于已检索候选生成可执行 JSON"""
+
+import json
+from typing import Any
+
+from backend.agent.schemas import Intent
+from backend.llm.deepseek_client import deepseek_client, LLMResult
+
+
+COMPOSER_SYSTEM_PROMPT = """你是本地生活短时活动规划 Agent 的方案组合器。
+你不能搜索外部信息，只能使用输入 candidates 中给出的候选 ID。
+
+请输出严格 JSON：
+{
+  "plans": [
+    {
+      "plan_id": "plan_001",
+      "title": "简短标题",
+      "selected_refs": {
+        "activity_id": "act_001 或 null",
+        "restaurant_id": "rest_001 或 null",
+        "drink_id": "drink_001 或 null",
+        "delivery_item_ids": ["delivery_001"]
+      },
+      "timeline": [
+        {"time": "14:00", "type": "activity|restaurant|drink|delivery|transit", "ref_id": "候选ID或空", "title": "展示标题", "duration_min": 60}
+      ],
+      "actions": [
+        {"action_id": "a1", "type": "book_activity|book_restaurant|book_drink|order_delivery|order_deal", "ref_id": "候选ID", "scheduled_time": "14:00", "quantity": 1, "target_ref_id": "rest_001 或 null"}
+      ],
+      "recommend_reasons": ["为什么适合"],
+      "risk_tips": ["需要用户知道的风险"]
+    }
+  ]
+}
+
+规则：
+- 只使用 candidates 中出现的 ID，不允许编造 POI、商品、团购券或订单号。
+- planning 阶段只能给 actions，不允许出现 booking_id/order_id。
+- 时间线要符合用户时间段，4-6小时下午场可从13:00或14:00开始，晚上场可从17:00开始。
+- 家庭场景要优先儿童年龄、低卡/健康和少排队；朋友场景要优先社交、拍照、唱歌/喝酒等明确偏好。
+- 外卖/闪送 action 要包含 order_delivery，target_ref_id 优先选择餐厅，其次活动地点；scheduled_time 是希望送达或下单时间。
+- 如果某个候选不可预约，也可以放进方案，但 actions 中不要为它生成预约动作，并在 risk_tips 说明。
+- 最多输出4个方案。
+"""
+
+
+async def compose_plan_specs_with_llm(
+    *,
+    message: str,
+    intent: Intent,
+    user_memory: dict | None,
+    tag_result: dict,
+    weather: dict | None,
+    candidates: dict[str, list[dict[str, Any]]],
+) -> tuple[list[dict[str, Any]], str | None]:
+    """调用 LLM 组合方案，返回经过本地 ID 校验的 plan specs。"""
+    if not deepseek_client.available:
+        return [], None
+
+    payload = {
+        "user_message": message,
+        "intent": intent.model_dump(),
+        "user_memory": user_memory or {},
+        "tag_result": tag_result,
+        "weather": weather or {},
+        "candidates": {
+            "activities": _compact_items(candidates.get("activities", []), "activity"),
+            "restaurants": _compact_items(candidates.get("restaurants", []), "restaurant"),
+            "drinks": _compact_items(candidates.get("drinks", []), "drink"),
+            "delivery_items": _compact_items(candidates.get("delivery_items", []), "delivery"),
+        },
+    }
+    messages = [
+        {"role": "system", "content": COMPOSER_SYSTEM_PROMPT},
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+    ]
+    result: LLMResult = await deepseek_client.chat_json(messages, temperature=0.2)
+    if not result.ok:
+        return [], f"LLM 组合失败，已使用本地规则: {result.error}"
+    if not isinstance(result.json_data, dict):
+        return [], "LLM 组合结果不是 JSON object，已使用本地规则"
+
+    specs = result.json_data.get("plans", [])
+    if not isinstance(specs, list):
+        return [], "LLM 组合结果缺少 plans 数组，已使用本地规则"
+
+    valid_specs, issues = validate_plan_specs(specs, candidates)
+    if not valid_specs:
+        suffix = f": {'; '.join(issues[:3])}" if issues else ""
+        return [], f"LLM 组合结果未通过本地校验，已使用本地规则{suffix}"
+
+    warning = None
+    if issues:
+        warning = "LLM 部分动作/引用被本地校验丢弃: " + "; ".join(issues[:3])
+    return valid_specs, warning
+
+
+def validate_plan_specs(
+    specs: list[dict[str, Any]],
+    candidates: dict[str, list[dict[str, Any]]],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """校验 LLM 输出中所有引用都来自候选集合。"""
+    id_domain = _build_id_domain(candidates)
+    issues: list[str] = []
+    valid: list[dict[str, Any]] = []
+
+    for idx, raw in enumerate(specs[:4]):
+        if not isinstance(raw, dict):
+            issues.append(f"plan[{idx}] 不是对象")
+            continue
+        spec = dict(raw)
+        refs = spec.get("selected_refs") if isinstance(spec.get("selected_refs"), dict) else {}
+        cleaned_refs = {
+            "activity_id": _valid_ref(refs.get("activity_id"), id_domain, "activity", issues),
+            "restaurant_id": _valid_ref(refs.get("restaurant_id"), id_domain, "restaurant", issues),
+            "drink_id": _valid_ref(refs.get("drink_id"), id_domain, "drink", issues),
+            "delivery_item_ids": [],
+        }
+        for item_id in refs.get("delivery_item_ids") or []:
+            valid_id = _valid_ref(item_id, id_domain, "delivery", issues)
+            if valid_id:
+                cleaned_refs["delivery_item_ids"].append(valid_id)
+        spec["selected_refs"] = cleaned_refs
+
+        timeline = []
+        for item in spec.get("timeline") or []:
+            if not isinstance(item, dict):
+                continue
+            ref_id = str(item.get("ref_id") or "")
+            step_type = _normalize_timeline_type(item.get("type"))
+            if ref_id and ref_id not in id_domain:
+                issues.append(f"timeline 引用了未知 ID: {ref_id}")
+                continue
+            if ref_id and not _timeline_type_matches(step_type, id_domain.get(ref_id)):
+                issues.append(f"timeline 类型与 ID 不匹配: {step_type}/{ref_id}")
+                continue
+            timeline.append({
+                "time": str(item.get("time") or ""),
+                "type": step_type,
+                "ref_id": ref_id,
+                "title": str(item.get("title") or ""),
+                "duration_min": int(item.get("duration_min") or 0),
+            })
+        spec["timeline"] = timeline
+
+        actions = []
+        for action in spec.get("actions") or []:
+            if not isinstance(action, dict):
+                continue
+            action_type = str(action.get("type") or "")
+            ref_id = str(action.get("ref_id") or "")
+            if not _action_ref_matches(action_type, ref_id, id_domain):
+                issues.append(f"action 引用不合法: {action_type}/{ref_id}")
+                continue
+            target_ref_id = action.get("target_ref_id")
+            if target_ref_id and target_ref_id not in id_domain:
+                issues.append(f"action target_ref_id 未知: {target_ref_id}")
+                target_ref_id = None
+            actions.append({
+                "action_id": str(action.get("action_id") or f"action_{len(actions) + 1}"),
+                "type": action_type,
+                "ref_id": ref_id,
+                "scheduled_time": str(action.get("scheduled_time") or ""),
+                "quantity": int(action.get("quantity") or 1),
+                "target_ref_id": target_ref_id,
+            })
+        spec["actions"] = actions
+
+        has_any_ref = any([
+            cleaned_refs["activity_id"],
+            cleaned_refs["restaurant_id"],
+            cleaned_refs["drink_id"],
+            cleaned_refs["delivery_item_ids"],
+        ])
+        if not has_any_ref:
+            issues.append(f"plan[{idx}] 没有任何合法候选引用")
+            continue
+        valid.append(spec)
+
+    return valid, issues
+
+
+def _compact_items(items: list[dict[str, Any]], domain: str) -> list[dict[str, Any]]:
+    keys = [
+        "id", "name", "category", "sub_category", "area", "distance_km", "avg_price",
+        "tags", "rating", "queue_minutes", "available", "available_slots", "bookable",
+        "business_hours", "recommended_duration_min", "risk", "description",
+        "child_friendly", "suitable_age_min", "suitable_age_max", "low_calorie_options",
+        "estimated_delivery_min", "prep_time_min", "delivery_fee", "available_areas",
+        "merchant_name",
+    ]
+    compacted = []
+    for item in items[:8]:
+        entry = {k: item.get(k) for k in keys if k in item}
+        entry["domain"] = domain
+        compacted.append(entry)
+    return compacted
+
+
+def _build_id_domain(candidates: dict[str, list[dict[str, Any]]]) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for key, domain in [
+        ("activities", "activity"),
+        ("restaurants", "restaurant"),
+        ("drinks", "drink"),
+        ("delivery_items", "delivery"),
+    ]:
+        for item in candidates.get(key, []):
+            item_id = item.get("id")
+            if item_id:
+                mapping[item_id] = domain
+    return mapping
+
+
+def _valid_ref(
+    ref_id: Any,
+    id_domain: dict[str, str],
+    expected_domain: str,
+    issues: list[str],
+) -> str | None:
+    if not ref_id:
+        return None
+    ref = str(ref_id)
+    if id_domain.get(ref) != expected_domain:
+        issues.append(f"引用不合法: {expected_domain}/{ref}")
+        return None
+    return ref
+
+
+def _normalize_timeline_type(value: Any) -> str:
+    mapping = {
+        "play": "activity",
+        "activity": "activity",
+        "eat": "restaurant",
+        "restaurant": "restaurant",
+        "drink": "drink",
+        "delivery": "delivery",
+        "flash": "delivery",
+        "takeout": "delivery",
+        "transit": "transit",
+    }
+    return mapping.get(str(value or ""), "activity")
+
+
+def _timeline_type_matches(step_type: str, domain: str | None) -> bool:
+    if step_type == "transit":
+        return True
+    return {
+        "activity": "activity",
+        "restaurant": "restaurant",
+        "drink": "drink",
+        "delivery": "delivery",
+    }.get(step_type) == domain
+
+
+def _action_ref_matches(action_type: str, ref_id: str, id_domain: dict[str, str]) -> bool:
+    expected = {
+        "book_activity": "activity",
+        "book_restaurant": "restaurant",
+        "book_drink": "drink",
+        "order_delivery": "delivery",
+        "order_deal": "deal",
+    }.get(action_type)
+    if expected == "deal":
+        return bool(ref_id)
+    return bool(expected and id_domain.get(ref_id) == expected)

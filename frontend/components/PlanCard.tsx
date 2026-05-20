@@ -14,6 +14,7 @@ export default function PlanCard({
   const activity = plan.activity;
   const restaurant = plan.restaurant;
   const drink = plan.drink;
+  const deliveryItems = plan.delivery_items ?? [];
   const route = plan.route;
 
   return (
@@ -46,17 +47,28 @@ export default function PlanCard({
           {plan.timeline.map((t, i) => {
             const isTransit = t.type === "transit";
             const isDrink = t.type === "drink";
+            const isDelivery = t.type === "delivery";
             return (
               <div key={i} className={`flex items-center gap-2 ${isTransit ? "text-gray-400 text-xs" : ""}`}>
                 <span className="font-mono text-xs w-12 shrink-0">{t.time}</span>
-                <span className={isDrink ? "text-purple-600 font-medium" : isTransit ? "" : "font-medium"}>
-                  {isTransit ? "🚶 " : isDrink ? "🥤 " : "📍 "}
+                <span className={isDelivery ? "text-cyan-700 font-medium" : isDrink ? "text-purple-600 font-medium" : isTransit ? "" : "font-medium"}>
+                  {isTransit ? "🚶 " : isDelivery ? "配送 " : isDrink ? "🥤 " : "📍 "}
                   {t.title}
                 </span>
                 <span className="text-gray-400 text-xs">{t.duration_min}min</span>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* 外卖/闪送 */}
+      {deliveryItems.length > 0 && (
+        <div className="text-sm">
+          <span className="text-gray-500">外卖/闪送: </span>
+          <span className="font-medium text-cyan-700">
+            {deliveryItems.map((item) => item.name as string).join(", ")}
+          </span>
         </div>
       )}
 

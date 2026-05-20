@@ -4,8 +4,13 @@ from backend.agent.state import AgentState
 from backend.tools.registry import get_tool
 from backend.agent.schemas import Intent
 from backend.agent.tag_resolver import resolve_domain_tags
+from backend.agent.plan_composer import compose_plan_specs_with_llm
 from backend.agent.planner import (
     _build_diverse_plans,
+    _build_delivery_only_plans,
+    _attach_delivery_to_plans,
+    _make_plan_from_composer_spec,
+    _ensure_plan_actions,
     _enrich_plan,
     _indoor_preference,
     _resolve_mock_weather_date,
@@ -68,6 +73,7 @@ async def planner_node(state: AgentState) -> AgentState:
     activities: list[dict] = []
     restaurants: list[dict] = []
     drinks: list[dict] = []
+    delivery_items: list[dict] = []
 
     for domain_name in domains:
         events.append({
@@ -106,7 +112,16 @@ async def planner_node(state: AgentState) -> AgentState:
             if tags:
                 params["tags_any"] = tags
 
-        result = await _run_tool("search_places", tool_logs, **params)
+        if domain_name == "delivery":
+            sub_cats = tag_result.get("domain_sub_categories", {}).get("delivery", [])
+            delivery_params: dict = {"scene": scene}
+            if tags:
+                delivery_params["tags_any"] = tags
+            if sub_cats:
+                delivery_params["sub_category"] = sub_cats[0]
+            result = await _run_tool("search_delivery_items", tool_logs, **delivery_params)
+        else:
+            result = await _run_tool("search_places", tool_logs, **params)
 
         if result and result.status == "ok":
             data = result.data or []
@@ -116,6 +131,8 @@ async def planner_node(state: AgentState) -> AgentState:
                 restaurants = data
             elif domain_name == "drink":
                 drinks = data
+            elif domain_name == "delivery":
+                delivery_items = data
 
             # 记录 tag 放宽警告
             if result.error:
@@ -139,15 +156,62 @@ async def planner_node(state: AgentState) -> AgentState:
     state["candidate_activities"] = activities
     state["candidate_restaurants"] = restaurants
     state["candidate_drinks"] = drinks
+    state["candidate_delivery_items"] = delivery_items
 
     # ── 4. 方案组合 ──
-    plans = _build_diverse_plans(intent, activities, restaurants, drinks, tool_logs)
+    events.append({
+        "event": "composer_start",
+        "message": "正在组合候选并生成可执行动作 JSON...",
+        "data": {},
+    })
+    fallback_plans = _build_diverse_plans(intent, activities, restaurants, drinks, tool_logs)
+    if not fallback_plans and delivery_items:
+        fallback_plans = _build_delivery_only_plans(intent, delivery_items)
+    _attach_delivery_to_plans(fallback_plans, delivery_items, intent)
+    llm_specs, composer_warning = await compose_plan_specs_with_llm(
+        message=state.get("user_message", ""),
+        intent=intent,
+        user_memory=state.get("user_profile", {}),
+        tag_result=tag_result,
+        weather=state.get("weather"),
+        candidates={
+            "activities": activities,
+            "restaurants": restaurants,
+            "drinks": drinks,
+            "delivery_items": delivery_items,
+        },
+    )
+    if composer_warning:
+        tool_logs.append({
+            "tool": "llm_plan_composer",
+            "status": "fallback",
+            "message": composer_warning,
+        })
+    plans = [
+        _make_plan_from_composer_spec(i, spec, intent, activities, restaurants, drinks, delivery_items)
+        for i, spec in enumerate(llm_specs)
+    ] if llm_specs else fallback_plans
+    events.append({
+        "event": "composer_done",
+        "message": "方案组合完成" if llm_specs else "已使用本地规则组合方案",
+        "data": {"llm_used": bool(llm_specs), "plans_count": len(plans)},
+    })
 
     # 将搜索不到的领域信息写入 risk_tips；只有完全无方案时才作为 errors。
     for domain_name in domains:
         is_required = domain_required.get(domain_name, False)
-        count = {"play": len(activities), "eat": len(restaurants), "drink": len(drinks)}.get(domain_name, 0)
-        label_cn = {"play": "活动", "eat": "餐厅", "drink": "饮品"}.get(domain_name, domain_name)
+        count = {
+            "play": len(activities),
+            "eat": len(restaurants),
+            "drink": len(drinks),
+            "delivery": len(delivery_items),
+        }.get(domain_name, 0)
+        label_cn = {
+            "play": "活动",
+            "eat": "餐厅",
+            "drink": "饮品",
+            "delivery": "外卖/闪送商品",
+        }.get(domain_name, domain_name)
         if count == 0:
             if plans:
                 suffix = "用户明确要求，已作为风险提示" if is_required else "该领域非必须"
@@ -167,6 +231,7 @@ async def planner_node(state: AgentState) -> AgentState:
     # ── 5. 丰富方案 + 评分 ──
     for plan in plans:
         await _enrich_plan(plan, tool_logs)
+        _ensure_plan_actions(plan, intent)
     for plan in plans:
         score_plan(plan, intent)
 

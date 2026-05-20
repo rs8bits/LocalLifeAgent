@@ -20,6 +20,8 @@ export interface Plan {
   activity: Record<string, unknown> | null;
   restaurant: Record<string, unknown> | null;
   drink?: Record<string, unknown> | null;
+  delivery_items?: Record<string, unknown>[];
+  actions?: Record<string, unknown>[];
   route: Record<string, unknown> | null;
   deals: Record<string, unknown>[];
   budget: { total: number; per_person: number; currency: string };
@@ -52,7 +54,9 @@ export interface BookingResult {
 
 export interface OrderResult {
   order_id: string;
-  deal_title: string;
+  order_type?: string;
+  deal_title?: string;
+  item_name?: string;
   success: boolean;
 }
 

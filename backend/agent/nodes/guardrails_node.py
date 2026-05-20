@@ -20,11 +20,14 @@ async def guardrails_node(state: AgentState) -> AgentState:
     valid_restaurant_ids = {r["id"] for r in read_json("restaurants.json")}
     valid_deal_ids = {d["id"] for d in read_json("deals.json")}
     valid_drink_ids = {d["id"] for d in read_json("drinks.json")}
+    valid_delivery_ids = {d["id"] for d in read_json("delivery_items.json")}
 
     for plan in plans:
         activity = plan.get("activity") or {}
         restaurant = plan.get("restaurant") or {}
         drink = plan.get("drink") or {}
+        delivery_items = plan.get("delivery_items") or []
+        actions = plan.get("actions") or []
         deals = plan.get("deals", [])
 
         # 1. POI 来源校验
@@ -49,6 +52,31 @@ async def guardrails_node(state: AgentState) -> AgentState:
                 issues.append(f"团购券 ID {deal_id} 不在合法数据中")
                 blocked = True
 
+        for item in delivery_items:
+            delivery_id = item.get("id", "")
+            if delivery_id and delivery_id not in valid_delivery_ids:
+                issues.append(f"配送商品 ID {delivery_id} 不在合法数据中")
+                blocked = True
+
+        # 1b. action 引用校验
+        valid_action_refs = {
+            "book_activity": valid_activity_ids,
+            "book_restaurant": valid_restaurant_ids,
+            "book_drink": valid_drink_ids,
+            "order_delivery": valid_delivery_ids,
+            "order_deal": valid_deal_ids,
+        }
+        for action in actions:
+            action_type = action.get("type", "")
+            ref_id = action.get("ref_id", "")
+            valid_set = valid_action_refs.get(action_type)
+            if valid_set is None:
+                issues.append(f"未知 action 类型: {action_type}")
+                blocked = True
+            elif ref_id and ref_id not in valid_set:
+                issues.append(f"action 引用非法: {action_type}/{ref_id}")
+                blocked = True
+
         # 2. 规划阶段不得有 booking_id / order_id
         if phase == "planning":
             if "booking_id" in plan:
@@ -57,6 +85,10 @@ async def guardrails_node(state: AgentState) -> AgentState:
             if "order_id" in plan:
                 issues.append("规划阶段方案不应包含 order_id")
                 blocked = True
+            for action in actions:
+                if action.get("booking_id") or action.get("order_id"):
+                    issues.append("规划阶段 action 不应包含 booking_id/order_id")
+                    blocked = True
 
         # 3. 儿童年龄校验
         if state.get("intent", {}).get("scene") == "family":

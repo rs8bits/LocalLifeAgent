@@ -20,6 +20,7 @@ def _matches_scene(item, scene):
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 BOOKINGS_FILE = DATA_DIR / "bookings.json"
 ORDERS_FILE = DATA_DIR / "orders.json"
+DELIVERY_ORDERS_FILE = DATA_DIR / "delivery_orders.json"
 
 
 @pytest.fixture(autouse=True)
@@ -31,9 +32,13 @@ def reset_bookings_and_orders():
         original_bookings = BOOKINGS_FILE.read_text(encoding="utf-8")
     if ORDERS_FILE.exists():
         original_orders = ORDERS_FILE.read_text(encoding="utf-8")
+    original_delivery_orders = None
+    if DELIVERY_ORDERS_FILE.exists():
+        original_delivery_orders = DELIVERY_ORDERS_FILE.read_text(encoding="utf-8")
 
     BOOKINGS_FILE.write_text("[]", encoding="utf-8")
     ORDERS_FILE.write_text("[]", encoding="utf-8")
+    DELIVERY_ORDERS_FILE.write_text("[]", encoding="utf-8")
 
     yield
 
@@ -41,6 +46,8 @@ def reset_bookings_and_orders():
         BOOKINGS_FILE.write_text(original_bookings, encoding="utf-8")
     if original_orders is not None:
         ORDERS_FILE.write_text(original_orders, encoding="utf-8")
+    if original_delivery_orders is not None:
+        DELIVERY_ORDERS_FILE.write_text(original_delivery_orders, encoding="utf-8")
 
 
 class TestHealthCheck:
@@ -541,6 +548,51 @@ class TestAddOnsAPI:
         assert response.status_code == 200
         data = response.json()
         assert data["count"] > 0
+
+
+class TestDeliveryAPI:
+    """外卖/闪送 API 测试"""
+
+    def test_list_delivery_items(self):
+        response = client.get("/api/mock/delivery/items")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] >= 6
+
+    def test_filter_delivery_by_scene_and_tag(self):
+        response = client.get("/api/mock/delivery/items?scene=family&tag=亲子")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] >= 1
+        for item in data["results"]:
+            assert "family" in item.get("suitable_scenes", []) or item.get("scene") == "family"
+            assert "亲子" in item.get("tags", [])
+
+    def test_quote_delivery(self):
+        response = client.post("/api/mock/delivery/quote", json={
+            "item_id": "delivery_003",
+            "quantity": 1,
+            "target_area": "三里屯商圈",
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["estimated_delivery_min"] >= 1
+
+    def test_create_delivery_order_persists(self):
+        response = client.post("/api/mock/delivery/orders", json={
+            "user_id": "user_002",
+            "item_id": "delivery_004",
+            "quantity": 1,
+            "target_area": "三里屯商圈",
+            "desired_arrival_time": "18:00",
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["order_id"].startswith("order_")
+        assert len(read_json("delivery_orders.json")) == 1
+        assert read_json("orders.json")[-1]["order_type"] == "delivery"
 
 
 class TestTagsAPI:

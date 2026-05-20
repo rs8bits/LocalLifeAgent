@@ -13,6 +13,7 @@
 - **阶段 4**：最小可演示前端 Demo（Next.js 页面、方案卡片、确认交互、执行结果）
 - **阶段 5**：LangGraph 多 Agent 结构（7 个节点、流式 SSE 输出）
 - **阶段 6**：Reflection、Guardrails 与 Memory（质量检查、安全边界校验、用户记忆读取）
+- **阶段 7**：标签对齐 + LLM 方案组合器（吃/喝/玩/外卖闪送候选检索 → 严格 JSON action 输出）
 
 ## 技术栈
 
@@ -20,7 +21,7 @@
 |------|------|
 | 前端 | Next.js + React + Tailwind CSS（阶段 4 实现） |
 | 后端 | FastAPI + Pydantic + Uvicorn |
-| Agent | 计划使用 LangGraph + DeepSeek API |
+| Agent | LangGraph + DeepSeek API（无 Key 时规则兜底） |
 | 数据 | 本地 JSON Mock Data |
 
 ## 本地 Python venv 启动方式
@@ -60,8 +61,13 @@ source .venv/bin/activate
 | GET | `/api/mock/routes` | 查询路线（支持 origin/destination/transport） |
 | GET | `/api/mock/weather` | 查询天气（支持 date/location） |
 | GET | `/api/mock/deals` | 查询团购券（支持 poi_id） |
+| GET | `/api/mock/drinks` | 查询饮品店（咖啡/奶茶/酒吧等） |
+| GET | `/api/mock/delivery/items` | 查询外卖/闪送商品 |
+| POST | `/api/mock/delivery/quote` | 估算外卖/闪送费用和时效 |
+| POST | `/api/mock/delivery/orders` | 创建 Mock 外卖/闪送订单 |
 | POST | `/api/mock/bookings/activity` | 预约活动 |
 | POST | `/api/mock/bookings/restaurant` | 预约餐厅 |
+| POST | `/api/mock/bookings/drink` | 预约饮品店 |
 | POST | `/api/mock/orders` | 创建 Mock 订单 |
 
 ## 示例 curl
@@ -93,7 +99,7 @@ curl -X POST http://127.0.0.1:8000/api/mock/orders \
 .venv/bin/pytest backend/tests -v
 ```
 
-目前共 89 个测试，覆盖 Mock API、工具、意图解析、评分和规划。
+目前共 187 个测试，覆盖 Mock API、工具、意图解析、标签对齐、LLM 方案组合兜底、评分、规划、流式 API 和确认执行。
 
 ## DeepSeek 配置（可选）
 
@@ -127,6 +133,10 @@ DEEPSEEK_MODEL=deepseek-v4-flash
 | `estimate_route` | 估算路线（支持 origin/destination/transport） |
 | `get_weather` | 查询天气（支持 date/location） |
 | `get_deals` | 查询团购券（支持 poi_id） |
+| `get_tag_catalog` / `resolve_tags` | 查询标签目录并将自然语言/英文偏好对齐到业务标签 |
+| `search_places` | 统一搜索吃/喝/玩等场所候选 |
+| `search_delivery_items` | 搜索外卖/闪送商品 |
+| `estimate_delivery` | 估算配送费用和时效 |
 
 工具兼容 `suitable_scenes` 字段，`general` 场景的活动/餐厅也可以进入家庭或朋友候选。
 
@@ -222,7 +232,7 @@ Memory → Intent → Planner → Reflection → Guardrails → (确认阶段) E
 |------|------|----------|
 | Memory Node | 读取用户长期记忆（位置/孩子年龄/饮食偏好/距离偏好） | `memory_loaded` |
 | Intent Node | 解析自然语言意图（LLM 优先 + 规则兜底） | `intent_start`, `intent_done` |
-| Planner Node | 调用工具查询天气/活动/餐厅/路线/团购券，组合方案 | `tool_start`, `tool_done`, `planner_start`, `plan_delta` |
+| Planner Node | 标签对齐，按吃/喝/玩/外卖闪送检索候选，交给 LLM 组合 JSON 方案，本地校验并兜底 | `tool_start`, `tool_done`, `planner_start`, `composer_start`, `composer_done`, `plan_delta` |
 | Reflection Node | 检查方案质量（儿童适配/距离/排队/健康/天气/路线等 10 项） | `reflection_start`, `reflection_done` |
 | Guardrails Node | 安全校验（POI 来源/阶段检查/支付承诺/儿童安全） | `guardrails_start`, `guardrails_done` |
 | Executor Node | 确认阶段执行预约+订位+Mock 订单 | `booking_start`, `booking_done`, `order_start`, `order_done` |
@@ -232,7 +242,7 @@ Memory → Intent → Planner → Reflection → Guardrails → (确认阶段) E
 
 规划完成后对每个方案自动检查（代码规则，不依赖 LLM）：
 
-1. 是否包含活动和餐厅
+1. 是否满足用户明确要求的领域（活动/餐厅/饮品/外卖闪送）
 2. 总时长是否适合 4～6 小时
 3. 距离是否超过用户偏好半径（1.5 倍阈值）
 4. 家庭场景是否适合儿童年龄
@@ -240,14 +250,14 @@ Memory → Intent → Planner → Reflection → Guardrails → (确认阶段) E
 6. 排队是否过久（超过容忍上限 2 倍）
 7. 天气不佳时是否优先室内
 8. 是否存在路线
-9. 活动/餐厅是否可预约/有位
+9. 活动/餐厅/饮品是否可预约/有位，配送时效是否过长
 10. 不可执行环节 → 写入风险提示
 
 ## Guardrails 检查项
 
 安全边界校验（显式代码检查，不依赖 prompt）：
 
-1. 所有 POI ID 必须存在于对应 JSON 数据文件
+1. 所有 POI / 配送商品 / 团购券 ID 必须存在于对应 JSON 数据文件
 2. 规划阶段不得出现 booking_id / order_id
 3. share_message 不得包含"真实支付成功"等违规内容
 4. 家庭场景必须满足儿童年龄要求
@@ -258,7 +268,7 @@ Memory → Intent → Planner → Reflection → Guardrails → (确认阶段) E
 
 ### POST /api/agent/plan/stream
 
-规划流式事件序列：`intent_start` → `intent_done` → `memory_loaded` → `tool_start`/`tool_done` → `planner_start` → `plan_delta` → `reflection_start`/`reflection_done` → `guardrails_start`/`guardrails_done` → `plan_done`
+规划流式事件序列：`intent_start` → `intent_done` → `memory_loaded` → `tag_resolve_start`/`tag_resolve_done` → `place_search_start`/`place_search_done` → `composer_start`/`composer_done` → `plan_delta` → `reflection_start`/`reflection_done` → `guardrails_start`/`guardrails_done` → `plan_done`
 
 ### POST /api/agent/confirm/stream
 
@@ -272,11 +282,15 @@ Memory → Intent → Planner → Reflection → Guardrails → (确认阶段) E
 
 | 文件 | 内容 | 数量 |
 |------|------|------|
-| `activities.json` | 活动（亲子乐园/公园/展览/商场/咖啡店/桌游/citywalk/影院） | 8 条 |
+| `activities.json` | 活动（亲子乐园/公园/展览/KTV/密室/电竞/LiveHouse/citywalk/影院等） | 14 条 |
 | `restaurants.json` | 餐厅（健康轻食/云南菜/火锅/烤肉/日料/咖啡甜品/亲子/排队长/无位） | 10 条 |
+| `drinks.json` | 饮品店（奶茶/咖啡/茶饮/酒吧） | 6 条 |
+| `delivery_items.json` | 外卖/闪送商品（轻食/奶茶/蛋糕/鲜花/水果/礼盒） | 6 条 |
+| `delivery_orders.json` | 外卖/闪送订单记录（运行时写入） | 初始为空 |
+| `tag_catalog.json` | 吃/喝/玩/外卖闪送标签目录与 aliases | 1 份 |
 | `routes.json` | 路线（开车/地铁/打车） | 5 条 |
 | `weather.json` | 天气（晴天/雨天 × 不同区域） | 4 条 |
-| `deals.json` | 团购券 | 5 条 |
+| `deals.json` | 团购券 | 13 条 |
 | `user_memory.json` | 用户记忆样例（家庭/朋友/聚会三种画像） | 3 条 |
 | `bookings.json` | 预约记录（运行时写入） | 初始为空 |
 | `orders.json` | 订单记录（运行时写入） | 初始为空 |

@@ -65,6 +65,8 @@ async def run_planning_graph(
         "user_profile": user_profile or {},
         "candidate_activities": [],
         "candidate_restaurants": [],
+        "candidate_drinks": [],
+        "candidate_delivery_items": [],
         "candidate_routes": [],
         "candidate_deals": [],
         "weather": None,

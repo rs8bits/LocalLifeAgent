@@ -8,6 +8,8 @@ from backend.tools.mock_tools import (
     GetWeatherTool,
     GetDealsTool,
     SearchDrinksTool,
+    SearchDeliveryItemsTool,
+    EstimateDeliveryTool,
 )
 from backend.tools.tag_tools import GetTagCatalogTool, ResolveTagsTool
 from backend.tools.registry import get_tool, list_tools
@@ -198,6 +200,26 @@ class TestSearchDrinks:
         result = await tool.run(scene="family")
         for item in result.data:
             assert item["sub_category"] != "bar"
+
+
+class TestDeliveryTools:
+    """外卖/闪送工具测试"""
+
+    @pytest.mark.asyncio
+    async def test_search_delivery_items_by_tag(self):
+        tool = SearchDeliveryItemsTool()
+        result = await tool.run(tags_any=["鲜花"])
+        assert result.status == "ok"
+        assert len(result.data) >= 1
+        assert any("鲜花" in item.get("tags", []) for item in result.data)
+
+    @pytest.mark.asyncio
+    async def test_estimate_delivery(self):
+        tool = EstimateDeliveryTool()
+        result = await tool.run(item_id="delivery_003", quantity=1, target_area="三里屯商圈")
+        assert result.status == "ok"
+        assert result.data["estimated_delivery_min"] >= 1
+        assert result.data["total_price"] > 0
 
 
 class TestTagCatalogTool:

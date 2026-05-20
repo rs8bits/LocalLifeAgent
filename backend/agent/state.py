@@ -14,6 +14,7 @@ class AgentState(TypedDict, total=False):
     candidate_activities: list[dict[str, Any]]
     candidate_restaurants: list[dict[str, Any]]
     candidate_drinks: list[dict[str, Any]]
+    candidate_delivery_items: list[dict[str, Any]]
     candidate_routes: list[dict[str, Any]]
     candidate_deals: list[dict[str, Any]]
     weather: dict[str, Any] | None

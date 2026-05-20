@@ -35,6 +35,11 @@ _DRINK_KEYWORDS = [
     "喝", "咖啡", "奶茶", "茶饮", "精酿", "啤酒", "酒吧", "喝酒",
     "小酌", "果茶", "奶盖", "奈雪", "喜茶", "星巴克", "瑞幸",
 ]
+_DELIVERY_KEYWORDS = [
+    "外卖", "点个", "送餐", "送到", "送到餐厅", "配送", "闪送", "跑腿",
+    "急送", "同城送", "蛋糕", "生日蛋糕", "鲜花", "花束", "礼物", "礼盒",
+    "气球", "惊喜", "水果", "水果拼盘",
+]
 
 # 标签类别 → tag_catalog 真实标签 的规则映射
 _ALIGN_RULES = {
@@ -113,6 +118,34 @@ _ALIGN_RULES = {
         "拍照": ["拍照"],
         "网红": ["网红"],
     },
+    "delivery": {
+        "外卖": ["外卖"],
+        "takeout": ["外卖"],
+        "food delivery": ["外卖"],
+        "送餐": ["外卖"],
+        "送到餐厅": ["外卖"],
+        "送到": ["外卖"],
+        "配送": ["闪送"],
+        "闪送": ["闪送"],
+        "flash delivery": ["闪送"],
+        "跑腿": ["闪送"],
+        "急送": ["闪送"],
+        "蛋糕": ["cake", "蛋糕"],
+        "生日蛋糕": ["cake", "蛋糕"],
+        "cake": ["cake", "蛋糕"],
+        "鲜花": ["flower", "鲜花"],
+        "花束": ["flower", "鲜花"],
+        "flower": ["flower", "鲜花"],
+        "礼物": ["gift", "儿童礼物"],
+        "礼盒": ["gift", "儿童礼物"],
+        "气球": ["gift", "儿童礼物"],
+        "惊喜": ["惊喜"],
+        "水果": ["fruit", "水果"],
+        "水果拼盘": ["fruit", "水果"],
+        "轻食": ["food", "轻食"],
+        "低卡": ["food", "低卡"],
+        "奶茶": ["drink", "奶茶"],
+    },
 }
 
 
@@ -126,6 +159,7 @@ def _rule_resolve_domains(message: str, intent: Intent) -> dict:
     required_play = _contains_keyword(message, _PLAY_KEYWORDS) or len(act_prefs) > 0
     required_eat = _contains_keyword(message, _EAT_KEYWORDS) or intent.needs_low_calorie
     required_drink = _contains_keyword(message, _DRINK_KEYWORDS) or len(prefs) > 0
+    required_delivery = _contains_keyword(message, _DELIVERY_KEYWORDS) or len(intent.delivery_preferences or []) > 0
 
     domains: list[str] = []
     if required_play:
@@ -134,6 +168,8 @@ def _rule_resolve_domains(message: str, intent: Intent) -> dict:
         domains.append("eat")
     if required_drink:
         domains.append("drink")
+    if required_delivery:
+        domains.append("delivery")
 
     # 泛化的“安排一下/出去几个小时”没有明确领域时，默认给玩+吃的综合方案。
     if not domains:
@@ -147,12 +183,13 @@ def _rule_resolve_domains(message: str, intent: Intent) -> dict:
 
     result = {
         "domains": domains,
-        "domain_tags": {"play": [], "eat": [], "drink": []},
-        "domain_sub_categories": {"play": [], "eat": [], "drink": []},
+        "domain_tags": {"play": [], "eat": [], "drink": [], "delivery": []},
+        "domain_sub_categories": {"play": [], "eat": [], "drink": [], "delivery": []},
         "domain_required": {
             "play": required_play,
             "eat": required_eat,
             "drink": required_drink,
+            "delivery": required_delivery,
         },
         "explanations": [],
     }
@@ -171,6 +208,10 @@ def _rule_resolve_domains(message: str, intent: Intent) -> dict:
     if "drink" in domains:
         raw_prefs = prefs + _extract_drink_keywords(message)
         _align_domain("drink", raw_prefs, result)
+
+    if "delivery" in domains:
+        raw_delivery = (intent.delivery_preferences or []) + _extract_delivery_keywords(message)
+        _align_domain("delivery", raw_delivery, result)
 
     return result
 
@@ -204,6 +245,14 @@ def _extract_drink_keywords(message: str) -> list[str]:
     return found
 
 
+def _extract_delivery_keywords(message: str) -> list[str]:
+    found = []
+    for kw in _DELIVERY_KEYWORDS:
+        if kw in message:
+            found.append(kw)
+    return found
+
+
 def _align_domain(domain: str, raw_keywords: list[str], result: dict) -> None:
     """将原始关键词对齐到 tag_catalog 中的真实标签和子品类"""
     rules = _ALIGN_RULES.get(domain, {})
@@ -215,7 +264,7 @@ def _align_domain(domain: str, raw_keywords: list[str], result: dict) -> None:
         if mapped:
             for m in mapped:
                 # 检查是标签还是子品类
-                if m in ("bar", "coffee", "milk_tea", "tea"):
+                if m in ("bar", "coffee", "milk_tea", "tea", "food", "drink", "cake", "flower", "fruit", "gift"):
                     matched_sub_cats.add(m)
                 else:
                     matched_tags.add(m)
@@ -240,28 +289,31 @@ def _align_domain(domain: str, raw_keywords: list[str], result: dict) -> None:
 TAG_RESOLVE_SYSTEM_PROMPT = """你是一个标签对齐器。根据用户输入和可用标签目录，输出对齐后的标签。仅输出 JSON：
 
 {
-  "domains": ["play", "eat", "drink"],
+  "domains": ["play", "eat", "drink", "delivery"],
   "domain_tags": {
     "play": [],
     "eat": [],
-    "drink": []
+    "drink": [],
+    "delivery": []
   },
   "domain_sub_categories": {
     "play": [],
     "eat": [],
-    "drink": []
+    "drink": [],
+    "delivery": []
   },
   "domain_required": {
     "play": true,
     "eat": true,
-    "drink": true
+    "drink": true,
+    "delivery": true
   },
   "explanations": []
 }
 
 规则：
 - 只使用给定的可用标签和子品类，不允许编造。
-- domain_required 判断用户是否明确要求该领域（说了唱歌→play required，说了吃饭→eat required，说了喝→drink required）。
+- domain_required 判断用户是否明确要求该领域（说了唱歌→play required，说了吃饭→eat required，说了喝→drink required，说了外卖/闪送/蛋糕/鲜花→delivery required）。
 - 英文输入应对齐到中文标签。
 """
 
@@ -298,7 +350,7 @@ async def _llm_resolve(message: str, intent_dict: dict, catalog: dict) -> Option
 def _validate_resolve(result: dict, catalog: dict) -> dict:
     """确保解析结果中的标签都存在于 catalog 中"""
     domains_info = catalog.get("domains", {})
-    allowed_domains = {"play", "eat", "drink"}
+    allowed_domains = {"play", "eat", "drink", "delivery"}
     result["domains"] = [
         d for d in result.get("domains", [])
         if d in allowed_domains and d in domains_info
@@ -341,15 +393,15 @@ async def resolve_domain_tags(
         # LLM 只做增强，不允许把规则已识别出的领域误删。
         merged_domains = []
         for domain_name in rule_result.get("domains", []) + llm_result.get("domains", []):
-            if domain_name in ("play", "eat", "drink") and domain_name not in merged_domains:
+            if domain_name in ("play", "eat", "drink", "delivery") and domain_name not in merged_domains:
                 merged_domains.append(domain_name)
         rule_result["domains"] = merged_domains
-        for domain_name in ["play", "eat", "drink"]:
+        for domain_name in ["play", "eat", "drink", "delivery"]:
             rule_required = rule_result.get("domain_required", {}).get(domain_name, False)
             llm_required = llm_result.get("domain_required", {}).get(domain_name, False)
             rule_result["domain_required"][domain_name] = bool(rule_required or llm_required)
         # 合并标签
-        for domain_name in ["play", "eat", "drink"]:
+        for domain_name in ["play", "eat", "drink", "delivery"]:
             llm_tags = set(llm_result.get("domain_tags", {}).get(domain_name, []))
             rule_tags = set(rule_result.get("domain_tags", {}).get(domain_name, []))
             rule_result["domain_tags"][domain_name] = list(llm_tags | rule_tags)

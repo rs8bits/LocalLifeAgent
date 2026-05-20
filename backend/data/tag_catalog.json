@@ -590,6 +590,142 @@
           "sub_category": "gift"
         }
       ]
+    },
+    "delivery": {
+      "display_name": "外卖/闪送",
+      "source_file": "delivery_items.json",
+      "categories": [
+        "外卖",
+        "闪送"
+      ],
+      "tags": [
+        "外卖",
+        "闪送",
+        "轻食",
+        "健康",
+        "低卡",
+        "减脂",
+        "奶茶",
+        "果茶",
+        "蛋糕",
+        "生日",
+        "庆祝",
+        "鲜花",
+        "约会",
+        "拍照",
+        "儿童",
+        "亲子",
+        "儿童礼物",
+        "气球",
+        "惊喜",
+        "水果",
+        "朋友聚会"
+      ],
+      "sub_categories": [
+        "food",
+        "drink",
+        "cake",
+        "flower",
+        "fruit",
+        "gift"
+      ],
+      "aliases": {
+        "外卖": [
+          "takeout",
+          "food delivery",
+          "送餐",
+          "点外卖",
+          "送到餐厅",
+          "送到"
+        ],
+        "闪送": [
+          "flash delivery",
+          "同城急送",
+          "跑腿",
+          "急送",
+          "配送"
+        ],
+        "蛋糕": [
+          "cake",
+          "birthday cake",
+          "生日蛋糕",
+          "甜品"
+        ],
+        "鲜花": [
+          "flower",
+          "flowers",
+          "花束",
+          "玫瑰",
+          "bouquet"
+        ],
+        "儿童礼物": [
+          "gift",
+          "礼物",
+          "儿童礼盒",
+          "气球",
+          "balloon",
+          "surprise"
+        ],
+        "奶茶": [
+          "milk tea",
+          "bubble tea",
+          "boba",
+          "果茶"
+        ],
+        "轻食": [
+          "salad",
+          "healthy",
+          "低卡",
+          "减脂",
+          "健康餐"
+        ],
+        "水果": [
+          "fruit",
+          "水果拼盘",
+          "鲜果"
+        ]
+      },
+      "examples": [
+        {
+          "id": "delivery_001",
+          "name": "轻食沙拉双人套餐",
+          "category": "外卖",
+          "tags": [
+            "外卖",
+            "轻食",
+            "健康",
+            "低卡",
+            "减脂"
+          ],
+          "sub_category": "food"
+        },
+        {
+          "id": "delivery_003",
+          "name": "生日蛋糕闪送",
+          "category": "闪送",
+          "tags": [
+            "闪送",
+            "蛋糕",
+            "生日",
+            "庆祝",
+            "惊喜"
+          ],
+          "sub_category": "cake"
+        },
+        {
+          "id": "delivery_004",
+          "name": "鲜花束闪送",
+          "category": "闪送",
+          "tags": [
+            "闪送",
+            "鲜花",
+            "约会",
+            "拍照",
+            "惊喜"
+          ],
+          "sub_category": "flower"
+        }
+      ]
     }
   }
 }

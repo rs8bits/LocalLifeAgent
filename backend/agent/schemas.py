@@ -23,6 +23,7 @@ class Intent(BaseModel):
     food_preferences: list[str] = Field(default_factory=list)
     activity_preferences: list[str] = Field(default_factory=list)
     drink_preferences: list[str] = Field(default_factory=list)
+    delivery_preferences: list[str] = Field(default_factory=list)
     child_age: Optional[int] = None
     needs_low_calorie: bool = False
     needs_photo_spot: bool = False
@@ -31,7 +32,7 @@ class Intent(BaseModel):
 
 class TimelineItem(BaseModel):
     time: str
-    type: str  # "activity" | "restaurant" | "drink" | "transit"
+    type: str  # "activity" | "restaurant" | "drink" | "delivery" | "transit"
     title: str
     poi_id: str
     duration_min: int
@@ -51,6 +52,8 @@ class Plan(BaseModel):
     activity: Optional[dict[str, Any]] = None
     restaurant: Optional[dict[str, Any]] = None
     drink: Optional[dict[str, Any]] = None
+    delivery_items: list[dict[str, Any]] = Field(default_factory=list)
+    actions: list[dict[str, Any]] = Field(default_factory=list)
     route: Optional[dict[str, Any]] = None
     deals: list[dict[str, Any]] = Field(default_factory=list)
     budget: dict[str, Any] = Field(default_factory=dict)

@@ -30,6 +30,8 @@ def generate_share_message(plan: dict, intent: dict, bookings: list[dict], order
             time_parts.append(f"{t} 喝{name}")
         elif slot_type == "restaurant":
             time_parts.append(f"{t} 去{name}吃饭")
+        elif slot_type == "delivery":
+            time_parts.append(f"{t} 安排{name}")
 
     if time_parts:
         parts.append("，然后".join(time_parts) + "。")
@@ -76,7 +78,12 @@ def generate_share_message(plan: dict, intent: dict, bookings: list[dict], order
     # 预约结果
     failed_bookings = [b for b in bookings if not b.get("success", True) and not b.get("skipped")]
     if orders:
-        parts.append("团购券 Mock 订单已创建（非真实支付）。")
+        has_delivery = any(o.get("order_type") == "delivery" for o in orders)
+        has_deal = any(o.get("order_type", "deal") == "deal" for o in orders)
+        if has_deal:
+            parts.append("团购券 Mock 订单已创建（非真实支付）。")
+        if has_delivery:
+            parts.append("外卖/闪送 Mock 订单已创建（非真实支付/配送）。")
     if failed_bookings:
         failed_names = [b.get("poi_name", "") for b in failed_bookings]
         parts.append(f"注意：{', '.join(failed_names)}预约/订位未成功，可能需要手动处理。")
