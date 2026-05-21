@@ -119,6 +119,26 @@ class TestIntentPreferenceNormalization:
         assert intent.activity_preferences == ["室内", "亲子"]
         assert intent.needs_low_calorie is True
 
+    @pytest.mark.asyncio
+    async def test_llm_zero_radius_does_not_override_memory_default(self, monkeypatch):
+        async def fake_llm_parse(message: str):
+            return {
+                "scene": "general",
+                "radius_km": 0.0,
+                "food_preferences": ["light"],
+                "needs_low_calorie": False,
+            }
+
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", True)
+        monkeypatch.setattr("backend.agent.intent_parser._llm_parse", fake_llm_parse)
+
+        memory = {"preferences": {"max_distance_km": 8}}
+        intent = await parse_intent("中午想吃点清淡的", user_memory=memory)
+
+        assert intent.radius_km == 8.0
+        assert intent.food_preferences == ["健康"]
+        assert intent.needs_low_calorie is True
+
 
 class TestUserMemoryMerge:
     """用户记忆合并"""

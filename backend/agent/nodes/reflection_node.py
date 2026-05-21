@@ -1,13 +1,13 @@
 """Reflection 节点 - 方案质量检查"""
 
 from backend.agent.state import AgentState
+from backend.agent.event_bus import emit_event
 from backend.agent.reflection import run_llm_reflection
 
 
 async def reflection_node(state: AgentState) -> AgentState:
     """检查方案质量，生成问题和建议"""
-    events: list[dict] = state.get("stream_events", [])
-    events.append({"event": "reflection_start", "message": "正在检查方案质量...", "data": {}})
+    await emit_event(state, {"event": "reflection_start", "message": "正在检查方案质量...", "data": {}})
 
     intent = state.get("intent", {})
     plans = state.get("plans", [])
@@ -147,13 +147,12 @@ async def reflection_node(state: AgentState) -> AgentState:
 
     state["reflection_result"] = result
 
-    events.append({
+    await emit_event(state, {
         "event": "reflection_done",
         "message": f"质量检查完成: {'通过' if all_passed else '发现问题'} ({len(result['issues'])}个问题)",
         "data": result,
     })
 
-    state["stream_events"] = events
     return state
 
 

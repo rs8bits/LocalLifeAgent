@@ -397,3 +397,154 @@ class TestPlannerErrors:
         # 不应崩溃
         assert "plans" in result
         assert "errors" in result
+
+
+class TestDomainFiltering:
+    """P0: 领域过滤 - 避免误召回无关领域"""
+
+    @pytest.mark.asyncio
+    async def test_light_lunch_only_searches_eat(self, monkeypatch):
+        """输入「中午想吃点清淡的」应只查询 eat 领域"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="中午想吃点清淡的",
+        )
+        search_logs = [
+            log for log in result["tool_logs"]
+            if log["tool"] in ("search_places", "search_delivery_items")
+        ]
+        messages = [log["message"] for log in search_logs]
+        # 应出现 search_places(eat)
+        assert any("(eat)" in msg for msg in messages), f"应查询 eat 领域，实际日志: {messages}"
+        # 不应出现 play/drink/delivery
+        assert not any("(play)" in msg for msg in messages), f"不应查询 play 领域: {messages}"
+        assert not any("(drink)" in msg for msg in messages), f"不应查询 drink 领域: {messages}"
+        assert not any(
+            log["tool"] == "search_delivery_items" for log in search_logs
+        ), f"不应查询 delivery: {search_logs}"
+
+    @pytest.mark.asyncio
+    async def test_light_lunch_domains_is_only_eat(self, monkeypatch):
+        """验证 tag_resolve_result.domains == ['eat']"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        from backend.agent.intent_parser import parse_intent
+        from backend.agent.tag_resolver import resolve_domain_tags
+        intent = await parse_intent("中午想吃点清淡的")
+        intent_dict = intent.model_dump()
+        tag_result = await resolve_domain_tags(
+            message="中午想吃点清淡的",
+            intent=intent,
+            intent_dict=intent_dict,
+        )
+        assert tag_result["domains"] == ["eat"], \
+            f"应只包含 eat，实际: {tag_result['domains']}"
+        # 应包含健康/低卡相关标签
+        eat_tags = tag_result.get("domain_tags", {}).get("eat", [])
+        assert any(
+            t in eat_tags for t in ["健康轻食", "健康", "低卡", "轻食"]
+        ), f"eat 标签应对齐到健康/低卡: {eat_tags}"
+
+    @pytest.mark.asyncio
+    async def test_llm_template_all_domains_cleaned(self, monkeypatch):
+        """LLM 返回模板式全领域 [play,eat,drink,delivery] 且无有效标签时应被丢弃"""
+        async def fake_llm_resolve(message: str, intent_dict: dict, catalog: dict):
+            return {
+                "domains": ["play", "eat", "drink", "delivery"],
+                "domain_categories": {"play": [], "eat": [], "drink": [], "delivery": []},
+                "domain_tags": {"play": [], "eat": [], "drink": [], "delivery": []},
+                "domain_sub_categories": {"play": [], "eat": [], "drink": [], "delivery": []},
+                "domain_required": {
+                    "play": False, "eat": False, "drink": False, "delivery": False
+                },
+                "domain_specs": [],
+                "explanations": [],
+            }
+
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", True)
+        monkeypatch.setattr(
+            "backend.agent.tag_resolver._llm_resolve", fake_llm_resolve
+        )
+        # 同时禁用 LLM intent 解析，确保只用规则
+        async def fake_llm_parse(message: str):
+            return None
+        monkeypatch.setattr(
+            "backend.agent.intent_parser._llm_parse", fake_llm_parse
+        )
+
+        from backend.agent.intent_parser import parse_intent
+        from backend.agent.tag_resolver import resolve_domain_tags
+        intent = await parse_intent("中午想吃点清淡的")
+        intent_dict = intent.model_dump()
+        tag_result = await resolve_domain_tags(
+            message="中午想吃点清淡的",
+            intent=intent,
+            intent_dict=intent_dict,
+        )
+        # LLM 返回了所有 4 个领域但都是空标签且 domain_required 全 false
+        # 合并后应只保留规则识别出的 eat
+        assert tag_result["domains"] == ["eat"], \
+            f"LLM 模板全领域应被清洗到只保留 eat，实际: {tag_result['domains']}"
+
+    @pytest.mark.asyncio
+    async def test_sing_and_drink_domains_play_and_drink(self, monkeypatch):
+        """唱歌+喝酒应包含 play 和 drink，且 play 对齐 KTV，drink 对齐酒吧"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        from backend.agent.intent_parser import parse_intent
+        from backend.agent.tag_resolver import resolve_domain_tags
+        intent = await parse_intent("今晚想唱歌，然后去喝酒")
+        intent_dict = intent.model_dump()
+        tag_result = await resolve_domain_tags(
+            message="今晚想唱歌，然后去喝酒",
+            intent=intent,
+            intent_dict=intent_dict,
+        )
+        domains = tag_result["domains"]
+        assert "play" in domains, f"应包含 play 领域: {domains}"
+        assert "drink" in domains, f"应包含 drink 领域: {domains}"
+        # play 应对齐 KTV/唱歌
+        play_tags = tag_result.get("domain_tags", {}).get("play", [])
+        assert any(t in play_tags for t in ["唱歌", "KTV"]), \
+            f"play 标签应对齐 KTV: {play_tags}"
+        # drink 应对齐 bar/精酿
+        drink_tags = tag_result.get("domain_tags", {}).get("drink", [])
+        assert any(t in drink_tags for t in ["bar", "精酿"]), \
+            f"drink 标签应对齐 bar: {drink_tags}"
+
+    @pytest.mark.asyncio
+    async def test_delivery_cake_no_extra_domains(self, monkeypatch):
+        """点蛋糕配送应包含 delivery，不应自动加 play"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        from backend.agent.intent_parser import parse_intent
+        from backend.agent.tag_resolver import resolve_domain_tags
+        intent = await parse_intent("想点个蛋糕送到餐厅")
+        intent_dict = intent.model_dump()
+        tag_result = await resolve_domain_tags(
+            message="想点个蛋糕送到餐厅",
+            intent=intent,
+            intent_dict=intent_dict,
+        )
+        domains = tag_result["domains"]
+        assert "delivery" in domains, f"应包含 delivery: {domains}"
+        assert "play" not in domains, f"不应包含 play: {domains}"
+
+    @pytest.mark.asyncio
+    async def test_noon_singing_does_not_auto_add_eat(self, monkeypatch):
+        """「中午」只是时间线索，不应单独触发 eat 领域"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        from backend.agent.intent_parser import parse_intent
+        from backend.agent.tag_resolver import resolve_domain_tags
+        intent = await parse_intent("中午想唱歌")
+        tag_result = await resolve_domain_tags(
+            message="中午想唱歌",
+            intent=intent,
+            intent_dict=intent.model_dump(),
+        )
+        domains = tag_result["domains"]
+        assert "play" in domains, f"应包含 play: {domains}"
+        assert "eat" not in domains, f"不应仅因中午自动加入 eat: {domains}"

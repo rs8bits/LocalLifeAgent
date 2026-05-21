@@ -273,8 +273,11 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
                         "people_count", "radius_km", "distance_preference",
                         "budget_per_person", "child_age", "needs_low_calorie",
                         "needs_photo_spot", "avoid_queue_minutes"]:
-                if key in intent_dict and intent_dict[key] is not None:
-                    setattr(intent, key, intent_dict[key])
+                if key in intent_dict and _valid_llm_field(key, intent_dict[key]):
+                    if key in {"needs_low_calorie", "needs_photo_spot"}:
+                        setattr(intent, key, bool(getattr(intent, key) or intent_dict[key]))
+                    else:
+                        setattr(intent, key, intent_dict[key])
             if "food_preferences" in intent_dict and intent_dict["food_preferences"]:
                 intent.food_preferences = intent_dict["food_preferences"]
             if "activity_preferences" in intent_dict and intent_dict["activity_preferences"]:
@@ -317,6 +320,10 @@ def _normalize_preferences(intent: Intent) -> None:
     """将 LLM 的自然语言偏好归一化到 Mock Data 标签体系"""
     food_map = {
         "清淡": "健康",
+        "light": "健康",
+        "healthy": "健康",
+        "low calorie": "健康",
+        "low_calorie": "健康",
         "低脂": "健康",
         "低卡": "健康",
         "减脂": "健康",
@@ -378,3 +385,20 @@ def _normalize_preferences(intent: Intent) -> None:
         "salad": "轻食",
     }
     intent.delivery_preferences = normalize(intent.delivery_preferences, delivery_map)
+
+
+def _valid_llm_field(key: str, value) -> bool:
+    """过滤 LLM 常见的占位/零值，避免覆盖规则默认值。"""
+    if value is None:
+        return False
+    if key in {"radius_km", "duration_hours"}:
+        try:
+            return float(value) > 0
+        except (TypeError, ValueError):
+            return False
+    if key in {"people_count", "budget_per_person", "child_age", "avoid_queue_minutes"}:
+        try:
+            return int(value) > 0
+        except (TypeError, ValueError):
+            return False
+    return True

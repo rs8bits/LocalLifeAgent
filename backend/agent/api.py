@@ -1,9 +1,8 @@
 """Agent API 路由（含流式 SSE）"""
 
 import json
-import asyncio
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from backend.schemas.agent_api import (
@@ -12,14 +11,15 @@ from backend.schemas.agent_api import (
     AgentConfirmRequest,
     AgentConfirmResponse,
 )
-from backend.agent.planner import plan_for_message
 from backend.agent.session_store import create_session, get_session, update_session
-from backend.agent.executor import execute_plan
-from backend.agent.message_generator import generate_share_message
 
 # Graph 导入
-from backend.agent.graph import run_planning_graph, run_execution_graph
-from backend.agent.stream import plan_stream_events, confirm_stream_events
+from backend.agent.graph import (
+    run_planning_graph,
+    run_planning_graph_stream,
+    run_execution_graph,
+    run_execution_graph_stream,
+)
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
@@ -169,53 +169,17 @@ async def agent_get_session(session_id: str):
 
 @router.post("/plan/stream")
 async def agent_plan_stream(req: AgentPlanRequest):
-    """流式规划接口 (SSE)"""
+    """流式规划接口 (SSE) - 节点完成后立即输出，真正的实时流式"""
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="message 不能为空")
 
     async def event_stream():
         try:
-            # 发送 confirm_start 作为初始事件
-            yield f"event: intent_start\ndata: {json.dumps({'event': 'intent_start', 'message': '开始规划...', 'data': {}}, ensure_ascii=False)}\n\n"
-
-            graph_result = await run_planning_graph(
+            async for sse_chunk in run_planning_graph_stream(
                 user_id=req.user_id,
                 message=req.message,
-            )
-
-            errors = list(graph_result.get("errors", []))
-            guardrail_result = graph_result.get("guardrail_result", {})
-            plans = graph_result.get("plans", [])
-            if guardrail_result.get("blocked"):
-                errors.extend(guardrail_result.get("issues", []))
-                plans = []
-
-            planner_output = {
-                "intent": graph_result.get("intent", {}),
-                "plans": plans,
-                "tool_logs": graph_result.get("tool_logs", []),
-                "errors": errors,
-            }
-
-            session = create_session(
-                user_id=req.user_id,
-                message=req.message,
-                planner_output=planner_output,
-            )
-
-            # 更新 session_id 到结果
-            graph_result["session_id"] = session["session_id"]
-            graph_result["plans"] = plans
-            graph_result["errors"] = errors
-
-            update_session(session["session_id"], {
-                "reflection_result": graph_result.get("reflection_result", {}),
-                "guardrail_result": graph_result.get("guardrail_result", {}),
-            })
-
-            # 流式输出事件
-            async for chunk in plan_stream_events(graph_result):
-                yield chunk
+            ):
+                yield sse_chunk
 
         except Exception as e:
             err = {"event": "error", "message": str(e), "data": {}}
@@ -290,18 +254,7 @@ async def agent_confirm_stream(req: AgentConfirmRequest):
                 "stream_events": [],
                 "phase": "execution",
             }
-            exec_state = await run_execution_graph(graph_state, req.plan_id)
-            result = exec_state.get("execution_result", {})
-            share_msg = exec_state.get("share_message", "")
-
-            update_session(req.session_id, {
-                "status": result.get("status", "failed"),
-                "selected_plan_id": req.plan_id,
-                "execution_result": result,
-                "share_message": share_msg,
-            })
-
-            async for chunk in confirm_stream_events(exec_state):
+            async for chunk in run_execution_graph_stream(graph_state, req.plan_id):
                 yield chunk
 
         except Exception as e:

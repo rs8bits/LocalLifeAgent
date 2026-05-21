@@ -1,13 +1,12 @@
 """消息生成节点"""
 
 from backend.agent.state import AgentState
+from backend.agent.event_bus import emit_event
 from backend.agent.message_generator import generate_share_message
 
 
 async def message_node(state: AgentState) -> AgentState:
     """生成转发消息"""
-    events: list[dict] = state.get("stream_events", [])
-
     execution = state.get("execution_result") or {}
     bookings = execution.get("bookings", [])
     orders = execution.get("orders", [])
@@ -30,11 +29,10 @@ async def message_node(state: AgentState) -> AgentState:
 
     state["share_message"] = share_msg
 
-    events.append({
+    await emit_event(state, {
         "event": "message_done",
         "message": "转发消息已生成",
         "data": {"share_message": share_msg},
     })
 
-    state["stream_events"] = events
     return state

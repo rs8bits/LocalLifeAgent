@@ -1,6 +1,7 @@
 """规划节点 - 标签对齐 → 场所搜索 → 方案组合"""
 
 from backend.agent.state import AgentState
+from backend.agent.event_bus import emit_event
 from backend.tools.registry import get_tool
 from backend.agent.schemas import Intent
 from backend.agent.tag_resolver import resolve_domain_tags
@@ -24,29 +25,28 @@ from backend.agent.scorer import score_plan
 
 async def planner_node(state: AgentState) -> AgentState:
     """新流程：标签对齐 → 天气 → 场所搜索 → 方案组合"""
-    events: list[dict] = state.get("stream_events", [])
     tool_logs: list[dict] = []
     warnings: list[str] = []
 
     intent_dict = state.get("intent", {})
     intent = Intent(**intent_dict)
 
-    events.append({
+    await emit_event(state, {
         "event": "planner_start",
         "message": "开始规划...",
         "data": {},
     })
 
     # ── 1. 标签对齐 ──
-    events.append({"event": "tag_catalog_start", "message": "正在查询标签目录...", "data": {}})
-    events.append({"event": "tag_catalog_done", "message": "标签目录已加载", "data": {}})
-    events.append({"event": "tag_resolve_start", "message": "正在对齐用户意图与业务标签...", "data": {}})
+    await emit_event(state, {"event": "tag_catalog_start", "message": "正在查询标签目录...", "data": {}})
+    await emit_event(state, {"event": "tag_catalog_done", "message": "标签目录已加载", "data": {}})
+    await emit_event(state, {"event": "tag_resolve_start", "message": "正在对齐用户意图与业务标签...", "data": {}})
     tag_result = await resolve_domain_tags(
         message=state.get("user_message", ""),
         intent=intent,
         intent_dict=intent_dict,
     )
-    events.append({
+    await emit_event(state, {
         "event": "tag_resolve_done",
         "message": f"标签对齐完成: domains={tag_result['domains']}",
         "data": tag_result,
@@ -58,10 +58,10 @@ async def planner_node(state: AgentState) -> AgentState:
     domain_required = tag_result.get("domain_required", {})
 
     # ── 2. 天气 ──
-    events.append({"event": "tool_start", "message": "查询天气...", "data": {"tool": "get_weather"}})
+    await emit_event(state, {"event": "tool_start", "message": "查询天气...", "data": {"tool": "get_weather"}})
     weather_result = await _run_tool("get_weather", tool_logs,
         date=_resolve_mock_weather_date(intent.date), location="朝阳区")
-    events.append({"event": "tool_done", "message": tool_logs[-1]["message"],
+    await emit_event(state, {"event": "tool_done", "message": tool_logs[-1]["message"],
                    "data": {"tool": "get_weather", "status": "ok"}})
     if weather_result and weather_result.status == "ok" and weather_result.data:
         state["weather"] = weather_result.data[0]
@@ -79,7 +79,7 @@ async def planner_node(state: AgentState) -> AgentState:
     delivery_items: list[dict] = []
 
     for domain_name in domains:
-        events.append({
+        await emit_event(state, {
             "event": "place_search_start",
             "message": f"正在搜索场所 ({domain_name})...",
             "data": {"domain": domain_name},
@@ -116,7 +116,7 @@ async def planner_node(state: AgentState) -> AgentState:
             if result.error:
                 warnings.append(f"[{domain_name}] {result.error}")
 
-        events.append({
+        await emit_event(state, {
             "event": "place_search_done",
             "message": tool_logs[-1]["message"],
             "data": {"domain": domain_name, "count": len(result.data) if result and result.data else 0},
@@ -137,7 +137,7 @@ async def planner_node(state: AgentState) -> AgentState:
     state["candidate_delivery_items"] = delivery_items
 
     # ── 4. 方案组合 ──
-    events.append({
+    await emit_event(state, {
         "event": "composer_start",
         "message": "正在组合候选并生成可执行动作 JSON...",
         "data": {},
@@ -169,7 +169,7 @@ async def planner_node(state: AgentState) -> AgentState:
         _make_plan_from_composer_spec(i, spec, intent, activities, restaurants, drinks, delivery_items)
         for i, spec in enumerate(llm_specs)
     ] if llm_specs else fallback_plans
-    events.append({
+    await emit_event(state, {
         "event": "composer_done",
         "message": "方案组合完成" if llm_specs else "已使用本地规则组合方案",
         "data": {"llm_used": bool(llm_specs), "plans_count": len(plans)},
@@ -215,7 +215,7 @@ async def planner_node(state: AgentState) -> AgentState:
 
     # 输出 plan_delta
     for i, plan in enumerate(plans[:4]):
-        events.append({
+        await emit_event(state, {
             "event": "plan_delta",
             "message": f"方案{i + 1}: {plan.get('title', '')}",
             "data": {"plan": plan},
@@ -223,7 +223,6 @@ async def planner_node(state: AgentState) -> AgentState:
 
     state["plans"] = plans[:4]
     state["tool_logs"] = tool_logs
-    state["stream_events"] = events
 
     return state
 

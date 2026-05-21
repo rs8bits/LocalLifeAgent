@@ -31,4 +31,5 @@ class AgentState(TypedDict, total=False):
     share_message: str | None
     errors: list[str]
     stream_events: list[dict[str, Any]]
+    event_queue: Any
     phase: str  # "planning" | "execution"

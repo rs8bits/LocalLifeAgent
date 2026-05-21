@@ -1,13 +1,13 @@
 """Guardrails 节点 - 安全边界校验"""
 
 from backend.agent.state import AgentState
+from backend.agent.event_bus import emit_event
 from backend.mock_api.storage import read_json
 
 
 async def guardrails_node(state: AgentState) -> AgentState:
     """校验方案的安全边界"""
-    events: list[dict] = state.get("stream_events", [])
-    events.append({"event": "guardrails_start", "message": "正在进行安全校验...", "data": {}})
+    await emit_event(state, {"event": "guardrails_start", "message": "正在进行安全校验...", "data": {}})
 
     issues: list[str] = []
     blocked = False
@@ -114,11 +114,10 @@ async def guardrails_node(state: AgentState) -> AgentState:
     result = {"passed": not blocked, "issues": issues, "blocked": blocked}
     state["guardrail_result"] = result
 
-    events.append({
+    await emit_event(state, {
         "event": "guardrails_done",
         "message": f"安全校验完成: {'通过' if not blocked else '被阻止'} ({len(issues)}个问题)",
         "data": result,
     })
 
-    state["stream_events"] = events
     return state

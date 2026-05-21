@@ -1,6 +1,8 @@
 """流式 API 测试"""
 
+import asyncio
 import json
+import time
 import pytest
 from fastapi.testclient import TestClient
 
@@ -158,3 +160,118 @@ class TestExistingAPIsUnaffected:
         sid = plan_resp.json()["session_id"]
         resp = client.get(f"/api/agent/session/{sid}")
         assert resp.status_code == 200
+
+
+class TestRealStreamingOrder:
+    """P1: 验证真正的流式输出顺序"""
+
+    def test_memory_loaded_before_plan_done(self, monkeypatch):
+        """memory_loaded 应在 plan_done 之前到达"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        resp = client.post("/api/agent/plan/stream", json={
+            "user_id": "user_001",
+            "message": "下午带老婆孩子去亲子乐园，孩子5岁",
+        })
+        assert resp.status_code == 200
+        body = resp.text
+        mem_pos = body.find("memory_loaded")
+        plan_done_pos = body.find("plan_done")
+        assert mem_pos >= 0, "应包含 memory_loaded 事件"
+        assert plan_done_pos >= 0, "应包含 plan_done 事件"
+        assert mem_pos < plan_done_pos, \
+            f"memory_loaded 应在 plan_done 之前 (mem={mem_pos}, done={plan_done_pos})"
+
+    def test_node_level_events_in_order(self, monkeypatch):
+        """验证节点级事件的出现顺序"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        resp = client.post("/api/agent/plan/stream", json={
+            "user_id": "user_001",
+            "message": "下午带老婆孩子去亲子乐园，孩子5岁",
+        })
+        assert resp.status_code == 200
+        body = resp.text
+        # 关键事件顺序检查
+        expected_order = [
+            "memory_loaded",
+            "intent_start",
+            "intent_done",
+            "planner_start",
+            "tag_resolve_start",
+            "tag_resolve_done",
+            "place_search_start",
+            "place_search_done",
+            "composer_start",
+            "composer_done",
+            "reflection_start",
+            "reflection_done",
+            "guardrails_start",
+            "guardrails_done",
+            "plan_done",
+        ]
+        positions = {}
+        for evt in expected_order:
+            pos = body.find(evt)
+            if pos >= 0:
+                positions[evt] = pos
+
+        # 验证已出现的事件按顺序排列
+        found_events = [e for e in expected_order if e in positions]
+        for i in range(len(found_events) - 1):
+            assert positions[found_events[i]] < positions[found_events[i + 1]], \
+                f"{found_events[i]} 应在 {found_events[i + 1]} 之前"
+
+    def test_light_lunch_streaming_no_play_drink(self, monkeypatch):
+        """流式接口「中午想吃点清淡的」不应出现 play/drink/delivery"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        resp = client.post("/api/agent/plan/stream", json={
+            "user_id": "user_002",
+            "message": "中午想吃点清淡的",
+        })
+        assert resp.status_code == 200
+        body = resp.text
+        assert "plan_done" in body
+        # 不应出现无关领域搜索
+        assert "(play)" not in body, f"不应搜索 play: {body[:500]}"
+        assert "(drink)" not in body, f"不应搜索 drink: {body[:500]}"
+        assert "search_delivery_items" not in body, f"不应搜索 delivery: {body[:500]}"
+        assert "(eat)" in body, "应搜索 eat 领域"
+
+    @pytest.mark.asyncio
+    async def test_planner_internal_events_emit_before_slow_composer(self, monkeypatch):
+        """planner_node 内部事件应在慢 LLM 组合完成前就被推送"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        async def slow_compose_plan_specs_with_llm(**kwargs):
+            await asyncio.sleep(0.5)
+            return [], None
+
+        monkeypatch.setattr(
+            "backend.agent.nodes.planner_node.compose_plan_specs_with_llm",
+            slow_compose_plan_specs_with_llm,
+        )
+
+        from backend.agent.graph import run_planning_graph_stream
+
+        seen_events = []
+        started = time.perf_counter()
+        gen = run_planning_graph_stream(
+            user_id="user_002",
+            message="中午想吃点清淡的",
+        )
+        try:
+            async for chunk in gen:
+                for line in chunk.splitlines():
+                    if line.startswith("data: "):
+                        seen_events.append(json.loads(line[6:])["event"])
+                if "composer_start" in seen_events:
+                    break
+        finally:
+            await gen.aclose()
+
+        elapsed = time.perf_counter() - started
+        assert "composer_start" in seen_events
+        assert elapsed < 0.4, f"composer_start 没有实时吐出，耗时 {elapsed:.3f}s"
