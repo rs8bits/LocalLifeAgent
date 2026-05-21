@@ -1,5 +1,6 @@
 """DeepSeek API 客户端封装"""
 
+import asyncio
 import json
 import httpx
 
@@ -41,6 +42,8 @@ class DeepSeekClient:
         self.base_url = settings.DEEPSEEK_BASE_URL.rstrip("/")
         self.model = settings.DEEPSEEK_MODEL
         self.timeout_seconds = settings.DEEPSEEK_TIMEOUT_SECONDS
+        self.max_retries = settings.DEEPSEEK_MAX_RETRIES
+        self.retry_backoff_seconds = settings.DEEPSEEK_RETRY_BACKOFF_SECONDS
         self.available = bool(self.api_key)
 
     def _build_url(self) -> str:
@@ -65,33 +68,64 @@ class DeepSeekClient:
             "temperature": temperature,
         }
 
-        try:
-            timeout = httpx.Timeout(
-                timeout=self.timeout_seconds,
-                connect=min(10.0, self.timeout_seconds),
-            )
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.post(
-                    self._build_url(), headers=self._headers(), json=payload
+        max_attempts = self.max_retries + 1
+        timeout = httpx.Timeout(
+            timeout=self.timeout_seconds,
+            connect=min(10.0, self.timeout_seconds),
+        )
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    resp = await client.post(
+                        self._build_url(), headers=self._headers(), json=payload
+                    )
+            except httpx.TimeoutException:
+                if await self._sleep_before_retry(attempt, max_attempts):
+                    continue
+                return LLMResult(
+                    error=(
+                        f"DeepSeek API 请求超时（超过 {self.timeout_seconds:g} 秒，"
+                        f"已重试 {attempt - 1} 次）"
+                    )
                 )
-        except httpx.TimeoutException:
-            return LLMResult(error=f"DeepSeek API 请求超时（超过 {self.timeout_seconds:g} 秒）")
-        except httpx.ConnectError:
-            return LLMResult(error="无法连接 DeepSeek API")
-        except Exception as e:
-            return LLMResult(error=f"DeepSeek API 网络错误: {str(e)}")
+            except httpx.ConnectError:
+                if await self._sleep_before_retry(attempt, max_attempts):
+                    continue
+                return LLMResult(error=f"无法连接 DeepSeek API（已重试 {attempt - 1} 次）")
+            except httpx.TransportError as e:
+                if await self._sleep_before_retry(attempt, max_attempts):
+                    continue
+                return LLMResult(
+                    error=f"DeepSeek API 网络错误（已重试 {attempt - 1} 次）: {str(e)}"
+                )
+            except Exception as e:
+                return LLMResult(error=f"DeepSeek API 网络错误: {str(e)}")
 
-        if resp.status_code == 401 or resp.status_code == 403:
-            return LLMResult(error="DeepSeek API 鉴权失败，请检查 API Key")
-        if resp.status_code != 200:
-            return LLMResult(error=f"DeepSeek API 返回错误状态码 {resp.status_code}")
+            if resp.status_code == 401 or resp.status_code == 403:
+                return LLMResult(error="DeepSeek API 鉴权失败，请检查 API Key")
+            if resp.status_code == 429 or resp.status_code >= 500:
+                if await self._sleep_before_retry(attempt, max_attempts):
+                    continue
+            if resp.status_code != 200:
+                return LLMResult(error=f"DeepSeek API 返回错误状态码 {resp.status_code}")
 
-        try:
-            body = resp.json()
-            text = body["choices"][0]["message"]["content"]
-            return LLMResult(text=text)
-        except (KeyError, IndexError, json.JSONDecodeError) as e:
-            return LLMResult(error=f"DeepSeek API 响应解析失败: {str(e)}")
+            try:
+                body = resp.json()
+                text = body["choices"][0]["message"]["content"]
+                return LLMResult(text=text)
+            except (KeyError, IndexError, json.JSONDecodeError) as e:
+                return LLMResult(error=f"DeepSeek API 响应解析失败: {str(e)}")
+
+        return LLMResult(error="DeepSeek API 调用失败")
+
+    async def _sleep_before_retry(self, attempt: int, max_attempts: int) -> bool:
+        """需要继续重试时等待一小段时间。"""
+        if attempt >= max_attempts:
+            return False
+        if self.retry_backoff_seconds > 0:
+            await asyncio.sleep(self.retry_backoff_seconds * attempt)
+        return True
 
     async def chat_json(
         self, messages: list[dict[str, str]], temperature: float = 0.1

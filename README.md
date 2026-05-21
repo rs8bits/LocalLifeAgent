@@ -117,9 +117,12 @@ DEEPSEEK_API_KEY=your_deepseek_api_key
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-flash
 DEEPSEEK_TIMEOUT_SECONDS=90
+DEEPSEEK_MAX_RETRIES=2
+DEEPSEEK_RETRY_BACKOFF_SECONDS=0.8
 ```
 
 `.env` 已被 `.gitignore` 忽略，不会提交到仓库。
+网络瞬断、超时、429 或 5xx 会按 `DEEPSEEK_MAX_RETRIES` 自动重试；鉴权失败不会重试。
 
 ## 已实现的 Agent 模块
 
