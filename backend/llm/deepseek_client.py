@@ -40,6 +40,7 @@ class DeepSeekClient:
         self.api_key = settings.DEEPSEEK_API_KEY
         self.base_url = settings.DEEPSEEK_BASE_URL.rstrip("/")
         self.model = settings.DEEPSEEK_MODEL
+        self.timeout_seconds = settings.DEEPSEEK_TIMEOUT_SECONDS
         self.available = bool(self.api_key)
 
     def _build_url(self) -> str:
@@ -65,12 +66,16 @@ class DeepSeekClient:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            timeout = httpx.Timeout(
+                timeout=self.timeout_seconds,
+                connect=min(10.0, self.timeout_seconds),
+            )
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.post(
                     self._build_url(), headers=self._headers(), json=payload
                 )
         except httpx.TimeoutException:
-            return LLMResult(error="DeepSeek API 请求超时")
+            return LLMResult(error=f"DeepSeek API 请求超时（超过 {self.timeout_seconds:g} 秒）")
         except httpx.ConnectError:
             return LLMResult(error="无法连接 DeepSeek API")
         except Exception as e:

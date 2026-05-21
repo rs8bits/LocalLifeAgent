@@ -10,6 +10,16 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 load_dotenv(PROJECT_ROOT / ".env")
 
 
+def _env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
 class Settings:
     """应用设置"""
 
@@ -23,6 +33,7 @@ class Settings:
     DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
     DEEPSEEK_BASE_URL: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
     DEEPSEEK_MODEL: str = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+    DEEPSEEK_TIMEOUT_SECONDS: float = _env_float("DEEPSEEK_TIMEOUT_SECONDS", 90.0)
 
     @property
     def llm_available(self) -> bool:

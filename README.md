@@ -116,6 +116,7 @@ cp .env.example .env
 DEEPSEEK_API_KEY=your_deepseek_api_key
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_TIMEOUT_SECONDS=90
 ```
 
 `.env` 已被 `.gitignore` 忽略，不会提交到仓库。

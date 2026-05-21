@@ -60,10 +60,10 @@ async def compose_plan_specs_with_llm(
 
     payload = {
         "user_message": message,
-        "intent": intent.model_dump(),
-        "user_memory": user_memory or {},
-        "tag_result": tag_result,
-        "weather": weather or {},
+        "intent": _compact_intent(intent),
+        "user_memory": _compact_memory(user_memory),
+        "tag_result": _compact_tag_result(tag_result),
+        "weather": _compact_weather(weather),
         "candidates": {
             "activities": _compact_items(candidates.get("activities", []), "activity"),
             "restaurants": _compact_items(candidates.get("restaurants", []), "restaurant"),
@@ -185,17 +185,67 @@ def _compact_items(items: list[dict[str, Any]], domain: str) -> list[dict[str, A
     keys = [
         "id", "name", "category", "sub_category", "area", "distance_km", "avg_price",
         "tags", "rating", "queue_minutes", "available", "available_slots", "bookable",
-        "business_hours", "recommended_duration_min", "risk", "description",
+        "business_hours", "recommended_duration_min", "risk",
         "child_friendly", "suitable_age_min", "suitable_age_max", "low_calorie_options",
         "estimated_delivery_min", "prep_time_min", "delivery_fee", "available_areas",
         "merchant_name",
     ]
     compacted = []
-    for item in items[:8]:
+    for item in items[:4]:
         entry = {k: item.get(k) for k in keys if k in item}
+        if "tags" in entry:
+            entry["tags"] = entry["tags"][:6]
+        if "available_slots" in entry:
+            entry["available_slots"] = entry["available_slots"][:5]
+        if "available_areas" in entry:
+            entry["available_areas"] = entry["available_areas"][:4]
+        if item.get("description"):
+            entry["description"] = str(item["description"])[:60]
         entry["domain"] = domain
         compacted.append(entry)
     return compacted
+
+
+def _compact_intent(intent: Intent) -> dict[str, Any]:
+    data = intent.model_dump()
+    keep = [
+        "scene", "date", "time_window", "duration_hours", "people_count",
+        "radius_km", "budget_per_person", "food_preferences",
+        "activity_preferences", "drink_preferences", "delivery_preferences",
+        "child_age", "needs_low_calorie", "needs_photo_spot", "avoid_queue_minutes",
+    ]
+    return {k: data.get(k) for k in keep}
+
+
+def _compact_memory(user_memory: dict | None) -> dict[str, Any]:
+    if not user_memory:
+        return {}
+    prefs = user_memory.get("preferences", {})
+    return {
+        "preferences": {
+            "child_age": prefs.get("child_age"),
+            "max_distance_km": prefs.get("max_distance_km"),
+            "max_queue_minutes": prefs.get("max_queue_minutes"),
+            "cuisine_likes": prefs.get("cuisine_likes", [])[:4],
+            "spouse_diet": prefs.get("spouse_diet"),
+        }
+    }
+
+
+def _compact_tag_result(tag_result: dict) -> dict[str, Any]:
+    return {
+        "domains": tag_result.get("domains", []),
+        "domain_required": tag_result.get("domain_required", {}),
+        "domain_tags": tag_result.get("domain_tags", {}),
+        "domain_sub_categories": tag_result.get("domain_sub_categories", {}),
+    }
+
+
+def _compact_weather(weather: dict | None) -> dict[str, Any]:
+    if not weather:
+        return {}
+    keep = ["date", "location", "condition", "temperature", "outdoor_suitable", "risk"]
+    return {k: weather.get(k) for k in keep if k in weather}
 
 
 def _build_id_domain(candidates: dict[str, list[dict[str, Any]]]) -> dict[str, str]:
