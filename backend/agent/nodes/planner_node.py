@@ -15,6 +15,9 @@ from backend.agent.planner import (
     _indoor_preference,
     _resolve_mock_weather_date,
     _dedupe_by_id,
+    _domain_spec_map,
+    _build_place_search_params,
+    _build_delivery_search_params,
 )
 from backend.agent.scorer import score_plan
 
@@ -50,9 +53,9 @@ async def planner_node(state: AgentState) -> AgentState:
     })
     state["tag_resolve_result"] = tag_result
 
-    domains = tag_result["domains"]
+    spec_by_domain = _domain_spec_map(tag_result)
+    domains = list(spec_by_domain.keys())
     domain_required = tag_result.get("domain_required", {})
-    domain_tags = tag_result.get("domain_tags", {})
 
     # ── 2. 天气 ──
     events.append({"event": "tool_start", "message": "查询天气...", "data": {"tool": "get_weather"}})
@@ -82,45 +85,20 @@ async def planner_node(state: AgentState) -> AgentState:
             "data": {"domain": domain_name},
         })
 
-        # 构建搜索参数
-        params = {
-            "domain": domain_name,
-            "scene": scene,
-            "radius_km": radius,
-        }
-        tags = domain_tags.get(domain_name, [])
-
-        if domain_name == "play":
-            if tags:
-                params["tags_any"] = tags
-            if intent.scene == "family":
-                params["child_age"] = intent.child_age
-            if indoor_pref is not None:
-                params["indoor"] = indoor_pref
-
-        elif domain_name == "eat":
-            if tags:
-                params["tags_any"] = tags
-            params["party_size"] = people
-            params["available"] = True
-            params["max_queue_minutes"] = queue_limit
-
-        elif domain_name == "drink":
-            sub_cats = tag_result.get("domain_sub_categories", {}).get("drink", [])
-            if sub_cats:
-                params["sub_category"] = sub_cats[0]
-            if tags:
-                params["tags_any"] = tags
-
         if domain_name == "delivery":
-            sub_cats = tag_result.get("domain_sub_categories", {}).get("delivery", [])
-            delivery_params: dict = {"scene": scene}
-            if tags:
-                delivery_params["tags_any"] = tags
-            if sub_cats:
-                delivery_params["sub_category"] = sub_cats[0]
+            delivery_params = _build_delivery_search_params(spec_by_domain[domain_name], scene)
             result = await _run_tool("search_delivery_items", tool_logs, **delivery_params)
         else:
+            params = _build_place_search_params(
+                domain_name=domain_name,
+                spec=spec_by_domain[domain_name],
+                scene=scene,
+                radius=radius,
+                people=people,
+                queue_limit=queue_limit,
+                child_age=intent.child_age if intent.scene == "family" else None,
+                indoor_pref=indoor_pref,
+            )
             result = await _run_tool("search_places", tool_logs, **params)
 
         if result and result.status == "ok":

@@ -26,7 +26,7 @@ def _rule_parse(message: str) -> Intent:
 
     # 时间窗口
     time_window = "afternoon"
-    if any(kw in message for kw in ["傍晚", "晚上", "晚餐", "晚饭", "夜间"]):
+    if any(kw in message for kw in ["傍晚", "晚上", "今晚", "晚餐", "晚饭", "夜间"]):
         time_window = "evening"
     elif any(kw in message for kw in ["上午", "早上", "中午"]):
         time_window = "afternoon"

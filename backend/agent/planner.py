@@ -31,9 +31,9 @@ async def plan_for_message(
     tag_result = await resolve_domain_tags(
         message=message, intent=intent, intent_dict=intent_dict,
     )
-    domains = tag_result["domains"]
+    spec_by_domain = _domain_spec_map(tag_result)
+    domains = list(spec_by_domain.keys())
     domain_required = tag_result.get("domain_required", {})
-    domain_tags = tag_result.get("domain_tags", {})
 
     # 4. 查询天气
     weather_result = await _run_tool(
@@ -54,44 +54,20 @@ async def plan_for_message(
     delivery_items: list[dict] = []
 
     for domain_name in domains:
-        params: dict[str, Any] = {
-            "domain": domain_name,
-            "scene": scene,
-            "radius_km": radius,
-        }
-        tags = domain_tags.get(domain_name, [])
-
-        if domain_name == "play":
-            if tags:
-                params["tags_any"] = tags
-            if intent.scene == "family":
-                params["child_age"] = intent.child_age
-            if indoor_pref is not None:
-                params["indoor"] = indoor_pref
-
-        elif domain_name == "eat":
-            if tags:
-                params["tags_any"] = tags
-            params["party_size"] = people
-            params["available"] = True
-            params["max_queue_minutes"] = queue_limit
-
-        elif domain_name == "drink":
-            sub_cats = tag_result.get("domain_sub_categories", {}).get("drink", [])
-            if sub_cats:
-                params["sub_category"] = sub_cats[0]
-            if tags:
-                params["tags_any"] = tags
-
         if domain_name == "delivery":
-            sub_cats = tag_result.get("domain_sub_categories", {}).get("delivery", [])
-            delivery_params: dict[str, Any] = {"scene": scene}
-            if tags:
-                delivery_params["tags_any"] = tags
-            if sub_cats:
-                delivery_params["sub_category"] = sub_cats[0]
+            delivery_params = _build_delivery_search_params(spec_by_domain[domain_name], scene)
             result = await _run_tool("search_delivery_items", tool_logs, **delivery_params)
         else:
+            params = _build_place_search_params(
+                domain_name=domain_name,
+                spec=spec_by_domain[domain_name],
+                scene=scene,
+                radius=radius,
+                people=people,
+                queue_limit=queue_limit,
+                child_age=intent.child_age if intent.scene == "family" else None,
+                indoor_pref=indoor_pref,
+            )
             result = await _run_tool("search_places", tool_logs, **params)
 
         if result and result.status == "ok":
@@ -251,6 +227,73 @@ def _indoor_preference(weather_result: Any, intent: Intent) -> Optional[bool]:
 def _dedupe_by_id(existing: list[dict], new_items: list[dict]) -> list[dict]:
     seen = {item.get("id") for item in existing}
     return existing + [item for item in new_items if item.get("id") not in seen]
+
+
+def _domain_spec_map(tag_result: dict) -> dict[str, dict]:
+    specs = tag_result.get("domain_specs") or []
+    if specs:
+        return {
+            spec["domain"]: spec
+            for spec in specs
+            if spec.get("domain") in ("play", "eat", "drink", "delivery")
+        }
+    result = {}
+    for domain_name in tag_result.get("domains", []):
+        result[domain_name] = {
+            "domain": domain_name,
+            "required": tag_result.get("domain_required", {}).get(domain_name, False),
+            "categories": tag_result.get("domain_categories", {}).get(domain_name, []),
+            "tags": tag_result.get("domain_tags", {}).get(domain_name, []),
+            "sub_categories": tag_result.get("domain_sub_categories", {}).get(domain_name, []),
+        }
+    return result
+
+
+def _apply_domain_spec_filters(params: dict[str, Any], spec: dict) -> None:
+    categories = spec.get("categories") or []
+    tags = spec.get("tags") or []
+    sub_categories = spec.get("sub_categories") or []
+    if len(categories) == 1:
+        params["category"] = categories[0]
+    elif len(categories) > 1:
+        params["categories_any"] = categories
+    if tags:
+        params["tags_any"] = tags
+    if sub_categories:
+        params["sub_category"] = sub_categories[0]
+
+
+def _build_place_search_params(
+    *,
+    domain_name: str,
+    spec: dict,
+    scene: str,
+    radius: float,
+    people: int | None,
+    queue_limit: int,
+    child_age: int | None,
+    indoor_pref: bool | None,
+) -> dict[str, Any]:
+    params: dict[str, Any] = {
+        "domain": domain_name,
+        "scene": scene,
+        "radius_km": radius,
+    }
+    _apply_domain_spec_filters(params, spec)
+    if domain_name == "play":
+        params["child_age"] = child_age
+        params["indoor"] = indoor_pref
+    elif domain_name == "eat":
+        params["party_size"] = people
+        params["available"] = True
+        params["max_queue_minutes"] = queue_limit
+    return params
+
+
+def _build_delivery_search_params(spec: dict, scene: str) -> dict[str, Any]:
+    params: dict[str, Any] = {"scene": scene}
+    _apply_domain_spec_filters(params, spec)
+    return params
 
 
 # ═══════════════════════════════════════════════════════════════

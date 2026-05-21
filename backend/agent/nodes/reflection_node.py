@@ -1,6 +1,7 @@
 """Reflection 节点 - 方案质量检查"""
 
 from backend.agent.state import AgentState
+from backend.agent.reflection import run_llm_reflection
 
 
 async def reflection_node(state: AgentState) -> AgentState:
@@ -90,8 +91,8 @@ async def reflection_node(state: AgentState) -> AgentState:
                 issues.append("天气不佳，活动在户外")
                 suggestions.append("建议改为室内活动")
 
-        # 9. 路线
-        if not plan.get("route"):
+        # 9. 路线：只有活动+餐厅组合才强制检查路线
+        if activity and restaurant and not plan.get("route"):
             issues.append("未找到从活动到餐厅的路线")
             suggestions.append("建议选择同商圈的活动和餐厅")
 
@@ -134,6 +135,16 @@ async def reflection_node(state: AgentState) -> AgentState:
         result["issues"].extend(pr["issues"])
         result["suggestions"].extend(pr["suggestions"])
 
+    llm_result, llm_error = await run_llm_reflection(state)
+    if llm_result:
+        _merge_llm_reflection(result, plan_results, plans, llm_result)
+    elif llm_error:
+        state.setdefault("tool_logs", []).append({
+            "tool": "llm_reflection",
+            "status": "fallback",
+            "message": f"LLM Reflection 不可用，已使用规则反思: {llm_error}",
+        })
+
     state["reflection_result"] = result
 
     events.append({
@@ -144,3 +155,37 @@ async def reflection_node(state: AgentState) -> AgentState:
 
     state["stream_events"] = events
     return state
+
+
+def _merge_llm_reflection(
+    result: dict,
+    plan_results: list[dict],
+    plans: list[dict],
+    llm_result: dict,
+) -> None:
+    plan_result_by_id = {item.get("plan_id"): item for item in plan_results}
+    plan_by_id = {item.get("plan_id"): item for item in plans}
+    for llm_plan in llm_result.get("plan_results", []):
+        plan_id = llm_plan.get("plan_id")
+        target = plan_result_by_id.get(plan_id)
+        if not target:
+            continue
+        for issue in llm_plan.get("issues", []):
+            if issue not in target["issues"]:
+                target["issues"].append(issue)
+            plan = plan_by_id.get(plan_id)
+            if plan is not None and issue not in plan.get("risk_tips", []):
+                plan.setdefault("risk_tips", []).append(issue)
+        for suggestion in llm_plan.get("suggestions", []):
+            if suggestion not in target["suggestions"]:
+                target["suggestions"].append(suggestion)
+        target["passed"] = target["passed"] and llm_plan.get("passed", True)
+
+    for issue in llm_result.get("issues", []):
+        if issue not in result["issues"]:
+            result["issues"].append(issue)
+    for suggestion in llm_result.get("suggestions", []):
+        if suggestion not in result["suggestions"]:
+            result["suggestions"].append(suggestion)
+    result["passed"] = all(item["passed"] for item in plan_results) and not result["issues"]
+    result["llm_reflection"] = llm_result

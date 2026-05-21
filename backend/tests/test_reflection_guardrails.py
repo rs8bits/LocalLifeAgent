@@ -4,6 +4,7 @@ import pytest
 from backend.agent.state import AgentState
 from backend.agent.nodes.reflection_node import reflection_node
 from backend.agent.nodes.guardrails_node import guardrails_node
+from backend.llm.deepseek_client import LLMResult
 from backend.mock_api.storage import read_json
 
 
@@ -151,6 +152,51 @@ class TestReflection:
         pr = result["reflection_result"]["plan_results"][0]
         assert any("减脂" in i or "低卡" in i or "健康" in i for i in pr["issues"]), \
             f"应检测到减脂需求未满足, got issues={pr['issues']}"
+
+    @pytest.mark.asyncio
+    async def test_llm_reflection_merges_semantic_issue(self, monkeypatch):
+        async def fake_chat_json(messages, temperature=0.1):
+            return LLMResult(json_data={
+                "plan_results": [{
+                    "plan_id": "p_llm",
+                    "passed": False,
+                    "issues": ["用户明确想唱歌，但方案里的活动不是 KTV/唱歌类"],
+                    "suggestions": ["换成 KTV 类活动"],
+                }],
+                "issues": [],
+                "suggestions": [],
+            })
+
+        monkeypatch.setattr("backend.agent.reflection.deepseek_client.available", True)
+        monkeypatch.setattr("backend.agent.reflection.deepseek_client.chat_json", fake_chat_json)
+        state = _make_state(
+            intent={"scene": "friends", "radius_km": 5.0, "avoid_queue_minutes": 30},
+            tag_resolve_result={
+                "domain_required": {"play": True},
+                "domain_specs": [{
+                    "domain": "play", "required": True,
+                    "categories": ["KTV"], "tags": ["唱歌"], "sub_categories": [],
+                }],
+            },
+            plans=[{
+                "plan_id": "p_llm",
+                "title": "test",
+                "activity": {
+                    "id": "act_003", "name": "展览", "category": "展览",
+                    "tags": ["艺术"], "distance_km": 2.0,
+                    "queue_minutes": 0, "recommended_duration_min": 120,
+                    "bookable": True,
+                },
+                "restaurant": {},
+                "route": None,
+                "risk_tips": [],
+            }],
+        )
+        result = await reflection_node(state)
+        pr = result["reflection_result"]["plan_results"][0]
+        assert pr["passed"] is False
+        assert any("KTV" in issue or "唱歌" in issue for issue in pr["issues"])
+        assert any("KTV" in tip or "唱歌" in tip for tip in result["plans"][0]["risk_tips"])
 
 
 class TestGuardrails:

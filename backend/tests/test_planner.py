@@ -242,6 +242,28 @@ class TestTagResolverFlow:
         assert has_activity, "唱歌应由 play domain 生成活动方案"
 
     @pytest.mark.asyncio
+    async def test_sing_and_drink_only_searches_needed_domains(self, monkeypatch):
+        """唱歌+喝酒应只搜索 play/drink，不应顺手查 eat/delivery。"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="今晚想唱歌，然后去喝酒",
+        )
+        search_logs = [
+            log for log in result["tool_logs"]
+            if log["tool"] in ("search_places", "search_delivery_items")
+        ]
+        messages = [log["message"] for log in search_logs]
+        assert any("(play)" in msg for msg in messages)
+        assert any("(drink)" in msg for msg in messages)
+        assert not any("(eat)" in msg for msg in messages), messages
+        assert not any(log["tool"] == "search_delivery_items" for log in search_logs), search_logs
+        assert result["plans"][0]["restaurant"] is None
+        assert result["plans"][0]["activity"]["category"] == "KTV"
+        assert result["plans"][0]["drink"]["sub_category"] == "bar"
+
+    @pytest.mark.asyncio
     async def test_tag_search_fallback(self, monkeypatch):
         """标签搜索 0 结果时应自动放宽"""
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")

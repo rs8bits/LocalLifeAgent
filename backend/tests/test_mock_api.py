@@ -144,6 +144,28 @@ class TestMockDataBusinessFields:
             assert item["source"] == "mock_meituan_deal"
             assert item["quantity_available"] >= 0
 
+    def test_tag_catalog_terms_are_backed_by_mock_data(self):
+        """标签目录里的类目/标签/子类目必须能在对应 Mock Data 中找到。"""
+        catalog = json.loads((DATA_DIR / "tag_catalog.json").read_text(encoding="utf-8"))
+        source_files = {
+            "play": "activities.json",
+            "eat": "restaurants.json",
+            "drink": "drinks.json",
+            "delivery": "delivery_items.json",
+            "add_on": "add_ons.json",
+        }
+        for domain, filename in source_files.items():
+            domain_info = catalog["domains"][domain]
+            data = read_json(filename)
+            actual_categories = {item.get("category") for item in data if item.get("category")}
+            actual_tags = {tag for item in data for tag in item.get("tags", [])}
+            actual_sub_categories = {
+                item.get("sub_category") for item in data if item.get("sub_category")
+            }
+            assert set(domain_info.get("categories", [])).issubset(actual_categories), domain
+            assert set(domain_info.get("tags", [])).issubset(actual_tags), domain
+            assert set(domain_info.get("sub_categories", [])).issubset(actual_sub_categories), domain
+
 
 class TestActivities:
     """活动查询测试"""

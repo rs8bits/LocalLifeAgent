@@ -13,7 +13,7 @@
 - **阶段 4**：最小可演示前端 Demo（Next.js 页面、方案卡片、确认交互、执行结果）
 - **阶段 5**：LangGraph 多 Agent 结构（7 个节点、流式 SSE 输出）
 - **阶段 6**：Reflection、Guardrails 与 Memory（质量检查、安全边界校验、用户记忆读取）
-- **阶段 7**：标签对齐 + LLM 方案组合器（吃/喝/玩/外卖闪送候选检索 → 严格 JSON action 输出）
+- **阶段 7**：标签对齐 + LLM 方案组合器（吃/喝/玩/外卖闪送分类与标签解析 → 精准候选检索 → 严格 JSON action 输出）
 
 ## 技术栈
 
@@ -233,15 +233,15 @@ Memory → Intent → Planner → Reflection → Guardrails → (确认阶段) E
 |------|------|----------|
 | Memory Node | 读取用户长期记忆（位置/孩子年龄/饮食偏好/距离偏好） | `memory_loaded` |
 | Intent Node | 解析自然语言意图（LLM 优先 + 规则兜底） | `intent_start`, `intent_done` |
-| Planner Node | 标签对齐，按吃/喝/玩/外卖闪送检索候选，交给 LLM 组合 JSON 方案，本地校验并兜底 | `tool_start`, `tool_done`, `planner_start`, `composer_start`, `composer_done`, `plan_delta` |
-| Reflection Node | 检查方案质量（儿童适配/距离/排队/健康/天气/路线等 10 项） | `reflection_start`, `reflection_done` |
+| Planner Node | 使用 Tag Resolver 输出的 `domain_specs` 只检索必要领域，交给 LLM 组合 JSON 方案，本地校验并兜底 | `tool_start`, `tool_done`, `planner_start`, `composer_start`, `composer_done`, `plan_delta` |
+| Reflection Node | 规则检查 + LLM 语义反思，检查方案是否真正满足用户意图 | `reflection_start`, `reflection_done` |
 | Guardrails Node | 安全校验（POI 来源/阶段检查/支付承诺/儿童安全） | `guardrails_start`, `guardrails_done` |
 | Executor Node | 确认阶段执行预约+订位+Mock 订单 | `booking_start`, `booking_done`, `order_start`, `order_done` |
 | Message Node | 生成可转发消息 | `message_done` |
 
 ## Reflection 检查项
 
-规划完成后对每个方案自动检查（代码规则，不依赖 LLM）：
+规划完成后对每个方案自动检查：规则层负责稳定结构化检查，LLM Reflection 负责语义层检查（例如“唱歌”是否真的匹配 KTV，“喝酒”是否真的匹配酒吧/精酿）。
 
 1. 是否满足用户明确要求的领域（活动/餐厅/饮品/外卖闪送）
 2. 总时长是否适合 4～6 小时

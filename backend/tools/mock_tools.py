@@ -269,6 +269,8 @@ class SearchPlacesTool(BaseTool):
         domain: str,
         scene: Optional[str] = None,
         radius_km: Optional[float] = None,
+        category: Optional[str] = None,
+        categories_any: Optional[list[str]] = None,
         tags_any: Optional[list[str]] = None,
         tags_all: Optional[list[str]] = None,
         sub_category: Optional[str] = None,
@@ -297,6 +299,13 @@ class SearchPlacesTool(BaseTool):
             # 距离
             if radius_km is not None:
                 results = [r for r in results if r.get("distance_km", float("inf")) <= radius_km]
+
+            # 类目
+            if category:
+                results = [r for r in results if r.get("category") == category]
+
+            if categories_any:
+                results = [r for r in results if r.get("category") in categories_any]
 
             # 子品类
             if sub_category:
@@ -378,6 +387,8 @@ class SearchDeliveryItemsTool(BaseTool):
         area: Optional[str] = None,
         tag: Optional[str] = None,
         tags_any: Optional[list[str]] = None,
+        category: Optional[str] = None,
+        categories_any: Optional[list[str]] = None,
         sub_category: Optional[str] = None,
         max_eta_min: Optional[int] = None,
     ) -> ToolResult:
@@ -388,6 +399,10 @@ class SearchDeliveryItemsTool(BaseTool):
                 results = [item for item in results if _matches_scene(item, scene)]
             if area:
                 results = [item for item in results if area in item.get("available_areas", [])]
+            if category:
+                results = [item for item in results if item.get("category") == category]
+            if categories_any:
+                results = [item for item in results if item.get("category") in categories_any]
             if tag:
                 results = [item for item in results if tag in item.get("tags", [])]
             if sub_category:
