@@ -69,6 +69,12 @@ async def plan_for_message(
                 indoor_pref=indoor_pref,
             )
             result = await _run_tool("search_places", tool_logs, **params)
+            if _should_relax_place_search(result, params):
+                relaxed_params = _relax_place_search_params(params)
+                relaxed = await _run_tool("search_places", tool_logs, **relaxed_params)
+                if relaxed and relaxed.status == "ok" and relaxed.data:
+                    warnings.append(f"[{domain_name}] 严格标签/类目无结果，已按 party_type 放宽检索")
+                    result = relaxed
 
         if result and result.status == "ok":
             data = result.data or []
@@ -310,6 +316,20 @@ def _build_delivery_search_params(spec: dict, party_type: str) -> dict[str, Any]
         params["party_type"] = party_type
     _apply_domain_spec_filters(params, spec)
     return params
+
+
+def _should_relax_place_search(result: Any, params: dict[str, Any]) -> bool:
+    if not result or result.status != "ok" or result.data:
+        return False
+    strict_keys = {"category", "categories_any", "tags_any", "tags_all", "sub_category"}
+    return any(params.get(key) for key in strict_keys)
+
+
+def _relax_place_search_params(params: dict[str, Any]) -> dict[str, Any]:
+    relaxed = dict(params)
+    for key in ["category", "categories_any", "tags_any", "tags_all", "sub_category"]:
+        relaxed.pop(key, None)
+    return relaxed
 
 
 # ═══════════════════════════════════════════════════════════════

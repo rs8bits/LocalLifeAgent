@@ -21,6 +21,8 @@ from backend.agent.planner import (
     _build_delivery_search_params,
     _has_child_context,
     _format_tool_query,
+    _relax_place_search_params,
+    _should_relax_place_search,
 )
 from backend.agent.scorer import score_plan
 
@@ -110,6 +112,12 @@ async def planner_node(state: AgentState) -> AgentState:
                 indoor_pref=indoor_pref,
             )
             result = await _run_tool("search_places", tool_logs, **params)
+            if _should_relax_place_search(result, params):
+                relaxed_params = _relax_place_search_params(params)
+                relaxed = await _run_tool("search_places", tool_logs, **relaxed_params)
+                if relaxed and relaxed.status == "ok" and relaxed.data:
+                    warnings.append(f"[{domain_name}] 严格标签/类目无结果，已按 party_type 放宽检索")
+                    result = relaxed
 
         if result and result.status == "ok":
             data = result.data or []

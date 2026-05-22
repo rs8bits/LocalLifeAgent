@@ -156,6 +156,50 @@ class TestPlannerPartyTypes:
         assert all(not p["title"].startswith("亲子方案") for p in result["plans"])
 
     @pytest.mark.asyncio
+    async def test_couple_anniversary_relaxes_over_strict_place_filters(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        async def fake_resolve_domain_tags(message, intent, intent_dict):
+            return {
+                "domains": ["play", "eat", "delivery"],
+                "domain_required": {"play": True, "eat": True, "drink": False, "delivery": False},
+                "domain_specs": [
+                    {
+                        "domain": "play",
+                        "required": True,
+                        "categories": ["不存在的活动类目"],
+                        "tags": ["纪念日", "约会", "仪式感"],
+                        "sub_categories": [],
+                    },
+                    {
+                        "domain": "eat",
+                        "required": True,
+                        "categories": ["不存在的餐厅类目"],
+                        "tags": ["纪念日", "约会", "仪式感"],
+                        "sub_categories": [],
+                    },
+                    {
+                        "domain": "delivery",
+                        "required": False,
+                        "categories": [],
+                        "tags": ["纪念日", "鲜花"],
+                        "sub_categories": [],
+                    },
+                ],
+            }
+
+        monkeypatch.setattr("backend.agent.planner.resolve_domain_tags", fake_resolve_domain_tags)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="今天是和对象的两周年纪念日，帮我安排一下今天的活动",
+        )
+        assert result["intent"]["party_type"] == "couple"
+        assert any(p.get("activity") for p in result["plans"])
+        assert any(p.get("restaurant") for p in result["plans"])
+        assert any("放宽检索" in tip for p in result["plans"] for tip in p.get("risk_tips", []))
+
+    @pytest.mark.asyncio
     async def test_plans_are_sorted_by_score_desc(self, monkeypatch):
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
