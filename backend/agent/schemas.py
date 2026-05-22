@@ -18,6 +18,8 @@ class Intent(BaseModel):
     party_type: str = "general"  # family_with_child | family_elder | family | friends | couple | solo | business | general
     # tags 统一表达时机、体验、偏好和约束，不再拆 occasion/occasion_tags/experience_tags。
     tags: list[str] = Field(default_factory=list)
+    # memory_tags 来自用户长期记忆，只用于排序/打分，不参与搜索硬过滤。
+    memory_tags: list[str] = Field(default_factory=list)
     date: str = "today"
     time_window: str = "afternoon"  # "afternoon" | "evening" | "unknown"
     duration_hours: Optional[int] = None

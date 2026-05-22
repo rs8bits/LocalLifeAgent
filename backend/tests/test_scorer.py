@@ -319,3 +319,42 @@ class TestScorerPartyTypes:
         result = score_plan(plan, intent)
         assert result["score"] > 0.6
         assert any("安静" in reason or "稳定" in reason for reason in result["score_reasons"])
+
+    def test_memory_tags_add_bonus_without_being_required(self):
+        intent = Intent(
+            scene="couple",
+            party_type="couple",
+            memory_tags=["日料", "健康"],
+            radius_km=8.0,
+            avoid_queue_minutes=30,
+            people_count=2,
+        )
+        plan = {
+            "plan_id": "memory_bonus_001",
+            "activity": {
+                "name": "香氛手作",
+                "distance_km": 2.0,
+                "tags": ["约会", "仪式感"],
+                "rating": 4.7,
+                "queue_minutes": 5,
+                "avg_price": 180,
+                "recommended_duration_min": 90,
+            },
+            "restaurant": {
+                "name": "约会日料",
+                "distance_km": 2.3,
+                "category": "日料",
+                "cuisine": "日料",
+                "tags": ["约会", "纪念日"],
+                "rating": 4.7,
+                "popularity_score": 80,
+                "party_size_max": 4,
+                "queue_minutes": 5,
+                "avg_price": 260,
+                "recommended_duration_min": 75,
+            },
+        }
+
+        result = score_plan(plan, intent)
+
+        assert any("记忆偏好匹配" in reason for reason in result["score_reasons"])

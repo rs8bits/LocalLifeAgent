@@ -15,14 +15,11 @@ from backend.agent.planner import (
     _enrich_plan,
     _indoor_preference,
     _resolve_mock_weather_date,
-    _dedupe_by_id,
     _domain_spec_map,
     _build_place_search_params,
     _build_delivery_search_params,
     _has_child_context,
     _format_tool_query,
-    _relax_place_search_params,
-    _should_relax_place_search,
 )
 from backend.agent.scorer import score_plan
 
@@ -112,12 +109,6 @@ async def planner_node(state: AgentState) -> AgentState:
                 indoor_pref=indoor_pref,
             )
             result = await _run_tool("search_places", tool_logs, **params)
-            if _should_relax_place_search(result, params):
-                relaxed_params = _relax_place_search_params(params)
-                relaxed = await _run_tool("search_places", tool_logs, **relaxed_params)
-                if relaxed and relaxed.status == "ok" and relaxed.data:
-                    warnings.append(f"[{domain_name}] 严格标签/类目无结果，已按 party_type 放宽检索")
-                    result = relaxed
 
         if result and result.status == "ok":
             data = result.data or []
@@ -139,15 +130,6 @@ async def planner_node(state: AgentState) -> AgentState:
             "message": tool_logs[-1]["message"],
             "data": {"domain": domain_name, "count": len(result.data) if result and result.data else 0},
         })
-
-    # eat fallback: 低卡需求
-    if intent.needs_low_calorie and len(restaurants) < 2 and "eat" in domains:
-        fallback = await _run_tool("search_places", tool_logs,
-            domain="eat", party_type=party_type, radius_km=radius,
-            party_size=people, available=True,
-        )
-        if fallback and fallback.status == "ok":
-            restaurants = _dedupe_by_id(restaurants, fallback.data)
 
     state["candidate_activities"] = activities
     state["candidate_restaurants"] = restaurants

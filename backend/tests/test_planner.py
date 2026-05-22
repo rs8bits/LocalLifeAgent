@@ -9,7 +9,7 @@ class TestPlannerFamily:
     """家庭场景规划"""
 
     @pytest.mark.asyncio
-    async def test_generates_at_least_two_plans(self, monkeypatch):
+    async def test_generates_at_least_one_plan(self, monkeypatch):
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
         result = await plan_for_message(
@@ -17,7 +17,7 @@ class TestPlannerFamily:
             message="今天下午想和老婆孩子出去玩几个小时，别太远，孩子5岁，老婆最近在减肥",
         )
         plans = result["plans"]
-        assert len(plans) >= 2, f"期望至少2个方案，实际{len(plans)}个"
+        assert len(plans) >= 1, f"期望至少1个方案，实际{len(plans)}个"
 
     @pytest.mark.asyncio
     async def test_plans_have_required_fields(self, monkeypatch):
@@ -73,9 +73,10 @@ class TestPlannerFamily:
             user_id="user_001",
             message="下午带老婆孩子出去玩",
         )
-        # user_001 有 child_age=5, spouse_diet=减脂，在家场景应生效
+        # user_001 有 child_age=5，家庭上下文应继承孩子年龄；减脂记忆只进入 memory_tags 打分。
         intent = result["intent"]
         assert intent["child_age"] == 5
+        assert "减脂" in intent["memory_tags"]
 
     @pytest.mark.asyncio
     async def test_no_booking_or_order_calls(self, monkeypatch):
@@ -156,48 +157,31 @@ class TestPlannerPartyTypes:
         assert all(not p["title"].startswith("亲子方案") for p in result["plans"])
 
     @pytest.mark.asyncio
-    async def test_couple_anniversary_relaxes_over_strict_place_filters(self, monkeypatch):
+    async def test_memory_tags_do_not_become_search_filters(self, monkeypatch):
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
 
-        async def fake_resolve_domain_tags(message, intent, intent_dict):
-            return {
-                "domains": ["play", "eat", "delivery"],
-                "domain_required": {"play": True, "eat": True, "drink": False, "delivery": False},
-                "domain_specs": [
-                    {
-                        "domain": "play",
-                        "required": True,
-                        "categories": ["不存在的活动类目"],
-                        "tags": ["纪念日", "约会", "仪式感"],
-                        "sub_categories": [],
-                    },
-                    {
-                        "domain": "eat",
-                        "required": True,
-                        "categories": ["不存在的餐厅类目"],
-                        "tags": ["纪念日", "约会", "仪式感"],
-                        "sub_categories": [],
-                    },
-                    {
-                        "domain": "delivery",
-                        "required": False,
-                        "categories": [],
-                        "tags": ["纪念日", "鲜花"],
-                        "sub_categories": [],
-                    },
-                ],
-            }
-
-        monkeypatch.setattr("backend.agent.planner.resolve_domain_tags", fake_resolve_domain_tags)
         result = await plan_for_message(
-            user_id="user_002",
+            user_id="user_001",
             message="今天是和对象的两周年纪念日，帮我安排一下今天的活动",
         )
         assert result["intent"]["party_type"] == "couple"
+        assert "纪念日" in result["intent"]["tags"]
+        assert "约会" in result["intent"]["tags"]
+        assert "健康" in result["intent"]["memory_tags"]
+        assert "健康" not in result["intent"]["tags"]
+        search_messages = [
+            log["message"]
+            for log in result["tool_logs"]
+            if log["tool"] in {"search_places", "search_delivery_items"}
+        ]
+        assert search_messages
+        assert not any("健康" in msg for msg in search_messages), search_messages
+        assert not any("健康轻食" in msg for msg in search_messages), search_messages
+        assert not any("日料" in msg for msg in search_messages), search_messages
+        assert not any("粤菜" in msg for msg in search_messages), search_messages
         assert any(p.get("activity") for p in result["plans"])
         assert any(p.get("restaurant") for p in result["plans"])
-        assert any("放宽检索" in tip for p in result["plans"] for tip in p.get("risk_tips", []))
 
     @pytest.mark.asyncio
     async def test_plans_are_sorted_by_score_desc(self, monkeypatch):

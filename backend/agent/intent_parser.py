@@ -438,10 +438,7 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
             intent.radius_km = float(prefs["max_distance_km"])
         if intent.avoid_queue_minutes == 30 and prefs.get("max_queue_minutes"):
             intent.avoid_queue_minutes = prefs["max_queue_minutes"]
-        if not intent.food_preferences and prefs.get("cuisine_likes"):
-            intent.food_preferences = [tag for tag in prefs.get("cuisine_likes", [])]
-        if prefs.get("spouse_diet") == "减脂" and _has_spouse_context(intent):
-            intent.needs_low_calorie = True
+        _merge_memory_tags(intent, prefs)
 
         # companions: 朋友场景不加入 child/spouse
         if not intent.companions:
@@ -509,6 +506,17 @@ def _normalize_party_fields(intent: Intent) -> None:
         _append_unique(intent.tags, "独处")
     if party == "family_with_child":
         _append_unique(intent.tags, "亲子")
+
+
+def _merge_memory_tags(intent: Intent, prefs: dict) -> None:
+    """将用户长期记忆整理成打分标签，不进入本轮搜索过滤。"""
+    for tag in prefs.get("preferred_tags", []) or []:
+        _append_unique(intent.memory_tags, tag)
+    for tag in prefs.get("cuisine_likes", []) or []:
+        _append_unique(intent.memory_tags, tag)
+    if prefs.get("spouse_diet") == "减脂" and _has_spouse_context(intent):
+        for tag in ["减脂", "健康", "低卡"]:
+            _append_unique(intent.memory_tags, tag)
 
 
 def _normalize_preferences(intent: Intent) -> None:

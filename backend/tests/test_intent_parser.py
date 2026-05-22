@@ -205,7 +205,12 @@ class TestUserMemoryMerge:
         assert intent.party_type == "family_with_child"
         assert intent.radius_km == 8.0
         assert intent.avoid_queue_minutes == 20
-        assert intent.needs_low_calorie is True
+        assert intent.needs_low_calorie is False
+        assert "减脂" in intent.memory_tags
+        assert "健康" in intent.memory_tags
+        assert "日料" in intent.memory_tags
+        assert "减脂" not in intent.tags
+        assert "日料" not in intent.tags
 
     @pytest.mark.asyncio
     async def test_user_input_overrides_memory(self, monkeypatch):
@@ -243,6 +248,8 @@ class TestFriendsMemoryIsolation:
         assert intent.party_type == "friends"
         assert intent.child_age is None, "朋友场景不应继承 child_age"
         assert intent.needs_low_calorie is False, "朋友场景不应继承配偶减脂偏好"
+        assert "减脂" not in intent.memory_tags, "朋友场景不应继承配偶减脂打分标签"
+        assert "日料" in intent.memory_tags, "用户自己的口味记忆可作为打分标签"
         # companions 不应包含 child/spouse
         roles = [c.get("role") for c in intent.companions]
         assert "child" not in roles, "朋友场景 companions 不应包含 child"
@@ -263,4 +270,7 @@ class TestFriendsMemoryIsolation:
         intent = await parse_intent("晚上和老婆吃饭", user_memory=memory)
         assert intent.party_type == "couple"
         assert intent.child_age is None
-        assert intent.needs_low_calorie is True
+        assert intent.needs_low_calorie is False
+        assert "减脂" in intent.memory_tags
+        assert "健康" in intent.memory_tags
+        assert "减脂" not in intent.tags

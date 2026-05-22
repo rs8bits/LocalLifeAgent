@@ -44,7 +44,8 @@ class TestPlanningGraph:
             message="下午带老婆孩子出去玩",
         )
         assert result["intent"].get("child_age") == 5
-        assert result["intent"].get("needs_low_calorie") is True
+        assert result["intent"].get("needs_low_calorie") is False
+        assert "减脂" in result["intent"].get("memory_tags", [])
 
     @pytest.mark.asyncio
     async def test_graph_plans_have_scores(self, monkeypatch):

@@ -9,20 +9,48 @@ def score_plan(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
     """对单个方案评分，返回带分值的方案"""
     party_type = intent.party_type
     if party_type == "family_with_child" or _intent_has_child(intent):
-        return _score_family(plan, intent)
-    if party_type in {"family_elder", "family"}:
-        return _score_family_group(plan, intent)
-    if party_type == "couple":
-        return _score_couple(plan, intent)
-    if party_type == "business":
-        return _score_business(plan, intent)
-    if party_type == "solo":
-        return _score_solo(plan, intent)
-    return _score_friends(plan, intent)
+        scored = _score_family(plan, intent)
+    elif party_type in {"family_elder", "family"}:
+        scored = _score_family_group(plan, intent)
+    elif party_type == "couple":
+        scored = _score_couple(plan, intent)
+    elif party_type == "business":
+        scored = _score_business(plan, intent)
+    elif party_type == "solo":
+        scored = _score_solo(plan, intent)
+    else:
+        scored = _score_friends(plan, intent)
+    return _apply_memory_tag_bonus(scored, intent)
 
 
 def _intent_has_child(intent: Intent) -> bool:
     return intent.child_age is not None or any(c.get("role") == "child" for c in intent.companions)
+
+
+def _apply_memory_tag_bonus(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
+    memory_tags = set(intent.memory_tags or [])
+    if not memory_tags:
+        return plan
+    poi_tags = set()
+    for key in ["activity", "restaurant", "drink"]:
+        poi = plan.get(key) or {}
+        poi_tags.update(poi.get("tags", []))
+        category = poi.get("category")
+        cuisine = poi.get("cuisine")
+        if category:
+            poi_tags.add(category)
+        if cuisine:
+            poi_tags.add(cuisine)
+    for item in plan.get("delivery_items") or []:
+        poi_tags.update((item or {}).get("tags", []))
+
+    matched = sorted(memory_tags & poi_tags)
+    if not matched:
+        return plan
+    bonus = min(0.08, 0.025 * len(matched))
+    plan["score"] = round(min(1.0, plan.get("score", 0.0) + bonus), 3)
+    plan.setdefault("score_reasons", []).append(f"记忆偏好匹配: {', '.join(matched[:3])}")
+    return plan
 
 
 def _score_family(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:

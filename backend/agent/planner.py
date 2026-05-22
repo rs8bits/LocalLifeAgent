@@ -69,12 +69,6 @@ async def plan_for_message(
                 indoor_pref=indoor_pref,
             )
             result = await _run_tool("search_places", tool_logs, **params)
-            if _should_relax_place_search(result, params):
-                relaxed_params = _relax_place_search_params(params)
-                relaxed = await _run_tool("search_places", tool_logs, **relaxed_params)
-                if relaxed and relaxed.status == "ok" and relaxed.data:
-                    warnings.append(f"[{domain_name}] 严格标签/类目无结果，已按 party_type 放宽检索")
-                    result = relaxed
 
         if result and result.status == "ok":
             data = result.data or []
@@ -88,15 +82,6 @@ async def plan_for_message(
                 delivery_items = data
             if result.error:
                 warnings.append(f"[{domain_name}] {result.error}")
-
-    # eat fallback
-    if intent.needs_low_calorie and len(restaurants) < 2 and "eat" in domains:
-        fallback = await _run_tool("search_places", tool_logs,
-            domain="eat", party_type=party_type, radius_km=radius,
-            party_size=people, available=True,
-        )
-        if fallback and fallback.status == "ok":
-            restaurants = _dedupe_by_id(restaurants, fallback.data)
 
     # 6. 组合方案：LLM 输出方案 JSON，本地规则作为兜底
     fallback_plans = _build_diverse_plans(intent, activities, restaurants, drinks, tool_logs)
@@ -243,11 +228,6 @@ def _indoor_preference(weather_result: Any, intent: Intent) -> Optional[bool]:
     return None
 
 
-def _dedupe_by_id(existing: list[dict], new_items: list[dict]) -> list[dict]:
-    seen = {item.get("id") for item in existing}
-    return existing + [item for item in new_items if item.get("id") not in seen]
-
-
 def _domain_spec_map(tag_result: dict) -> dict[str, dict]:
     specs = tag_result.get("domain_specs") or []
     if specs:
@@ -316,20 +296,6 @@ def _build_delivery_search_params(spec: dict, party_type: str) -> dict[str, Any]
         params["party_type"] = party_type
     _apply_domain_spec_filters(params, spec)
     return params
-
-
-def _should_relax_place_search(result: Any, params: dict[str, Any]) -> bool:
-    if not result or result.status != "ok" or result.data:
-        return False
-    strict_keys = {"category", "categories_any", "tags_any", "tags_all", "sub_category"}
-    return any(params.get(key) for key in strict_keys)
-
-
-def _relax_place_search_params(params: dict[str, Any]) -> dict[str, Any]:
-    relaxed = dict(params)
-    for key in ["category", "categories_any", "tags_any", "tags_all", "sub_category"]:
-        relaxed.pop(key, None)
-    return relaxed
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -885,9 +851,14 @@ def _attach_delivery_to_plans(
     for idx, plan in enumerate(plans):
         if plan.get("delivery_items"):
             continue
-        item = sorted_items[0]
+        item, target = _select_delivery_for_plan(sorted_items, plan)
+        if not item:
+            continue
+        item = dict(item)
+        item["_delivery_target_ref_id"] = target.get("id")
+        item["_delivery_target_name"] = target.get("name")
+        item["_delivery_target_area"] = target.get("area")
         plan["delivery_items"] = [item]
-        target = plan.get("restaurant") or plan.get("activity") or plan.get("drink") or {}
         delivery_time = _delivery_time_for_plan(plan, item)
         plan.setdefault("timeline", []).append({
             "time": delivery_time,
@@ -898,9 +869,32 @@ def _attach_delivery_to_plans(
         })
         plan["timeline"] = _sort_timeline(plan["timeline"])
         plan.setdefault("recommend_reasons", []).append("可叠加外卖/闪送服务")
+        if target and target != (plan.get("restaurant") or {}):
+            plan.setdefault("risk_tips", []).append("配送商品不支持送到餐厅，已改为送达活动地点")
         if item.get("risk"):
             plan.setdefault("risk_tips", []).append(item["risk"])
         _recalculate_budget(plan, intent)
+
+
+def _select_delivery_for_plan(delivery_items: list[dict], plan: dict) -> tuple[dict | None, dict]:
+    targets = [
+        plan.get("restaurant") or {},
+        plan.get("activity") or {},
+        plan.get("drink") or {},
+    ]
+    for target in [t for t in targets if t]:
+        item = next((candidate for candidate in delivery_items if _delivery_supports_target(candidate, target)), None)
+        if item:
+            return item, target
+    return None, {}
+
+
+def _delivery_supports_target(item: dict, target: dict) -> bool:
+    target_area = target.get("area")
+    if not target_area:
+        return True
+    available_areas = item.get("available_areas") or []
+    return target_area in available_areas
 
 
 def _build_delivery_only_plans(intent: Intent, delivery_items: list[dict]) -> list[dict]:
@@ -1114,13 +1108,14 @@ def _ensure_plan_actions(plan: dict, intent: Intent) -> None:
         if ("order_delivery", item.get("id")) in seen:
             continue
         target = plan.get("restaurant") or plan.get("activity") or plan.get("drink") or {}
+        target_ref_id = item.get("_delivery_target_ref_id") or target.get("id")
         actions.append({
             "action_id": f"order_{item.get('id')}",
             "type": "order_delivery",
             "ref_id": item.get("id"),
             "scheduled_time": _timeline_time_for(plan, "delivery") or _delivery_time_for_plan(plan, item),
             "quantity": 1,
-            "target_ref_id": target.get("id"),
+            "target_ref_id": target_ref_id,
         })
 
     for deal in plan.get("deals") or []:
