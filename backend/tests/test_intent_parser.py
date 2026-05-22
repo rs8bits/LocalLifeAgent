@@ -10,8 +10,9 @@ class TestRuleParseFamily:
     def test_family_basic(self):
         msg = "今天下午想和老婆孩子出去玩几个小时，别太远，孩子5岁，老婆最近在减肥"
         intent = _rule_parse(msg)
-        assert intent.scene == "family"
+        assert intent.scene == "family_with_child"
         assert intent.party_type == "family_with_child"
+        assert "亲子" in intent.tags
         assert intent.child_age == 5
         assert intent.needs_low_calorie is True
         assert intent.radius_km == 5.0
@@ -20,7 +21,7 @@ class TestRuleParseFamily:
     def test_family_with_distance(self):
         msg = "周末带4岁宝宝去附近公园，不要太远"
         intent = _rule_parse(msg)
-        assert intent.scene == "family"
+        assert intent.scene == "family_with_child"
         assert intent.party_type == "family_with_child"
         assert intent.child_age == 4
         assert "亲子" in intent.activity_preferences
@@ -28,15 +29,16 @@ class TestRuleParseFamily:
     def test_spouse_without_child_is_couple(self):
         msg = "下午和老婆出去逛逛"
         intent = _rule_parse(msg)
-        assert intent.scene == "friends"
+        assert intent.scene == "couple"
         assert intent.party_type == "couple"
+        assert "约会" in intent.tags
         assert intent.child_age is None
         assert intent.people_count == 2
 
     def test_parents_are_family_elder(self):
         msg = "周末想带爸妈在附近吃点清淡的，少走路"
         intent = _rule_parse(msg)
-        assert intent.scene == "family"
+        assert intent.scene == "family_elder"
         assert intent.party_type == "family_elder"
         assert intent.needs_less_walking is True
         assert intent.needs_low_calorie is True
@@ -78,14 +80,14 @@ class TestRuleParseFriends:
     def test_business_scene(self):
         msg = "晚上和客户吃饭，需要安静正式一点"
         intent = _rule_parse(msg)
-        assert intent.scene == "friends"
+        assert intent.scene == "business"
         assert intent.party_type == "business"
         assert intent.needs_quiet is True
 
     def test_solo_scene(self):
         msg = "中午一个人想吃点清淡的"
         intent = _rule_parse(msg)
-        assert intent.scene == "general"
+        assert intent.scene == "solo"
         assert intent.party_type == "solo"
         assert intent.people_count == 1
 
@@ -102,6 +104,11 @@ class TestRuleParseGeneral:
         msg = "明天下午去公园"
         intent = _rule_parse(msg)
         assert intent.date == "tomorrow"
+
+    def test_morning_time_window(self):
+        msg = "明天上午和老婆去喝下午茶"
+        intent = _rule_parse(msg)
+        assert intent.time_window == "morning"
 
     def test_duration(self):
         msg = "想玩3个小时"
@@ -128,7 +135,7 @@ class TestIntentWithoutAPIKey:
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
         intent = await parse_intent("今天下午想和老婆孩子出去玩，孩子5岁")
-        assert intent.scene == "family"
+        assert intent.scene == "family_with_child"
         assert intent.party_type == "family_with_child"
         assert intent.child_age == 5
 

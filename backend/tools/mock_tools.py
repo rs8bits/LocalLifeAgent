@@ -4,34 +4,39 @@ from typing import Optional
 
 from backend.tools.base import BaseTool, ToolResult
 from backend.mock_api.storage import read_json
-
-
-def _matches_scene(item: dict, scene: str) -> bool:
-    """兼容 scene 和 suitable_scenes 的场景匹配"""
-    if item.get("scene") == scene:
-        return True
-    suitable = item.get("suitable_scenes", [])
-    return scene in suitable
+from backend.mock_api.filters import (
+    FAMILY_PARTY_TYPES,
+    matches_all_tags,
+    matches_any_tag,
+    matches_party_type,
+    matches_scene,
+)
 
 
 class SearchActivitiesTool(BaseTool):
     name = "search_activities"
-    description = "搜索活动，可按场景、距离、儿童年龄、室内外、标签等过滤"
+    description = "搜索活动，可按同行人画像、距离、儿童年龄、室内外、标签等过滤"
 
     async def run(
         self,
         scene: Optional[str] = None,
+        party_type: Optional[str] = None,
         radius_km: Optional[float] = None,
         child_age: Optional[int] = None,
         indoor: Optional[bool] = None,
         tag: Optional[str] = None,
+        tags_any: Optional[list[str]] = None,
+        tags_all: Optional[list[str]] = None,
     ) -> ToolResult:
         try:
             data = read_json("activities.json")
             results = data
 
             if scene:
-                results = [a for a in results if _matches_scene(a, scene)]
+                results = [a for a in results if matches_scene(a, scene)]
+
+            if party_type:
+                results = [a for a in results if matches_party_type(a, party_type)]
 
             if radius_km is not None:
                 results = [a for a in results if a.get("distance_km", float("inf")) <= radius_km]
@@ -47,6 +52,10 @@ class SearchActivitiesTool(BaseTool):
 
             if tag:
                 results = [a for a in results if tag in a.get("tags", [])]
+            if tags_any:
+                results = [a for a in results if matches_any_tag(a, tags_any)]
+            if tags_all:
+                results = [a for a in results if matches_all_tags(a, tags_all)]
 
             return ToolResult(
                 tool=self.name,
@@ -62,14 +71,17 @@ class SearchActivitiesTool(BaseTool):
 
 class SearchRestaurantsTool(BaseTool):
     name = "search_restaurants"
-    description = "搜索餐厅，可按场景、距离、人数、标签、可用性、排队时间等过滤"
+    description = "搜索餐厅，可按同行人画像、距离、人数、标签、可用性、排队时间等过滤"
 
     async def run(
         self,
         scene: Optional[str] = None,
+        party_type: Optional[str] = None,
         radius_km: Optional[float] = None,
         party_size: Optional[int] = None,
         tag: Optional[str] = None,
+        tags_any: Optional[list[str]] = None,
+        tags_all: Optional[list[str]] = None,
         available: Optional[bool] = None,
         max_queue_minutes: Optional[int] = None,
     ) -> ToolResult:
@@ -78,7 +90,10 @@ class SearchRestaurantsTool(BaseTool):
             results = data
 
             if scene:
-                results = [r for r in results if _matches_scene(r, scene)]
+                results = [r for r in results if matches_scene(r, scene)]
+
+            if party_type:
+                results = [r for r in results if matches_party_type(r, party_type)]
 
             if radius_km is not None:
                 results = [r for r in results if r.get("distance_km", float("inf")) <= radius_km]
@@ -91,6 +106,10 @@ class SearchRestaurantsTool(BaseTool):
 
             if tag:
                 results = [r for r in results if tag in r.get("tags", [])]
+            if tags_any:
+                results = [r for r in results if matches_any_tag(r, tags_any)]
+            if tags_all:
+                results = [r for r in results if matches_all_tags(r, tags_all)]
 
             if available is not None:
                 results = [r for r in results if r.get("available") == available]
@@ -205,13 +224,16 @@ class GetDealsTool(BaseTool):
 
 class SearchDrinksTool(BaseTool):
     name = "search_drinks"
-    description = "搜索饮品店，可按场景、距离、品类（奶茶/咖啡/酒吧/茶饮）、标签等过滤"
+    description = "搜索饮品店，可按同行人画像、距离、品类（奶茶/咖啡/酒吧/茶饮）、标签等过滤"
 
     async def run(
         self,
         scene: Optional[str] = None,
+        party_type: Optional[str] = None,
         radius_km: Optional[float] = None,
         tag: Optional[str] = None,
+        tags_any: Optional[list[str]] = None,
+        tags_all: Optional[list[str]] = None,
         sub_category: Optional[str] = None,
         max_queue_minutes: Optional[int] = None,
     ) -> ToolResult:
@@ -223,13 +245,22 @@ class SearchDrinksTool(BaseTool):
                 # 家庭场景自动排除酒吧
                 if scene == "family":
                     results = [d for d in results if d.get("sub_category") != "bar"]
-                results = [d for d in results if _matches_scene(d, scene)]
+                results = [d for d in results if matches_scene(d, scene)]
+
+            if party_type:
+                if party_type in FAMILY_PARTY_TYPES:
+                    results = [d for d in results if d.get("sub_category") != "bar"]
+                results = [d for d in results if matches_party_type(d, party_type)]
 
             if radius_km is not None:
                 results = [d for d in results if d.get("distance_km", float("inf")) <= radius_km]
 
             if tag:
                 results = [d for d in results if tag in d.get("tags", [])]
+            if tags_any:
+                results = [d for d in results if matches_any_tag(d, tags_any)]
+            if tags_all:
+                results = [d for d in results if matches_all_tags(d, tags_all)]
 
             if sub_category:
                 results = [d for d in results if d.get("sub_category") == sub_category]
@@ -262,12 +293,13 @@ _SOURCE_FILES = {
 
 class SearchPlacesTool(BaseTool):
     name = "search_places"
-    description = "统一场所搜索，按领域(play/eat/drink/add_on)搜索，支持多标签 OR 匹配和自动放宽"
+    description = "统一场所搜索，按领域(play/eat/drink/add_on)和同行人画像搜索，支持多标签 OR 匹配和自动放宽"
 
     async def run(
         self,
         domain: str,
         scene: Optional[str] = None,
+        party_type: Optional[str] = None,
         radius_km: Optional[float] = None,
         category: Optional[str] = None,
         categories_any: Optional[list[str]] = None,
@@ -290,11 +322,17 @@ class SearchPlacesTool(BaseTool):
             data = read_json(source)
             results = data
 
-            # 场景过滤
+            # 旧场景兼容过滤
             if scene:
                 if domain == "drink" and scene == "family":
                     results = [d for d in results if d.get("sub_category") != "bar"]
-                results = [d for d in results if _matches_scene(d, scene)]
+                results = [d for d in results if matches_scene(d, scene)]
+
+            # 真实同行人画像过滤
+            if party_type:
+                if domain == "drink" and party_type in FAMILY_PARTY_TYPES:
+                    results = [d for d in results if d.get("sub_category") != "bar"]
+                results = [d for d in results if matches_party_type(d, party_type)]
 
             # 距离
             if radius_km is not None:
@@ -379,11 +417,12 @@ class SearchPlacesTool(BaseTool):
 
 class SearchDeliveryItemsTool(BaseTool):
     name = "search_delivery_items"
-    description = "搜索可外卖/闪送商品，支持场景、配送商圈、标签、子品类和预计配送时间过滤"
+    description = "搜索可外卖/闪送商品，支持同行人画像、配送商圈、标签、子品类和预计配送时间过滤"
 
     async def run(
         self,
         scene: Optional[str] = None,
+        party_type: Optional[str] = None,
         area: Optional[str] = None,
         tag: Optional[str] = None,
         tags_any: Optional[list[str]] = None,
@@ -396,7 +435,9 @@ class SearchDeliveryItemsTool(BaseTool):
             results = read_json("delivery_items.json")
 
             if scene:
-                results = [item for item in results if _matches_scene(item, scene)]
+                results = [item for item in results if matches_scene(item, scene)]
+            if party_type:
+                results = [item for item in results if matches_party_type(item, party_type)]
             if area:
                 results = [item for item in results if area in item.get("available_areas", [])]
             if category:

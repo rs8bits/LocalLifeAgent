@@ -155,8 +155,9 @@ def _check_plan_guardrails(state: AgentState) -> dict:
                 fatal_issues.append(msg)
 
         # 3. 儿童年龄校验 — RETRYABLE (planner can swap activity)
-        if state.get("intent", {}).get("scene") == "family":
-            child_age = state.get("intent", {}).get("child_age")
+        intent = state.get("intent", {})
+        if intent.get("party_type") == "family_with_child" or intent.get("child_age"):
+            child_age = intent.get("child_age")
             if child_age and activity:
                 age_min = activity.get("suitable_age_min", 0)
                 age_max = activity.get("suitable_age_max", 99)

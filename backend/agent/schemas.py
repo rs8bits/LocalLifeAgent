@@ -12,10 +12,12 @@ class Companion(BaseModel):
 
 
 class Intent(BaseModel):
-    # scene 保持旧 mock 工具兼容，只作为 coarse search scene 使用。
-    scene: str = "general"  # "family" | "friends" | "general"
-    # party_type 表达真实同行人画像，用于规划、评分和解释。
+    # scene 仅保留旧会话/旧接口兼容；新规划、搜索、评分都使用 party_type。
+    scene: str = "general"
+    # party_type 表达真实同行人画像，用于规划、搜索、评分和解释。
     party_type: str = "general"  # family_with_child | family_elder | family | friends | couple | solo | business | general
+    # tags 统一表达时机、体验、偏好和约束，不再拆 occasion/occasion_tags/experience_tags。
+    tags: list[str] = Field(default_factory=list)
     date: str = "today"
     time_window: str = "afternoon"  # "afternoon" | "evening" | "unknown"
     duration_hours: Optional[int] = None

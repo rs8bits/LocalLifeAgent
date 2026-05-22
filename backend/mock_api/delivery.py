@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 
 from backend.mock_api.storage import read_json, append_to_json, generate_order_id
+from backend.mock_api.filters import matches_any_tag, matches_party_type, matches_scene
 from backend.schemas.delivery import (
     DeliveryQuoteRequest,
     DeliveryQuoteResponse,
@@ -16,12 +17,6 @@ router = APIRouter(prefix="/api/mock/delivery", tags=["delivery"])
 DELIVERY_ITEMS_FILE = "delivery_items.json"
 DELIVERY_ORDERS_FILE = "delivery_orders.json"
 ORDERS_FILE = "orders.json"
-
-
-def _matches_scene(item: dict, scene: str) -> bool:
-    if item.get("scene") == scene:
-        return True
-    return scene in item.get("suitable_scenes", [])
 
 
 def _find_item(item_id: str) -> dict | None:
@@ -57,9 +52,11 @@ def _build_quote(item: dict, quantity: int, target_area: str | None) -> dict:
 
 @router.get("/items")
 async def list_delivery_items(
-    scene: Optional[str] = Query(None, description="场景过滤: family / friends / general"),
+    scene: Optional[str] = Query(None, description="旧场景兼容过滤"),
+    party_type: Optional[str] = Query(None, description="同行人画像过滤"),
     area: Optional[str] = Query(None, description="可配送商圈"),
     tag: Optional[str] = Query(None, description="标签过滤"),
+    tags_any: Optional[list[str]] = Query(None, description="任一标签匹配"),
     sub_category: Optional[str] = Query(None, description="子品类: food / drink / cake / flower / gift"),
     max_eta_min: Optional[int] = Query(None, description="最大预计配送分钟数"),
 ):
@@ -67,11 +64,15 @@ async def list_delivery_items(
     results = read_json(DELIVERY_ITEMS_FILE)
 
     if scene:
-        results = [item for item in results if _matches_scene(item, scene)]
+        results = [item for item in results if matches_scene(item, scene)]
+    if party_type:
+        results = [item for item in results if matches_party_type(item, party_type)]
     if area:
         results = [item for item in results if area in item.get("available_areas", [])]
     if tag:
         results = [item for item in results if tag in item.get("tags", [])]
+    if tags_any:
+        results = [item for item in results if matches_any_tag(item, tags_any)]
     if sub_category:
         results = [item for item in results if item.get("sub_category") == sub_category]
     if max_eta_min is not None:

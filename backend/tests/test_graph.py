@@ -17,7 +17,7 @@ class TestPlanningGraph:
         )
         assert len(result.get("plans", [])) >= 1
         assert "intent" in result
-        assert result["intent"].get("scene") == "family"
+        assert result["intent"].get("party_type") == "family_with_child"
 
     @pytest.mark.asyncio
     async def test_graph_includes_all_node_results(self, monkeypatch):
@@ -66,7 +66,7 @@ class TestPlanningGraph:
             user_id="user_002",
             message="和朋友们去拍照喝咖啡",
         )
-        assert result["intent"].get("scene") == "friends"
+        assert result["intent"].get("party_type") == "friends"
 
 
 class TestExecutionGraph:

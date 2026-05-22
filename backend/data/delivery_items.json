@@ -8,13 +8,27 @@
     "category": "外卖",
     "sub_category": "food",
     "area": "朝阳大悦城商圈",
-    "available_areas": ["朝阳大悦城商圈", "三里屯商圈", "合生汇商圈"],
+    "available_areas": [
+      "朝阳大悦城商圈",
+      "三里屯商圈",
+      "合生汇商圈"
+    ],
     "avg_price": 98,
     "delivery_fee": 8,
     "estimated_delivery_min": 35,
     "prep_time_min": 15,
-    "tags": ["外卖", "轻食", "健康", "低卡", "减脂"],
-    "suitable_scenes": ["family", "friends", "general"],
+    "tags": [
+      "外卖",
+      "轻食",
+      "健康",
+      "低卡",
+      "减脂"
+    ],
+    "suitable_scenes": [
+      "family",
+      "friends",
+      "general"
+    ],
     "scene": "general",
     "stock_remaining": 24,
     "available": true,
@@ -22,7 +36,13 @@
     "risk": null,
     "description": "两份低卡沙拉和无糖饮品，适合提前送到餐厅或活动结束后补充能量",
     "source": "mock_meituan_delivery",
-    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力"
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力",
+    "party_types": [
+      "solo",
+      "couple",
+      "family",
+      "family_with_child"
+    ]
   },
   {
     "id": "delivery_002",
@@ -33,13 +53,27 @@
     "category": "外卖",
     "sub_category": "drink",
     "area": "朝阳大悦城商圈",
-    "available_areas": ["朝阳大悦城商圈", "三里屯商圈", "798艺术区"],
+    "available_areas": [
+      "朝阳大悦城商圈",
+      "三里屯商圈",
+      "798艺术区"
+    ],
     "avg_price": 128,
     "delivery_fee": 10,
     "estimated_delivery_min": 40,
     "prep_time_min": 18,
-    "tags": ["外卖", "奶茶", "果茶", "朋友聚会", "拍照"],
-    "suitable_scenes": ["friends", "family", "general"],
+    "tags": [
+      "外卖",
+      "奶茶",
+      "果茶",
+      "朋友聚会",
+      "拍照"
+    ],
+    "suitable_scenes": [
+      "friends",
+      "family",
+      "general"
+    ],
     "scene": "general",
     "stock_remaining": 30,
     "available": true,
@@ -47,7 +81,13 @@
     "risk": "热门时段可能延迟10分钟",
     "description": "四杯热门果茶组合，可送至餐厅前台或活动地点",
     "source": "mock_meituan_delivery",
-    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力"
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力",
+    "party_types": [
+      "friends",
+      "family",
+      "family_with_child",
+      "couple"
+    ]
   },
   {
     "id": "delivery_003",
@@ -58,13 +98,27 @@
     "category": "闪送",
     "sub_category": "cake",
     "area": "三里屯商圈",
-    "available_areas": ["三里屯商圈", "朝阳大悦城商圈", "鼓楼商圈"],
+    "available_areas": [
+      "三里屯商圈",
+      "朝阳大悦城商圈",
+      "鼓楼商圈"
+    ],
     "avg_price": 188,
     "delivery_fee": 18,
     "estimated_delivery_min": 75,
     "prep_time_min": 45,
-    "tags": ["闪送", "蛋糕", "生日", "庆祝", "惊喜"],
-    "suitable_scenes": ["friends", "family", "general"],
+    "tags": [
+      "闪送",
+      "蛋糕",
+      "生日",
+      "庆祝",
+      "惊喜"
+    ],
+    "suitable_scenes": [
+      "friends",
+      "family",
+      "general"
+    ],
     "scene": "general",
     "stock_remaining": 8,
     "available": true,
@@ -72,7 +126,13 @@
     "risk": "蛋糕需要至少45分钟制作准备",
     "description": "6寸鲜奶蛋糕，支持写祝福牌，可送到指定餐厅",
     "source": "mock_meituan_delivery",
-    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力"
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力",
+    "party_types": [
+      "couple",
+      "friends",
+      "family",
+      "business"
+    ]
   },
   {
     "id": "delivery_004",
@@ -83,13 +143,27 @@
     "category": "闪送",
     "sub_category": "flower",
     "area": "三里屯商圈",
-    "available_areas": ["三里屯商圈", "798艺术区", "鼓楼商圈", "朝阳大悦城商圈"],
+    "available_areas": [
+      "三里屯商圈",
+      "798艺术区",
+      "鼓楼商圈",
+      "朝阳大悦城商圈"
+    ],
     "avg_price": 158,
     "delivery_fee": 16,
     "estimated_delivery_min": 50,
     "prep_time_min": 25,
-    "tags": ["闪送", "鲜花", "约会", "拍照", "惊喜"],
-    "suitable_scenes": ["friends", "general"],
+    "tags": [
+      "闪送",
+      "鲜花",
+      "约会",
+      "拍照",
+      "惊喜"
+    ],
+    "suitable_scenes": [
+      "friends",
+      "general"
+    ],
     "scene": "general",
     "stock_remaining": 12,
     "available": true,
@@ -97,7 +171,12 @@
     "risk": null,
     "description": "12支混搭花束，适合送到餐厅或展览入口作为惊喜",
     "source": "mock_meituan_delivery",
-    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力"
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力",
+    "party_types": [
+      "couple",
+      "friends",
+      "business"
+    ]
   },
   {
     "id": "delivery_005",
@@ -108,13 +187,26 @@
     "category": "外卖",
     "sub_category": "fruit",
     "area": "朝阳大悦城商圈",
-    "available_areas": ["朝阳大悦城商圈", "合生汇商圈", "三里屯商圈"],
+    "available_areas": [
+      "朝阳大悦城商圈",
+      "合生汇商圈",
+      "三里屯商圈"
+    ],
     "avg_price": 78,
     "delivery_fee": 8,
     "estimated_delivery_min": 30,
     "prep_time_min": 12,
-    "tags": ["外卖", "水果", "儿童", "亲子", "健康"],
-    "suitable_scenes": ["family", "general"],
+    "tags": [
+      "外卖",
+      "水果",
+      "儿童",
+      "亲子",
+      "健康"
+    ],
+    "suitable_scenes": [
+      "family",
+      "general"
+    ],
     "scene": "family",
     "stock_remaining": 18,
     "available": true,
@@ -122,7 +214,11 @@
     "risk": null,
     "description": "儿童友好水果拼盘，可送至亲子乐园或餐厅",
     "source": "mock_meituan_delivery",
-    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力"
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力",
+    "party_types": [
+      "family_with_child",
+      "family"
+    ]
   },
   {
     "id": "delivery_006",
@@ -133,19 +229,125 @@
     "category": "闪送",
     "sub_category": "gift",
     "area": "朝阳大悦城商圈",
-    "available_areas": ["朝阳大悦城商圈", "三里屯商圈", "合生汇商圈"],
+    "available_areas": [
+      "朝阳大悦城商圈",
+      "三里屯商圈",
+      "合生汇商圈"
+    ],
     "avg_price": 88,
     "delivery_fee": 12,
     "estimated_delivery_min": 60,
     "prep_time_min": 30,
-    "tags": ["闪送", "儿童礼物", "亲子", "气球", "惊喜"],
-    "suitable_scenes": ["family", "general"],
+    "tags": [
+      "闪送",
+      "儿童礼物",
+      "亲子",
+      "气球",
+      "惊喜"
+    ],
+    "suitable_scenes": [
+      "family",
+      "general"
+    ],
     "scene": "family",
     "stock_remaining": 10,
     "available": true,
     "business_hours": "10:00-20:00",
     "risk": "需要提前30分钟准备",
     "description": "儿童小玩具、气球和手写卡片组合，可送至餐厅前台",
+    "source": "mock_meituan_delivery",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力",
+    "party_types": [
+      "family_with_child",
+      "family"
+    ]
+  },
+  {
+    "id": "delivery_007",
+    "name": "纪念日玫瑰花束闪送",
+    "merchant_name": "野兽派鲜花",
+    "poi_type": "delivery_item",
+    "domain": "delivery",
+    "category": "闪送",
+    "sub_category": "flower",
+    "area": "三里屯商圈",
+    "available_areas": [
+      "三里屯商圈",
+      "798艺术区",
+      "国贸商圈",
+      "朝阳大悦城商圈"
+    ],
+    "avg_price": 238,
+    "delivery_fee": 18,
+    "estimated_delivery_min": 45,
+    "prep_time_min": 20,
+    "tags": [
+      "闪送",
+      "鲜花",
+      "纪念日",
+      "约会",
+      "仪式感",
+      "惊喜",
+      "高端"
+    ],
+    "party_types": [
+      "couple",
+      "business"
+    ],
+    "suitable_scenes": [
+      "couple",
+      "business",
+      "general"
+    ],
+    "scene": "couple",
+    "stock_remaining": 18,
+    "available": true,
+    "business_hours": "09:00-22:00",
+    "risk": null,
+    "description": "红玫瑰花束，可送到餐厅或活动地点，适合纪念日惊喜",
+    "source": "mock_meituan_delivery",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力"
+  },
+  {
+    "id": "delivery_008",
+    "name": "商务伴手礼礼盒闪送",
+    "merchant_name": "半岛精品礼盒",
+    "poi_type": "delivery_item",
+    "domain": "delivery",
+    "category": "闪送",
+    "sub_category": "gift",
+    "area": "国贸商圈",
+    "available_areas": [
+      "国贸商圈",
+      "三里屯商圈",
+      "朝阳大悦城商圈"
+    ],
+    "avg_price": 198,
+    "delivery_fee": 20,
+    "estimated_delivery_min": 60,
+    "prep_time_min": 30,
+    "tags": [
+      "闪送",
+      "礼物",
+      "商务",
+      "高端",
+      "惊喜"
+    ],
+    "party_types": [
+      "business",
+      "family_elder"
+    ],
+    "suitable_scenes": [
+      "business",
+      "family_elder",
+      "general"
+    ],
+    "scene": "business",
+    "stock_remaining": 9,
+    "available": true,
+    "business_hours": "10:00-20:00",
+    "risk": null,
+    "description": "茶点伴手礼，可用于商务会面或长辈拜访",
     "source": "mock_meituan_delivery",
     "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力"
   }

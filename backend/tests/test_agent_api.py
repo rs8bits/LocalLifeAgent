@@ -60,7 +60,7 @@ class TestAgentPlan:
         })
         assert resp.status_code == 200
         data = resp.json()
-        assert data["intent"]["scene"] == "family"
+        assert data["intent"]["party_type"] == "family_with_child"
 
     def test_plan_friends_scene(self):
         resp = client.post("/api/agent/plan", json={
@@ -69,7 +69,7 @@ class TestAgentPlan:
         })
         assert resp.status_code == 200
         data = resp.json()
-        assert data["intent"]["scene"] == "friends"
+        assert data["intent"]["party_type"] == "friends"
 
 
 class TestAgentSession:

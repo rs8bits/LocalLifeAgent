@@ -3,15 +3,19 @@
 
 def generate_share_message(plan: dict, intent: dict, bookings: list[dict], orders: list[dict]) -> str:
     """根据方案和执行结果生成可转发消息"""
-    scene = intent.get("scene", "general")
+    party_type = intent.get("party_type") or intent.get("scene", "general")
     timeline = plan.get("timeline", [])
     drink = plan.get("drink") or {}
 
     parts = []
 
-    if scene == "family":
+    if party_type in {"family_with_child", "family_elder", "family"}:
         parts.append("下午安排好了：")
-    elif scene == "friends":
+    elif party_type == "couple":
+        parts.append("约会安排好了：")
+    elif party_type == "business":
+        parts.append("会面安排好了：")
+    elif party_type == "friends":
         parts.append("行程定了：")
     else:
         parts.append("安排好了：")
@@ -47,17 +51,19 @@ def generate_share_message(plan: dict, intent: dict, bookings: list[dict], order
             parts.append(f"，再去{restaurant['name']}吃饭")
         parts.append("。")
 
-    if scene == "family":
+    if party_type in {"family_with_child", "family_elder", "family"}:
         activity = plan.get("activity") or {}
         restaurant = plan.get("restaurant") or {}
-        if activity.get("child_friendly"):
+        if party_type == "family_with_child" and activity.get("child_friendly"):
             parts.append("孩子能玩，")
+        elif party_type == "family_elder":
+            parts.append("整体少折腾，")
         if restaurant.get("low_calorie_options"):
             parts.append("餐厅也比较清淡健康。")
         else:
             parts.append("整体离家不远。")
 
-    elif scene == "friends":
+    elif party_type in {"friends", "couple"}:
         all_tags = set()
         for item in timeline:
             poi = None
@@ -72,6 +78,8 @@ def generate_share_message(plan: dict, intent: dict, bookings: list[dict], order
                 all_tags.update(poi.get("tags", []))
         if "拍照" in all_tags:
             parts.append("路线顺，适合聊天拍照，")
+        elif party_type == "couple":
+            parts.append("路线顺，适合慢慢约会，")
         else:
             parts.append("路线顺，适合聚会，")
 

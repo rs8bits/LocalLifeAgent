@@ -209,7 +209,7 @@ def _compact_items(items: list[dict[str, Any]], domain: str) -> list[dict[str, A
 def _compact_intent(intent: Intent) -> dict[str, Any]:
     data = intent.model_dump()
     keep = [
-        "scene", "party_type", "date", "time_window", "duration_hours", "people_count",
+        "scene", "party_type", "tags", "date", "time_window", "duration_hours", "people_count",
         "radius_km", "budget_per_person", "food_preferences",
         "activity_preferences", "drink_preferences", "delivery_preferences",
         "child_age", "needs_low_calorie", "needs_photo_spot", "needs_quiet",

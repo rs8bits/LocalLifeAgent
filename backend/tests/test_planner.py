@@ -137,7 +137,7 @@ class TestPlannerPartyTypes:
         )
         intent = result["intent"]
         assert intent["party_type"] == "family_elder"
-        assert intent["scene"] == "family"
+        assert intent["scene"] == "family_elder"
         assert intent["child_age"] is None
         assert intent["needs_less_walking"] is True
         for plan in result["plans"]:
@@ -152,7 +152,7 @@ class TestPlannerPartyTypes:
             message="今晚和老婆吃个纪念日晚餐，想拍照好看一点",
         )
         assert result["intent"]["party_type"] == "couple"
-        assert result["intent"]["scene"] == "friends"
+        assert result["intent"]["scene"] == "couple"
         assert all(not p["title"].startswith("亲子方案") for p in result["plans"])
 
     @pytest.mark.asyncio

@@ -24,9 +24,10 @@ async def intent_node(state: AgentState) -> AgentState:
             user_memory=user_memory,
         )
         state["intent"] = intent.model_dump()
+        tag_text = f", tags={intent.tags}" if intent.tags else ""
         await emit_event(state, {
             "event": "intent_done",
-            "message": f"意图解析完成: 场景={intent.scene}",
+            "message": f"意图解析完成: party_type={intent.party_type}{tag_text}",
             "data": {"intent": state["intent"]},
         })
     except Exception as e:

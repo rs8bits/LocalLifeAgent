@@ -2,6 +2,7 @@ export interface ToolLog {
   tool: string;
   status: string;
   message: string;
+  detail?: string;
 }
 
 export interface TimelineItem {
@@ -15,7 +16,7 @@ export interface TimelineItem {
 export interface Plan {
   plan_id: string;
   title: string;
-  scene: string;
+  scene?: string;
   party_type?: string;
   timeline: TimelineItem[];
   activity: Record<string, unknown> | null;

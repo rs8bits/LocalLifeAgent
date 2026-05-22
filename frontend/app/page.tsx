@@ -183,6 +183,14 @@ export default function Home() {
     }
   };
 
+  const intentPartyType = result?.intent?.party_type as string | undefined;
+  const intentTags = Array.isArray(result?.intent?.tags)
+    ? (result?.intent?.tags as unknown[]).filter((tag): tag is string => typeof tag === "string")
+    : [];
+  const intentDomains = Array.isArray(result?.intent?.domains)
+    ? (result?.intent?.domains as unknown[]).filter((domain): domain is string => typeof domain === "string")
+    : [];
+
   return (
     <main className="max-w-3xl mx-auto p-4 space-y-6">
       <h1 className="text-xl font-bold text-center">LocalLife Agent</h1>
@@ -268,6 +276,29 @@ export default function Home() {
       {error && (
         <section className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
           {error}
+        </section>
+      )}
+
+      {result && (
+        <section className="bg-white rounded-lg p-4 shadow-sm">
+          <h3 className="font-semibold text-sm mb-2">意图摘要</h3>
+          <div className="flex flex-wrap gap-2 text-xs">
+            {intentPartyType && (
+              <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded">
+                party_type={intentPartyType}
+              </span>
+            )}
+            {intentTags.map((tag) => (
+              <span key={tag} className="bg-gray-100 text-gray-700 px-2 py-1 rounded">
+                {tag}
+              </span>
+            ))}
+            {intentDomains.map((domain) => (
+              <span key={domain} className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded">
+                domain={domain}
+              </span>
+            ))}
+          </div>
         </section>
       )}
 

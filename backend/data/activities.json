@@ -64,7 +64,11 @@
       "kids_meal": true,
       "restroom": true
     },
-    "domain": "play"
+    "domain": "play",
+    "party_types": [
+      "family_with_child",
+      "family"
+    ]
   },
   {
     "id": "act_002",
@@ -128,7 +132,14 @@
       "kids_meal": false,
       "restroom": true
     },
-    "domain": "play"
+    "domain": "play",
+    "party_types": [
+      "family_with_child",
+      "family_elder",
+      "family",
+      "friends",
+      "solo"
+    ]
   },
   {
     "id": "act_003",
@@ -195,7 +206,13 @@
       "kids_meal": false,
       "restroom": true
     },
-    "domain": "play"
+    "domain": "play",
+    "party_types": [
+      "couple",
+      "friends",
+      "solo",
+      "business"
+    ]
   },
   {
     "id": "act_004",
@@ -256,7 +273,12 @@
       "kids_meal": true,
       "restroom": true
     },
-    "domain": "play"
+    "domain": "play",
+    "party_types": [
+      "family_with_child",
+      "family",
+      "solo"
+    ]
   },
   {
     "id": "act_005",
@@ -273,7 +295,8 @@
       "室内",
       "安静",
       "约会",
-      "阅读"
+      "阅读",
+      "独处"
     ],
     "scene": "friends",
     "indoor": true,
@@ -318,7 +341,13 @@
       "kids_meal": false,
       "restroom": true
     },
-    "domain": "play"
+    "domain": "play",
+    "party_types": [
+      "couple",
+      "solo",
+      "friends",
+      "business"
+    ]
   },
   {
     "id": "act_006",
@@ -385,7 +414,10 @@
       "kids_meal": false,
       "restroom": true
     },
-    "domain": "play"
+    "domain": "play",
+    "party_types": [
+      "friends"
+    ]
   },
   {
     "id": "act_007",
@@ -448,7 +480,14 @@
       "kids_meal": false,
       "restroom": true
     },
-    "domain": "play"
+    "domain": "play",
+    "party_types": [
+      "couple",
+      "family_elder",
+      "family",
+      "friends",
+      "solo"
+    ]
   },
   {
     "id": "act_008",
@@ -516,7 +555,13 @@
       "kids_meal": false,
       "restroom": true
     },
-    "domain": "play"
+    "domain": "play",
+    "party_types": [
+      "couple",
+      "friends",
+      "solo",
+      "family"
+    ]
   },
   {
     "id": "act_009",
@@ -526,7 +571,7 @@
     "address": "朝阳区工体北路甲2号3层",
     "lat": 39.9345,
     "lng": 116.456,
-    "distance_km": 4.0,
+    "distance_km": 4,
     "avg_price": 120,
     "tags": [
       "唱歌",
@@ -585,7 +630,11 @@
       "kids_meal": false,
       "restroom": true
     },
-    "domain": "play"
+    "domain": "play",
+    "party_types": [
+      "friends",
+      "couple"
+    ]
   },
   {
     "id": "act_010",
@@ -654,7 +703,13 @@
       "kids_meal": false,
       "restroom": true
     },
-    "domain": "play"
+    "domain": "play",
+    "party_types": [
+      "couple",
+      "friends",
+      "solo",
+      "family"
+    ]
   },
   {
     "id": "act_011",
@@ -723,7 +778,10 @@
       "kids_meal": false,
       "restroom": true
     },
-    "domain": "play"
+    "domain": "play",
+    "party_types": [
+      "friends"
+    ]
   },
   {
     "id": "act_012",
@@ -784,7 +842,11 @@
       "kids_meal": false,
       "restroom": true
     },
-    "domain": "play"
+    "domain": "play",
+    "party_types": [
+      "friends",
+      "solo"
+    ]
   },
   {
     "id": "act_013",
@@ -849,7 +911,11 @@
       "kids_meal": false,
       "restroom": true
     },
-    "domain": "play"
+    "domain": "play",
+    "party_types": [
+      "couple",
+      "friends"
+    ]
   },
   {
     "id": "act_014",
@@ -916,6 +982,164 @@
       "nursing_room": true,
       "stroller_friendly": true,
       "kids_meal": true,
+      "restroom": true
+    },
+    "domain": "play",
+    "party_types": [
+      "family_with_child",
+      "friends"
+    ]
+  },
+  {
+    "id": "act_015",
+    "name": "瑰丽酒店云端下午茶",
+    "category": "咖啡店",
+    "area": "三里屯商圈",
+    "address": "朝阳区呼家楼京广中心高层",
+    "lat": 39.9221,
+    "lng": 116.4625,
+    "distance_km": 4.4,
+    "avg_price": 328,
+    "tags": [
+      "下午茶",
+      "纪念日",
+      "约会",
+      "仪式感",
+      "拍照",
+      "高端",
+      "安静",
+      "室内",
+      "商务"
+    ],
+    "party_types": [
+      "couple",
+      "business",
+      "solo"
+    ],
+    "scene": "couple",
+    "indoor": true,
+    "suitable_age_min": 12,
+    "suitable_age_max": 99,
+    "child_friendly": false,
+    "has_nursing_room": false,
+    "has_kids_meal": false,
+    "queue_minutes": 5,
+    "available_slots": [
+      "10:30",
+      "13:00",
+      "15:30",
+      "17:00"
+    ],
+    "bookable": true,
+    "risk": null,
+    "description": "高层景观酒店下午茶，适合纪念日、约会和商务轻会面",
+    "poi_type": "activity",
+    "meituan_poi_id": "mt_act_015",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "couple",
+      "business",
+      "solo",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "10:30-18:00",
+    "rating": 4.8,
+    "review_count": 980,
+    "monthly_sales": 320,
+    "popularity_score": 88,
+    "recommended_duration_min": 90,
+    "stock_remaining": 18,
+    "booking_required": true,
+    "reservation_notice": "需提前预约窗边位",
+    "peak_hours": [
+      "15:00-17:00"
+    ],
+    "refund_policy": "到店前4小时可退",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": true,
+      "nursing_room": false,
+      "stroller_friendly": false,
+      "kids_meal": false,
+      "restroom": true
+    },
+    "domain": "play"
+  },
+  {
+    "id": "act_016",
+    "name": "木木美术馆香氛手作课",
+    "category": "展览",
+    "area": "798艺术区",
+    "address": "朝阳区酒仙桥路798艺术区内",
+    "lat": 39.9842,
+    "lng": 116.4932,
+    "distance_km": 6.2,
+    "avg_price": 198,
+    "tags": [
+      "艺术",
+      "手作",
+      "香氛",
+      "纪念日",
+      "约会",
+      "仪式感",
+      "安静",
+      "室内"
+    ],
+    "party_types": [
+      "couple",
+      "solo",
+      "friends"
+    ],
+    "scene": "couple",
+    "indoor": true,
+    "suitable_age_min": 12,
+    "suitable_age_max": 99,
+    "child_friendly": false,
+    "has_nursing_room": false,
+    "has_kids_meal": false,
+    "queue_minutes": 0,
+    "available_slots": [
+      "10:00",
+      "13:30",
+      "16:00"
+    ],
+    "bookable": true,
+    "risk": null,
+    "description": "小班香氛手作体验，安静、有纪念感，适合作为约会活动",
+    "poi_type": "activity",
+    "meituan_poi_id": "mt_act_016",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "couple",
+      "solo",
+      "friends",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "10:00-19:00",
+    "rating": 4.7,
+    "review_count": 520,
+    "monthly_sales": 180,
+    "popularity_score": 78,
+    "recommended_duration_min": 100,
+    "stock_remaining": 10,
+    "booking_required": true,
+    "reservation_notice": "小班制，建议提前1天预约",
+    "peak_hours": [
+      "13:30-16:00"
+    ],
+    "refund_policy": "开课前24小时可退",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": true,
+      "nursing_room": false,
+      "stroller_friendly": false,
+      "kids_meal": false,
       "restroom": true
     },
     "domain": "play"

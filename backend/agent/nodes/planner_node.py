@@ -20,6 +20,7 @@ from backend.agent.planner import (
     _build_place_search_params,
     _build_delivery_search_params,
     _has_child_context,
+    _format_tool_query,
 )
 from backend.agent.scorer import score_plan
 
@@ -76,7 +77,7 @@ async def planner_node(state: AgentState) -> AgentState:
         state["weather"] = weather_result.data[0]
 
     indoor_pref = _indoor_preference(weather_result, intent)
-    scene = intent.scene
+    party_type = intent.party_type
     radius = intent.radius_km
     people = intent.people_count
     queue_limit = (intent.avoid_queue_minutes or 30) * 2
@@ -95,13 +96,13 @@ async def planner_node(state: AgentState) -> AgentState:
         })
 
         if domain_name == "delivery":
-            delivery_params = _build_delivery_search_params(spec_by_domain[domain_name], scene)
+            delivery_params = _build_delivery_search_params(spec_by_domain[domain_name], party_type)
             result = await _run_tool("search_delivery_items", tool_logs, **delivery_params)
         else:
             params = _build_place_search_params(
                 domain_name=domain_name,
                 spec=spec_by_domain[domain_name],
-                scene=scene,
+                party_type=party_type,
                 radius=radius,
                 people=people,
                 queue_limit=queue_limit,
@@ -134,7 +135,7 @@ async def planner_node(state: AgentState) -> AgentState:
     # eat fallback: 低卡需求
     if intent.needs_low_calorie and len(restaurants) < 2 and "eat" in domains:
         fallback = await _run_tool("search_places", tool_logs,
-            domain="eat", scene=scene, radius_km=radius,
+            domain="eat", party_type=party_type, radius_km=radius,
             party_size=people, available=True,
         )
         if fallback and fallback.status == "ok":
@@ -244,7 +245,9 @@ async def _run_tool(name: str, tool_logs: list[dict], **kwargs):
         return None
     filtered = {k: v for k, v in kwargs.items() if v is not None}
     result = await tool.run(**filtered)
-    log = {"tool": result.tool, "status": result.status, "message": result.message}
+    query_suffix = _format_tool_query(filtered)
+    log_message = f"{result.message} | {query_suffix}" if query_suffix else result.message
+    log = {"tool": result.tool, "status": result.status, "message": log_message}
     if result.error:
         log["detail"] = result.error
     tool_logs.append(log)

@@ -15,6 +15,7 @@ class DrinkBase(BaseModel):
     avg_price: int
     tags: list[str]
     scene: str
+    party_types: list[str] = Field(default_factory=list)
     indoor: bool
     queue_minutes: int
     available_slots: list[str]

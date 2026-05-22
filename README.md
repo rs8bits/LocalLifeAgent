@@ -56,8 +56,8 @@ source .venv/bin/activate
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/health` | 健康检查 |
-| GET | `/api/mock/activities` | 查询活动（支持 scene/radius_km/child_age/indoor/tag） |
-| GET | `/api/mock/restaurants` | 查询餐厅（支持 scene/radius_km/party_size/tag/available/max_queue_minutes） |
+| GET | `/api/mock/activities` | 查询活动（支持 party_type/radius_km/child_age/indoor/tag/tags_any，scene 仅兼容旧调用） |
+| GET | `/api/mock/restaurants` | 查询餐厅（支持 party_type/radius_km/party_size/tag/tags_any/available/max_queue_minutes，scene 仅兼容旧调用） |
 | GET | `/api/mock/routes` | 查询路线（支持 origin/destination/transport） |
 | GET | `/api/mock/weather` | 查询天气（支持 date/location） |
 | GET | `/api/mock/deals` | 查询团购券（支持 poi_id） |
@@ -76,11 +76,11 @@ source .venv/bin/activate
 # 健康检查
 curl http://127.0.0.1:8000/health
 
-# 查询家庭场景、5km内、适合5岁儿童的活动
-curl "http://127.0.0.1:8000/api/mock/activities?scene=family&radius_km=5&child_age=5"
+# 查询亲子同行、5km内、适合5岁儿童的活动
+curl "http://127.0.0.1:8000/api/mock/activities?party_type=family_with_child&radius_km=5&child_age=5"
 
-# 查询家庭场景、健康标签、可用的餐厅
-curl "http://127.0.0.1:8000/api/mock/restaurants?scene=family&tag=%E5%81%A5%E5%BA%B7&available=true"
+# 查询情侣纪念日餐厅
+curl "http://127.0.0.1:8000/api/mock/restaurants?party_type=couple&tags_any=%E7%BA%AA%E5%BF%B5%E6%97%A5&available=true"
 
 # 预约活动
 curl -X POST http://127.0.0.1:8000/api/mock/bookings/activity \
@@ -132,8 +132,8 @@ DEEPSEEK_RETRY_BACKOFF_SECONDS=0.8
 
 | 工具 | 说明 |
 |------|------|
-| `search_activities` | 搜索活动（支持 scene/radius_km/child_age/indoor/tag） |
-| `search_restaurants` | 搜索餐厅（支持 scene/radius_km/party_size/tag/available/max_queue_minutes） |
+| `search_activities` | 搜索活动（支持 party_type/radius_km/child_age/indoor/tag/tags_any） |
+| `search_restaurants` | 搜索餐厅（支持 party_type/radius_km/party_size/tag/tags_any/available/max_queue_minutes） |
 | `estimate_route` | 估算路线（支持 origin/destination/transport） |
 | `get_weather` | 查询天气（支持 date/location） |
 | `get_deals` | 查询团购券（支持 poi_id） |
@@ -142,11 +142,11 @@ DEEPSEEK_RETRY_BACKOFF_SECONDS=0.8
 | `search_delivery_items` | 搜索外卖/闪送商品 |
 | `estimate_delivery` | 估算配送费用和时效 |
 
-工具兼容 `suitable_scenes` 字段，`general` 场景的活动/餐厅也可以进入家庭或朋友候选。
+工具主路径使用 `party_type` + `tags` 检索；`scene` / `suitable_scenes` 只保留为旧调用兼容字段。
 
 ### Intent Parser (`backend/agent/intent_parser.py`)
 
-从自然语言中提取结构化意图：场景、时间窗口、人数、儿童年龄、距离偏好、饮食偏好、拍照需求、排队容忍度等。支持 LLM 优先解析 + 规则兜底。
+从自然语言中提取结构化意图：同行人画像 `party_type`、统一 `tags`、时间窗口、人数、儿童年龄、距离偏好、饮食偏好、拍照需求、排队容忍度等。支持 LLM 优先解析 + 规则兜底。
 
 ### Scorer (`backend/agent/scorer.py`)
 
@@ -286,10 +286,10 @@ Memory → Intent → Planner → Reflection → Guardrails → (确认阶段) E
 
 | 文件 | 内容 | 数量 |
 |------|------|------|
-| `activities.json` | 活动（亲子乐园/公园/展览/KTV/密室/电竞/LiveHouse/citywalk/影院等） | 14 条 |
-| `restaurants.json` | 餐厅（健康轻食/云南菜/火锅/烤肉/日料/咖啡甜品/亲子/排队长/无位） | 10 条 |
-| `drinks.json` | 饮品店（奶茶/咖啡/茶饮/酒吧） | 6 条 |
-| `delivery_items.json` | 外卖/闪送商品（轻食/奶茶/蛋糕/鲜花/水果/礼盒） | 6 条 |
+| `activities.json` | 活动（亲子乐园/公园/展览/KTV/密室/电竞/LiveHouse/citywalk/影院/酒店下午茶等） | 16 条 |
+| `restaurants.json` | 餐厅（健康轻食/云南菜/火锅/烤肉/日料/咖啡甜品/亲子/情侣纪念日/长辈包间/商务宴请等） | 13 条 |
+| `drinks.json` | 饮品店（奶茶/咖啡/茶饮/酒吧/酒店茶廊） | 7 条 |
+| `delivery_items.json` | 外卖/闪送商品（轻食/奶茶/蛋糕/鲜花/水果/礼盒/纪念日花束） | 8 条 |
 | `delivery_orders.json` | 外卖/闪送订单记录（运行时写入） | 初始为空 |
 | `tag_catalog.json` | 吃/喝/玩/外卖闪送标签目录与 aliases | 1 份 |
 | `routes.json` | 路线（开车/地铁/打车） | 5 条 |

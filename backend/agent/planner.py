@@ -42,7 +42,7 @@ async def plan_for_message(
     )
 
     indoor_pref = _indoor_preference(weather_result, intent)
-    scene = intent.scene
+    party_type = intent.party_type
     radius = intent.radius_km
     people = intent.people_count
     queue_limit = (intent.avoid_queue_minutes or 30) * 2
@@ -55,13 +55,13 @@ async def plan_for_message(
 
     for domain_name in domains:
         if domain_name == "delivery":
-            delivery_params = _build_delivery_search_params(spec_by_domain[domain_name], scene)
+            delivery_params = _build_delivery_search_params(spec_by_domain[domain_name], party_type)
             result = await _run_tool("search_delivery_items", tool_logs, **delivery_params)
         else:
             params = _build_place_search_params(
                 domain_name=domain_name,
                 spec=spec_by_domain[domain_name],
-                scene=scene,
+                party_type=party_type,
                 radius=radius,
                 people=people,
                 queue_limit=queue_limit,
@@ -86,7 +86,7 @@ async def plan_for_message(
     # eat fallback
     if intent.needs_low_calorie and len(restaurants) < 2 and "eat" in domains:
         fallback = await _run_tool("search_places", tool_logs,
-            domain="eat", scene=scene, radius_km=radius,
+            domain="eat", party_type=party_type, radius_km=radius,
             party_size=people, available=True,
         )
         if fallback and fallback.status == "ok":
@@ -206,11 +206,23 @@ async def _run_tool(name: str, tool_logs: list[dict], **kwargs) -> Any:
         return None
     filtered = {k: v for k, v in kwargs.items() if v is not None}
     result = await tool.run(**filtered)
-    log = {"tool": result.tool, "status": result.status, "message": result.message}
+    query_suffix = _format_tool_query(filtered)
+    log_message = f"{result.message} | {query_suffix}" if query_suffix else result.message
+    log = {"tool": result.tool, "status": result.status, "message": log_message}
     if result.error:
         log["detail"] = result.error
     tool_logs.append(log)
     return result
+
+
+def _format_tool_query(params: dict[str, Any]) -> str:
+    keys = ["domain", "party_type", "category", "categories_any", "sub_category", "tags_any", "tags_all"]
+    parts = []
+    for key in keys:
+        value = params.get(key)
+        if value:
+            parts.append(f"{key}={value}")
+    return ", ".join(parts)
 
 
 def _indoor_preference(weather_result: Any, intent: Intent) -> Optional[bool]:
@@ -268,7 +280,7 @@ def _build_place_search_params(
     *,
     domain_name: str,
     spec: dict,
-    scene: str,
+    party_type: str,
     radius: float,
     people: int | None,
     queue_limit: int,
@@ -277,9 +289,10 @@ def _build_place_search_params(
 ) -> dict[str, Any]:
     params: dict[str, Any] = {
         "domain": domain_name,
-        "scene": scene,
         "radius_km": radius,
     }
+    if party_type != "general":
+        params["party_type"] = party_type
     _apply_domain_spec_filters(params, spec)
     if domain_name == "play":
         params["child_age"] = child_age
@@ -291,8 +304,10 @@ def _build_place_search_params(
     return params
 
 
-def _build_delivery_search_params(spec: dict, scene: str) -> dict[str, Any]:
-    params: dict[str, Any] = {"scene": scene}
+def _build_delivery_search_params(spec: dict, party_type: str) -> dict[str, Any]:
+    params: dict[str, Any] = {}
+    if party_type != "general":
+        params["party_type"] = party_type
     _apply_domain_spec_filters(params, spec)
     return params
 
@@ -850,7 +865,7 @@ def _attach_delivery_to_plans(
     for idx, plan in enumerate(plans):
         if plan.get("delivery_items"):
             continue
-        item = sorted_items[min(idx, len(sorted_items) - 1)]
+        item = sorted_items[0]
         plan["delivery_items"] = [item]
         target = plan.get("restaurant") or plan.get("activity") or plan.get("drink") or {}
         delivery_time = _delivery_time_for_plan(plan, item)

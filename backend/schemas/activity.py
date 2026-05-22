@@ -14,6 +14,7 @@ class ActivityBase(BaseModel):
     avg_price: int
     tags: list[str]
     scene: str
+    party_types: list[str] = Field(default_factory=list)
     indoor: bool
     suitable_age_min: int
     suitable_age_max: int

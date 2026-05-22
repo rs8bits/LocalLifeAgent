@@ -216,6 +216,15 @@ class TestActivities:
         for item in data["results"]:
             assert "拍照" in item["tags"]
 
+    def test_filter_by_party_type_couple(self):
+        response = client.get("/api/mock/activities?party_type=couple&tags_any=纪念日")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] >= 1
+        for item in data["results"]:
+            assert "couple" in item.get("party_types", [])
+            assert "纪念日" in item.get("tags", [])
+
     def test_combined_family_filters(self):
         response = client.get("/api/mock/activities?scene=family&radius_km=5&child_age=5")
         assert response.status_code == 200
@@ -271,6 +280,15 @@ class TestRestaurants:
         data = response.json()
         for item in data["results"]:
             assert "健康" in item["tags"]
+
+    def test_filter_by_party_type_and_tags(self):
+        response = client.get("/api/mock/restaurants?party_type=couple&tags_any=纪念日")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] >= 1
+        for item in data["results"]:
+            assert "couple" in item.get("party_types", [])
+            assert "纪念日" in item.get("tags", [])
 
     def test_combined_restaurant_filters(self):
         response = client.get("/api/mock/restaurants?scene=family&tag=健康&available=true")
@@ -589,6 +607,15 @@ class TestDeliveryAPI:
         for item in data["results"]:
             assert "family" in item.get("suitable_scenes", []) or item.get("scene") == "family"
             assert "亲子" in item.get("tags", [])
+
+    def test_filter_delivery_by_party_type_and_tags(self):
+        response = client.get("/api/mock/delivery/items?party_type=couple&tags_any=纪念日")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] >= 1
+        for item in data["results"]:
+            assert "couple" in item.get("party_types", [])
+            assert "纪念日" in item.get("tags", [])
 
     def test_quote_delivery(self):
         response = client.post("/api/mock/delivery/quote", json={

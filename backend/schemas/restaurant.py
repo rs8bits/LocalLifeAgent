@@ -14,6 +14,7 @@ class RestaurantBase(BaseModel):
     avg_price: int
     tags: list[str]
     scene: str
+    party_types: list[str] = Field(default_factory=list)
     cuisine: str
     indoor: bool
     party_size_min: int

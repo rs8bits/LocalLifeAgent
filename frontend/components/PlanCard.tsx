@@ -23,11 +23,18 @@ export default function PlanCard({
       <div className="flex justify-between items-start">
         <div>
           <h3 className="font-semibold text-base">{plan.title}</h3>
-          {typeof plan.score === "number" && plan.score > 0 && (
-            <p className="text-xs text-blue-700 mt-1">
-              推荐分 {(plan.score * 100).toFixed(0)}
-            </p>
-          )}
+          <div className="flex flex-wrap gap-1 mt-1">
+            {plan.party_type && (
+              <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
+                {plan.party_type}
+              </span>
+            )}
+            {typeof plan.score === "number" && plan.score > 0 && (
+              <span className="text-xs text-blue-700">
+                推荐分 {(plan.score * 100).toFixed(0)}
+              </span>
+            )}
+          </div>
         </div>
         <span
           className={`text-xs px-2 py-0.5 rounded ${

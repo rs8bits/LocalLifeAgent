@@ -67,7 +67,13 @@
       "parking": true,
       "nursing_room": true
     },
-    "domain": "eat"
+    "domain": "eat",
+    "party_types": [
+      "solo",
+      "family_elder",
+      "family",
+      "family_with_child"
+    ]
   },
   {
     "id": "rest_002",
@@ -137,7 +143,13 @@
       "parking": true,
       "nursing_room": false
     },
-    "domain": "eat"
+    "domain": "eat",
+    "party_types": [
+      "couple",
+      "friends",
+      "family",
+      "business"
+    ]
   },
   {
     "id": "rest_003",
@@ -203,7 +215,12 @@
       "parking": true,
       "nursing_room": false
     },
-    "domain": "eat"
+    "domain": "eat",
+    "party_types": [
+      "friends",
+      "family",
+      "family_with_child"
+    ]
   },
   {
     "id": "rest_004",
@@ -270,7 +287,12 @@
       "parking": true,
       "nursing_room": false
     },
-    "domain": "eat"
+    "domain": "eat",
+    "party_types": [
+      "couple",
+      "friends",
+      "business"
+    ]
   },
   {
     "id": "rest_005",
@@ -337,7 +359,13 @@
       "parking": true,
       "nursing_room": false
     },
-    "domain": "eat"
+    "domain": "eat",
+    "party_types": [
+      "couple",
+      "solo",
+      "business",
+      "friends"
+    ]
   },
   {
     "id": "rest_006",
@@ -400,7 +428,12 @@
       "parking": true,
       "nursing_room": true
     },
-    "domain": "eat"
+    "domain": "eat",
+    "party_types": [
+      "couple",
+      "solo",
+      "friends"
+    ]
   },
   {
     "id": "rest_007",
@@ -468,7 +501,11 @@
       "parking": true,
       "nursing_room": true
     },
-    "domain": "eat"
+    "domain": "eat",
+    "party_types": [
+      "family_with_child",
+      "family"
+    ]
   },
   {
     "id": "rest_008",
@@ -533,7 +570,11 @@
       "parking": true,
       "nursing_room": false
     },
-    "domain": "eat"
+    "domain": "eat",
+    "party_types": [
+      "friends",
+      "couple"
+    ]
   },
   {
     "id": "rest_009",
@@ -594,7 +635,13 @@
       "parking": true,
       "nursing_room": false
     },
-    "domain": "eat"
+    "domain": "eat",
+    "party_types": [
+      "family_elder",
+      "family",
+      "business",
+      "friends"
+    ]
   },
   {
     "id": "rest_010",
@@ -663,6 +710,238 @@
       "kids_menu": false,
       "private_room": false,
       "parking": false,
+      "nursing_room": false
+    },
+    "domain": "eat",
+    "party_types": [
+      "couple",
+      "solo",
+      "family_elder",
+      "family"
+    ]
+  },
+  {
+    "id": "rest_011",
+    "name": "云端景观西餐厅",
+    "category": "西餐",
+    "area": "三里屯商圈",
+    "address": "朝阳区三里屯路高层景观位",
+    "lat": 39.9358,
+    "lng": 116.4568,
+    "distance_km": 4.1,
+    "avg_price": 368,
+    "tags": [
+      "西餐",
+      "纪念日",
+      "约会",
+      "仪式感",
+      "景观",
+      "高端",
+      "拍照",
+      "安静"
+    ],
+    "party_types": [
+      "couple",
+      "business"
+    ],
+    "scene": "couple",
+    "cuisine": "西餐",
+    "indoor": true,
+    "party_size_min": 2,
+    "party_size_max": 4,
+    "child_friendly": false,
+    "has_high_chair": false,
+    "has_kids_menu": false,
+    "queue_minutes": 0,
+    "available": true,
+    "available_slots": [
+      "11:30",
+      "13:00",
+      "18:00",
+      "19:30"
+    ],
+    "bookable": true,
+    "risk": null,
+    "description": "窗边景观位和纪念日布置，适合情侣约会与小型商务宴请",
+    "poi_type": "restaurant",
+    "meituan_poi_id": "mt_rest_011",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "couple",
+      "business",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "11:30-22:00",
+    "rating": 4.8,
+    "review_count": 1680,
+    "monthly_sales": 520,
+    "popularity_score": 90,
+    "recommended_duration_min": 90,
+    "table_stock": 6,
+    "queue_status": "none",
+    "supports_queue_ticket": false,
+    "reservation_notice": "纪念日窗边位需备注",
+    "low_calorie_options": true,
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "high_chair": false,
+      "kids_menu": false,
+      "private_room": true,
+      "parking": true,
+      "nursing_room": false
+    },
+    "domain": "eat"
+  },
+  {
+    "id": "rest_012",
+    "name": "四季府清雅包间",
+    "category": "中餐",
+    "area": "朝阳大悦城商圈",
+    "address": "朝阳区朝阳北路101号",
+    "lat": 39.9274,
+    "lng": 116.5186,
+    "distance_km": 3.2,
+    "avg_price": 168,
+    "tags": [
+      "中餐",
+      "清淡",
+      "包间",
+      "少走路",
+      "安静",
+      "好停车",
+      "长辈友好",
+      "健康"
+    ],
+    "party_types": [
+      "family_elder",
+      "family",
+      "business"
+    ],
+    "scene": "family_elder",
+    "cuisine": "中餐",
+    "indoor": true,
+    "party_size_min": 2,
+    "party_size_max": 8,
+    "child_friendly": true,
+    "has_high_chair": true,
+    "has_kids_menu": false,
+    "queue_minutes": 5,
+    "available": true,
+    "available_slots": [
+      "11:30",
+      "12:30",
+      "17:30",
+      "18:30"
+    ],
+    "bookable": true,
+    "risk": null,
+    "description": "清淡中餐和独立包间，电梯直达、停车方便，适合带爸妈长辈",
+    "poi_type": "restaurant",
+    "meituan_poi_id": "mt_rest_012",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "family_elder",
+      "family",
+      "business"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "11:00-21:30",
+    "rating": 4.6,
+    "review_count": 1140,
+    "monthly_sales": 680,
+    "popularity_score": 76,
+    "recommended_duration_min": 80,
+    "table_stock": 8,
+    "queue_status": "low",
+    "supports_queue_ticket": true,
+    "reservation_notice": "包间需提前预约",
+    "low_calorie_options": true,
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "high_chair": true,
+      "kids_menu": false,
+      "private_room": true,
+      "parking": true,
+      "nursing_room": true
+    },
+    "domain": "eat"
+  },
+  {
+    "id": "rest_013",
+    "name": "粤雅轩商务粤菜",
+    "category": "商务宴请",
+    "area": "国贸商圈",
+    "address": "朝阳区建国门外大街1号",
+    "lat": 39.9097,
+    "lng": 116.4601,
+    "distance_km": 5.1,
+    "avg_price": 260,
+    "tags": [
+      "粤菜",
+      "商务",
+      "包间",
+      "安静",
+      "高端",
+      "宴请",
+      "好停车"
+    ],
+    "party_types": [
+      "business",
+      "family_elder",
+      "family"
+    ],
+    "scene": "business",
+    "cuisine": "粤菜",
+    "indoor": true,
+    "party_size_min": 2,
+    "party_size_max": 10,
+    "child_friendly": false,
+    "has_high_chair": false,
+    "has_kids_menu": false,
+    "queue_minutes": 0,
+    "available": true,
+    "available_slots": [
+      "11:30",
+      "12:30",
+      "18:00",
+      "19:00"
+    ],
+    "bookable": true,
+    "risk": null,
+    "description": "稳定可订的商务粤菜包间，适合客户饭局和正式家庭宴请",
+    "poi_type": "restaurant",
+    "meituan_poi_id": "mt_rest_013",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "business",
+      "family_elder",
+      "family"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "11:00-22:00",
+    "rating": 4.7,
+    "review_count": 920,
+    "monthly_sales": 460,
+    "popularity_score": 82,
+    "recommended_duration_min": 90,
+    "table_stock": 5,
+    "queue_status": "none",
+    "supports_queue_ticket": false,
+    "reservation_notice": "商务包间需电话确认",
+    "low_calorie_options": true,
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "high_chair": false,
+      "kids_menu": false,
+      "private_room": true,
+      "parking": true,
       "nursing_room": false
     },
     "domain": "eat"

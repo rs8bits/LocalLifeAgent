@@ -25,21 +25,23 @@ _PLAY_KEYWORDS = [
     "唱歌", "密室", "桌游", "拍照", "打卡", "电影", "蹦床", "撸猫",
     "KTV", "LiveHouse", "livehouse", "演出", "展览", "电竞", "公园",
     "户外", "亲子", "乐园", "逛街", "购物", "citywalk", "Citywalk",
-    "玩", "活动",
+    "玩", "活动", "约会", "纪念日", "仪式感", "手作", "香氛",
 ]
 _EAT_KEYWORDS = [
     "吃饭", "餐厅", "美食", "火锅", "烤肉", "日料", "晚餐", "午饭",
     "午饭", "晚饭", "聚餐", "用餐", "轻食", "健康餐",
-    "午餐", "吃点", "吃点儿", "清淡", "想吃",
+    "午餐", "吃点", "吃点儿", "清淡", "想吃", "下午茶", "约会",
+    "纪念日", "仪式感", "高端", "景观", "西餐", "包间", "宴请",
 ]
 _DRINK_KEYWORDS = [
     "喝", "咖啡", "奶茶", "茶饮", "精酿", "啤酒", "酒吧", "喝酒",
     "小酌", "果茶", "奶盖", "奈雪", "喜茶", "星巴克", "瑞幸",
+    "约会", "纪念日", "安静", "高端",
 ]
 _DELIVERY_KEYWORDS = [
     "外卖", "点个", "送餐", "送到", "送到餐厅", "配送", "闪送", "跑腿",
     "急送", "同城送", "蛋糕", "生日蛋糕", "鲜花", "花束", "礼物", "礼盒",
-    "气球", "惊喜", "水果", "水果拼盘",
+    "气球", "惊喜", "水果", "水果拼盘", "纪念日", "仪式感",
 ]
 
 # 标签类别 → tag_catalog 真实标签/类目/子品类 的规则映射
@@ -78,6 +80,15 @@ _ALIGN_RULES = {
         "亲子": ["亲子乐园", "亲子"],
         "kids": ["亲子乐园", "亲子"],
         "child": ["亲子乐园", "亲子"],
+        "约会": ["约会"],
+        "纪念日": ["纪念日", "约会"],
+        "仪式感": ["仪式感"],
+        "高端": ["高端"],
+        "安静": ["安静"],
+        "手作": ["手作"],
+        "香氛": ["香氛"],
+        "独处": ["安静"],
+        "商务": ["商务", "安静"],
     },
     "eat": {
         "美食": ["聚会"],
@@ -103,6 +114,19 @@ _ALIGN_RULES = {
         "高品质": ["高品质"],
         "fine dining": ["高品质"],
         "清淡": ["健康轻食", "健康", "低卡", "轻食"],
+        "纪念日": ["纪念日", "约会", "仪式感"],
+        "仪式感": ["仪式感"],
+        "高端": ["高端"],
+        "安静": ["安静"],
+        "包间": ["包间"],
+        "少走路": ["少走路"],
+        "好停车": ["好停车"],
+        "长辈友好": ["长辈友好"],
+        "商务": ["商务", "包间", "安静"],
+        "景观": ["景观"],
+        "西餐": ["西餐"],
+        "下午茶": ["咖啡甜品", "下午茶"],
+        "生日": ["生日"],
     },
     "drink": {
         "咖啡": ["coffee", "咖啡"],
@@ -120,6 +144,12 @@ _ALIGN_RULES = {
         "小酌": ["bar", "精酿"],
         "拍照": ["拍照"],
         "网红": ["网红"],
+        "约会": ["约会"],
+        "纪念日": ["纪念日", "约会"],
+        "仪式感": ["仪式感"],
+        "高端": ["高端"],
+        "安静": ["安静"],
+        "商务": ["商务", "安静"],
     },
     "delivery": {
         "外卖": ["外卖"],
@@ -148,6 +178,11 @@ _ALIGN_RULES = {
         "轻食": ["food", "轻食"],
         "低卡": ["food", "低卡"],
         "奶茶": ["drink", "奶茶"],
+        "纪念日": ["纪念日", "约会", "仪式感", "鲜花", "惊喜"],
+        "仪式感": ["仪式感"],
+        "约会": ["约会", "鲜花"],
+        "高端": ["高端"],
+        "生日": ["cake", "蛋糕", "生日"],
     },
 }
 
@@ -181,10 +216,18 @@ def _rule_resolve_domains(message: str, intent: Intent) -> dict:
         required_play = True
         required_eat = True
 
+    occasion_full_plan = _needs_occasion_full_plan(message, intent)
+    if occasion_full_plan:
+        for domain_name in ["play", "eat", "drink", "delivery"]:
+            if domain_name not in domains:
+                domains.append(domain_name)
+        required_play = required_play or _needs_composite_plan(message)
+        required_eat = required_eat or _needs_composite_plan(message)
+
     # 只有用户表达“帮我安排几个小时/完整下午”时，才把吃饭作为可选补充。
     if (
         required_play
-        and intent.scene in ("family", "friends")
+        and intent.party_type in {"family_with_child", "family_elder", "family", "friends", "couple", "business"}
         and "eat" not in domains
         and _needs_composite_plan(message)
     ):
@@ -206,21 +249,21 @@ def _rule_resolve_domains(message: str, intent: Intent) -> dict:
 
     # 对齐 play 标签
     if "play" in domains:
-        raw_tags = act_prefs + _extract_play_keywords(message)
+        raw_tags = intent.tags + act_prefs + _extract_play_keywords(message)
         _align_domain("play", raw_tags, result)
 
     # 对齐 eat 标签
     if "eat" in domains:
-        raw_tags = food_prefs + _extract_eat_keywords(message)
+        raw_tags = intent.tags + food_prefs + _extract_eat_keywords(message)
         _align_domain("eat", raw_tags, result)
 
     # 对齐 drink 标签
     if "drink" in domains:
-        raw_prefs = prefs + _extract_drink_keywords(message)
+        raw_prefs = intent.tags + prefs + _extract_drink_keywords(message)
         _align_domain("drink", raw_prefs, result)
 
     if "delivery" in domains:
-        raw_delivery = delivery_prefs + _extract_delivery_keywords(message)
+        raw_delivery = intent.tags + delivery_prefs + _extract_delivery_keywords(message)
         _align_domain("delivery", raw_delivery, result)
 
     _refresh_domain_specs(result)
@@ -238,6 +281,18 @@ def _needs_composite_plan(message: str) -> bool:
         "完整方案", "行程", "半天", "去哪玩", "玩完", "吃饭前后",
     ]
     return any(kw in message for kw in keywords)
+
+
+def _needs_occasion_full_plan(message: str, intent: Intent) -> bool:
+    occasion_tags = {"纪念日", "约会", "仪式感", "惊喜", "生日"}
+    has_occasion = bool(occasion_tags.intersection(intent.tags)) or any(
+        kw in message for kw in ["纪念日", "约会", "生日", "仪式感"]
+    )
+    if not has_occasion:
+        return False
+    if intent.party_type == "couple":
+        return True
+    return _needs_composite_plan(message)
 
 
 def _extract_play_keywords(message: str) -> list[str]:

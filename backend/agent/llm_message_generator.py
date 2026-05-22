@@ -93,7 +93,7 @@ def _rule_fallback(plan: dict, intent: dict, bookings: list, orders: list) -> di
     msg = generate_share_message(plan=plan, intent=intent, bookings=bookings, orders=orders)
     return {
         "share_message": msg,
-        "tone": intent.get("scene", "general"),
+        "tone": intent.get("party_type") or intent.get("scene", "general"),
         "summary": "已生成转发消息（规则兜底）",
         "warnings": ["这是 Demo Mock，不产生真实交易"],
     }

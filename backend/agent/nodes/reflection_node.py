@@ -57,8 +57,8 @@ async def reflection_node(state: AgentState) -> AgentState:
             issues.append(f"餐厅距离{rest_dist}km超出用户偏好{radius}km")
             suggestions.append("建议选择更近的餐厅")
 
-        # 5. 家庭场景 → 儿童年龄
-        if intent.get("scene") == "family" and intent.get("child_age"):
+        # 5. 亲子同行 → 儿童年龄
+        if (intent.get("party_type") == "family_with_child" or intent.get("child_age")) and intent.get("child_age"):
             child_age = intent["child_age"]
             age_min = activity.get("suitable_age_min", 0)
             age_max = activity.get("suitable_age_max", 99)

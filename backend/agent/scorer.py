@@ -402,12 +402,12 @@ def _score_social(activity: dict, restaurant: dict, reasons: list[str]) -> float
         score += 0.1
         reasons.append("餐厅有聚会标签 (+0.03)")
 
-    if activity.get("scene") == "friends":
+    if "friends" in activity.get("party_types", []) or activity.get("scene") == "friends":
         score += 0.2
-        reasons.append("活动适合朋友场景 (+0.05)")
-    if restaurant.get("scene") == "friends":
+        reasons.append("活动适合朋友同行 (+0.05)")
+    if "friends" in restaurant.get("party_types", []) or restaurant.get("scene") == "friends":
         score += 0.2
-        reasons.append("餐厅适合朋友场景 (+0.05)")
+        reasons.append("餐厅适合朋友同行 (+0.05)")
 
     # 人数适配
     party_max = restaurant.get("party_size_max", 4)

@@ -80,7 +80,7 @@ def _validate_reflection_result(data: dict[str, Any]) -> dict[str, Any]:
 
 def _compact_intent(intent: dict[str, Any]) -> dict[str, Any]:
     keep = [
-        "scene", "time_window", "duration_hours", "people_count", "radius_km",
+        "scene", "party_type", "tags", "time_window", "duration_hours", "people_count", "radius_km",
         "food_preferences", "activity_preferences", "drink_preferences",
         "delivery_preferences", "child_age", "needs_low_calorie",
         "needs_photo_spot", "avoid_queue_minutes",
