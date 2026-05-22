@@ -43,9 +43,19 @@ async def agent_plan(req: AgentPlanRequest):
     # 转换为兼容格式
     errors = list(graph_result.get("errors", []))
     guardrail_result = graph_result.get("guardrail_result", {})
+    input_safety_result = graph_result.get("input_safety_result", {})
     plans = graph_result.get("plans", [])
-    if guardrail_result.get("blocked"):
-        errors.extend(guardrail_result.get("issues", []))
+    guardrail_failed = bool(guardrail_result) and not guardrail_result.get("passed", True)
+
+    if guardrail_failed:
+        for issue in guardrail_result.get("issues", []):
+            if issue not in errors:
+                errors.append(issue)
+    if input_safety_result.get("blocked"):
+        safe_message = input_safety_result.get("safe_message", "输入被拦截")
+        if safe_message not in errors:
+            errors.append(safe_message)
+    if guardrail_failed or input_safety_result.get("blocked"):
         plans = []
 
     planner_output = {
@@ -55,26 +65,35 @@ async def agent_plan(req: AgentPlanRequest):
         "errors": errors,
     }
 
-    session = create_session(
-        user_id=req.user_id,
-        message=req.message,
-        planner_output=planner_output,
-    )
+    session_id = ""
+    if not guardrail_failed and not input_safety_result.get("blocked"):
+        session = create_session(
+            user_id=req.user_id,
+            message=req.message,
+            planner_output=planner_output,
+        )
 
-    # 将 graph 的 reflection/guardrails 结果写入 session
-    update_session(session["session_id"], {
-        "reflection_result": graph_result.get("reflection_result", {}),
-        "guardrail_result": graph_result.get("guardrail_result", {}),
-    })
+        # 将 graph 的 reflection/guardrails/新字段结果写入 session
+        session_id = session["session_id"]
+        update_session(session_id, {
+            "reflection_result": graph_result.get("reflection_result", {}),
+            "guardrail_result": graph_result.get("guardrail_result", {}),
+            "input_safety_result": graph_result.get("input_safety_result", {}),
+            "rewrite_result": graph_result.get("rewrite_result", {}),
+        })
 
     return AgentPlanResponse(
-        session_id=session["session_id"],
+        session_id=session_id,
         user_id=req.user_id,
         message=req.message,
         intent=planner_output.get("intent", {}),
         plans=planner_output.get("plans", []),
         tool_logs=planner_output.get("tool_logs", []),
         errors=planner_output.get("errors", []),
+        input_safety_result=graph_result.get("input_safety_result", {}),
+        rewrite_result=graph_result.get("rewrite_result", {}),
+        reflection_result=graph_result.get("reflection_result", {}),
+        guardrail_result=graph_result.get("guardrail_result", {}),
     )
 
 
@@ -96,6 +115,7 @@ async def agent_confirm(req: AgentConfirmRequest):
             orders=session.get("execution_result", {}).get("orders", []),
             share_message=session.get("share_message"),
             errors=session.get("execution_result", {}).get("errors", []),
+            message_guardrail_result=session.get("message_guardrail_result", {}),
         )
 
     plans = session.get("plans", [])
@@ -129,17 +149,31 @@ async def agent_confirm(req: AgentConfirmRequest):
         "errors": [],
         "stream_events": [],
         "phase": "execution",
+        "message_retry_count": 0,
+        "max_retries": 2,
+        "guardrail_feedback": {},
     }
     exec_state = await run_execution_graph(graph_state, req.plan_id)
     result = exec_state.get("execution_result", {})
     share_msg = exec_state.get("share_message", "")
+    guardrail_result = exec_state.get("guardrail_result", {})
+    guardrail_passed = guardrail_result.get("passed", True)
+    response_errors = list(result.get("errors", []))
+    if not guardrail_passed:
+        for issue in guardrail_result.get("issues", []):
+            if issue not in response_errors:
+                response_errors.append(issue)
+        share_msg = None
 
-    update_session(req.session_id, {
-        "status": result.get("status", "failed"),
-        "selected_plan_id": req.plan_id,
-        "execution_result": result,
-        "share_message": share_msg,
-    })
+    # 只有 guardrails 通过后才更新 session
+    if guardrail_passed:
+        update_session(req.session_id, {
+            "status": result.get("status", "failed"),
+            "selected_plan_id": req.plan_id,
+            "execution_result": result,
+            "share_message": share_msg,
+            "message_guardrail_result": guardrail_result,
+        })
 
     return AgentConfirmResponse(
         status=result.get("status", "failed"),
@@ -150,7 +184,8 @@ async def agent_confirm(req: AgentConfirmRequest):
         bookings=result.get("bookings", []),
         orders=result.get("orders", []),
         share_message=share_msg,
-        errors=result.get("errors", []),
+        errors=response_errors,
+        message_guardrail_result=guardrail_result,
     )
 
 
@@ -253,6 +288,9 @@ async def agent_confirm_stream(req: AgentConfirmRequest):
                 "errors": [],
                 "stream_events": [],
                 "phase": "execution",
+                "message_retry_count": 0,
+                "max_retries": 2,
+                "guardrail_feedback": {},
             }
             async for chunk in run_execution_graph_stream(graph_state, req.plan_id):
                 yield chunk

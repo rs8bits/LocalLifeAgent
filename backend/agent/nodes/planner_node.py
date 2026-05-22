@@ -31,10 +31,18 @@ async def planner_node(state: AgentState) -> AgentState:
     intent_dict = state.get("intent", {})
     intent = Intent(**intent_dict)
 
+    # 如果是重试，从 guardrail_feedback 中提取需要排除的 POI ID
+    excluded_poi_ids: set[str] = set()
+    guardrail_feedback = state.get("guardrail_feedback", {})
+    if guardrail_feedback and guardrail_feedback.get("retryable_issues"):
+        is_retry = state.get("planner_retry_count", 0) > 0
+    else:
+        is_retry = False
+
     await emit_event(state, {
         "event": "planner_start",
-        "message": "开始规划...",
-        "data": {},
+        "message": "正在重新规划..." if is_retry else "开始规划...",
+        "data": {"retry": is_retry},
     })
 
     # ── 1. 标签对齐 ──

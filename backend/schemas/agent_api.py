@@ -16,6 +16,10 @@ class AgentPlanResponse(BaseModel):
     plans: list[dict]
     tool_logs: list[dict]
     errors: list[str] = Field(default_factory=list)
+    input_safety_result: dict = Field(default_factory=dict)
+    rewrite_result: dict = Field(default_factory=dict)
+    reflection_result: dict = Field(default_factory=dict)
+    guardrail_result: dict = Field(default_factory=dict)
 
 
 class AgentConfirmRequest(BaseModel):
@@ -33,3 +37,4 @@ class AgentConfirmResponse(BaseModel):
     orders: list[dict] = Field(default_factory=list)
     share_message: str | None = None
     errors: list[str] = Field(default_factory=list)
+    message_guardrail_result: dict = Field(default_factory=dict)

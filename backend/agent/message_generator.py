@@ -88,5 +88,9 @@ def generate_share_message(plan: dict, intent: dict, bookings: list[dict], order
         failed_names = [b.get("poi_name", "") for b in failed_bookings]
         parts.append(f"注意：{', '.join(failed_names)}预约/订位未成功，可能需要手动处理。")
 
+    disclosure_words = ["Demo", "Mock", "模拟", "非真实", "演示"]
+    if not any(word in "".join(parts) for word in disclosure_words):
+        parts.append("以上为 Demo 模拟安排，非真实交易。")
+
     parts.append("出发前看一下时间就行。")
     return "".join(parts)

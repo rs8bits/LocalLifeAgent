@@ -256,11 +256,16 @@ class TestGuardrails:
     @pytest.mark.asyncio
     async def test_share_message_forbidden_content(self):
         state = _make_state(
+            phase="execution",
+            execution_result={"status": "success", "bookings": [], "orders": []},
             share_message="已真实支付成功，订单确认完毕",
             plans=[{"plan_id": "g4", "activity": {}, "restaurant": {}, "deals": [], "risk_tips": []}],
         )
         result = await guardrails_node(state)
-        assert result["guardrail_result"]["blocked"] is True
+        # share_message 违规是 retryable，不是 blocked
+        assert result["guardrail_result"]["passed"] is False
+        assert result["guardrail_result"]["retryable"] is True
+        assert len(result["guardrail_result"]["retryable_issues"]) >= 1
 
     @pytest.mark.asyncio
     async def test_family_child_age_blocked(self):
@@ -279,7 +284,10 @@ class TestGuardrails:
             }],
         )
         result = await guardrails_node(state)
-        assert result["guardrail_result"]["blocked"] is True
+        # 儿童年龄不匹配是 retryable（planner 可替换活动）
+        assert result["guardrail_result"]["passed"] is False
+        assert result["guardrail_result"]["retryable"] is True
+        assert any("儿童" in i for i in result["guardrail_result"]["retryable_issues"])
 
     @pytest.mark.asyncio
     async def test_valid_drink_passes(self):

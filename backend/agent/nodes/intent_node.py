@@ -16,8 +16,11 @@ async def intent_node(state: AgentState) -> AgentState:
             if "preferences" in user_profile
             else {"preferences": user_profile}
         )
+        # 使用 rewrite 后的消息（如果有），否则用原始消息
+        rewrite = state.get("rewrite_result", {})
+        effective_message = rewrite.get("rewritten_message") or state["user_message"]
         intent = await parse_intent(
-            message=state["user_message"],
+            message=effective_message,
             user_memory=user_memory,
         )
         state["intent"] = intent.model_dump()

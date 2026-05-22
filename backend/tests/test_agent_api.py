@@ -171,8 +171,10 @@ class TestAgentConfirm:
         # 不能声称真实支付成功（可以说非真实支付）
         assert "支付成功" not in result["share_message"]
         assert "交易成功" not in result["share_message"]
-        # 应包含"Mock"说明是非真实交易
-        assert "Mock" in result["share_message"] or "非真实" in result["share_message"]
+        # 应包含 Demo/Mock/模拟/非真实 说明是非真实交易
+        msg = result["share_message"]
+        assert any(w in msg for w in ["Mock", "Demo", "模拟", "非真实"]), \
+            f"转发消息应说明是非真实交易: {msg}"
 
     def test_confirm_twice_is_stable(self):
         plan_resp = client.post("/api/agent/plan", json={

@@ -2,6 +2,8 @@
 
 from typing import TypedDict, Any
 
+DEFAULT_MAX_RETRIES = 2
+
 
 class AgentState(TypedDict, total=False):
     session_id: str | None
@@ -33,3 +35,15 @@ class AgentState(TypedDict, total=False):
     stream_events: list[dict[str, Any]]
     event_queue: Any
     phase: str  # "planning" | "execution"
+
+    # P0: Input Safety
+    input_safety_result: dict[str, Any]
+
+    # P1: Rewrite
+    rewrite_result: dict[str, Any]
+
+    # P3: Guardrails Retry
+    guardrail_feedback: dict[str, Any]
+    planner_retry_count: int
+    message_retry_count: int
+    max_retries: int
