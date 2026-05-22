@@ -252,14 +252,19 @@ def _apply_domain_spec_filters(params: dict[str, Any], spec: dict) -> None:
     categories = spec.get("categories") or []
     tags = spec.get("tags") or []
     sub_categories = spec.get("sub_categories") or []
-    if len(categories) == 1:
-        params["category"] = categories[0]
-    elif len(categories) > 1:
-        params["categories_any"] = categories
-    if tags:
-        params["tags_any"] = tags
-    if sub_categories:
-        params["sub_category"] = sub_categories[0]
+    tag_signals = [*categories, *tags, *sub_categories]
+    if tag_signals:
+        params["tags_any"] = _unique_values(tag_signals)
+
+
+def _unique_values(values: list[str]) -> list[str]:
+    seen = set()
+    result = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
 
 
 def _build_place_search_params(

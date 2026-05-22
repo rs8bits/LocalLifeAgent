@@ -157,10 +157,47 @@ class TestPlannerPartyTypes:
         assert all(not p["title"].startswith("亲子方案") for p in result["plans"])
 
     @pytest.mark.asyncio
-    async def test_memory_tags_do_not_become_search_filters(self, monkeypatch):
+    async def test_tags_are_or_scoring_signals_not_category_filters(self, monkeypatch):
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
 
+        async def fake_resolve_domain_tags(message, intent, intent_dict):
+            return {
+                "domains": ["play", "eat", "drink", "delivery"],
+                "domain_required": {"play": True, "eat": True, "drink": False, "delivery": False},
+                "domain_specs": [
+                    {
+                        "domain": "play",
+                        "required": True,
+                        "categories": [],
+                        "tags": ["纪念日", "约会"],
+                        "sub_categories": [],
+                    },
+                    {
+                        "domain": "eat",
+                        "required": True,
+                        "categories": ["健康轻食"],
+                        "tags": ["健康", "纪念日", "约会", "减脂", "轻食", "低卡"],
+                        "sub_categories": [],
+                    },
+                    {
+                        "domain": "drink",
+                        "required": False,
+                        "categories": [],
+                        "tags": ["纪念日", "约会"],
+                        "sub_categories": [],
+                    },
+                    {
+                        "domain": "delivery",
+                        "required": False,
+                        "categories": [],
+                        "tags": ["纪念日", "鲜花"],
+                        "sub_categories": [],
+                    },
+                ],
+            }
+
+        monkeypatch.setattr("backend.agent.planner.resolve_domain_tags", fake_resolve_domain_tags)
         result = await plan_for_message(
             user_id="user_001",
             message="今天是和对象的两周年纪念日，帮我安排一下今天的活动",
@@ -168,20 +205,18 @@ class TestPlannerPartyTypes:
         assert result["intent"]["party_type"] == "couple"
         assert "纪念日" in result["intent"]["tags"]
         assert "约会" in result["intent"]["tags"]
-        assert "健康" in result["intent"]["memory_tags"]
-        assert "健康" not in result["intent"]["tags"]
         search_messages = [
             log["message"]
             for log in result["tool_logs"]
             if log["tool"] in {"search_places", "search_delivery_items"}
         ]
         assert search_messages
-        assert not any("健康" in msg for msg in search_messages), search_messages
-        assert not any("健康轻食" in msg for msg in search_messages), search_messages
-        assert not any("日料" in msg for msg in search_messages), search_messages
-        assert not any("粤菜" in msg for msg in search_messages), search_messages
+        assert not any("category=" in msg for msg in search_messages), search_messages
+        assert not any("sub_category=" in msg for msg in search_messages), search_messages
+        assert not any("找到 1 个场所 (eat)" in msg for msg in search_messages), search_messages
         assert any(p.get("activity") for p in result["plans"])
         assert any(p.get("restaurant") for p in result["plans"])
+        assert any("标签匹配" in reason for p in result["plans"] for reason in p.get("score_reasons", []))
 
     @pytest.mark.asyncio
     async def test_plans_are_sorted_by_score_desc(self, monkeypatch):
@@ -336,15 +371,14 @@ class TestTagResolverFlow:
 
     @pytest.mark.asyncio
     async def test_tag_search_fallback(self, monkeypatch):
-        """标签搜索 0 结果时应自动放宽"""
+        """标签搜索没有精确匹配时不应崩溃"""
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
         result = await plan_for_message(
             user_id="user_002",
             message="下午想去玩",
         )
-        # 即使"玩"没有精确匹配到标签，tag resolver 应放宽或返回空 tags_any
-        # 结果不应崩溃
+        # 即使"玩"没有精确匹配到标签，tag resolver 可返回空 tags_any，结果不应崩溃
         assert "plans" in result
 
 

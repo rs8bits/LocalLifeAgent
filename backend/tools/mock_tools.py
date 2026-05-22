@@ -291,9 +291,23 @@ _SOURCE_FILES = {
 }
 
 
+def _searchable_tags(item: dict) -> set[str]:
+    values = set(item.get("tags", []) or [])
+    for key in ("category", "sub_category", "cuisine"):
+        value = item.get(key)
+        if value:
+            values.add(value)
+    return values
+
+
+def _tag_match_score(item: dict, tags: list[str]) -> int:
+    searchable = _searchable_tags(item)
+    return sum(1 for tag in tags if tag in searchable)
+
+
 class SearchPlacesTool(BaseTool):
     name = "search_places"
-    description = "统一场所搜索，按领域(play/eat/drink/add_on)和同行人画像搜索，支持多标签 OR 匹配和自动放宽"
+    description = "统一场所搜索，按领域(play/eat/drink/add_on)和同行人画像搜索，支持多标签 OR 召回和匹配数量排序"
 
     async def run(
         self,
@@ -375,15 +389,16 @@ class SearchPlacesTool(BaseTool):
             if max_queue_minutes is not None:
                 results = [r for r in results if r.get("queue_minutes", 0) <= max_queue_minutes]
 
-            # 标签过滤 (OR 匹配)
+            # 标签 OR 召回：命中任意 tag 即可入选，命中越多排序越靠前。
             tag_warnings: list[str] = []
             if tags_any:
-                tagged = [r for r in results if any(t in r.get("tags", []) for t in tags_any)]
+                tagged = []
+                for item in results:
+                    match_score = _tag_match_score(item, tags_any)
+                    if match_score:
+                        item["_match_score"] = match_score
+                        tagged.append(item)
                 if tagged:
-                    for item in tagged:
-                        item["_match_score"] = sum(
-                            1 for t in tags_any if t in item.get("tags", [])
-                        )
                     results = sorted(
                         tagged,
                         key=lambda r: (
@@ -398,7 +413,7 @@ class SearchPlacesTool(BaseTool):
                     # 不缩小结果
 
             if tags_all:
-                tagged = [r for r in results if all(t in r.get("tags", []) for t in tags_all)]
+                tagged = [r for r in results if all(t in _searchable_tags(r) for t in tags_all)]
                 if tagged:
                     results = tagged
 
@@ -456,12 +471,13 @@ class SearchDeliveryItemsTool(BaseTool):
 
             tag_warnings: list[str] = []
             if tags_any:
-                tagged = [r for r in results if any(t in r.get("tags", []) for t in tags_any)]
+                tagged = []
+                for item in results:
+                    match_score = _tag_match_score(item, tags_any)
+                    if match_score:
+                        item["_match_score"] = match_score
+                        tagged.append(item)
                 if tagged:
-                    for item in tagged:
-                        item["_match_score"] = sum(
-                            1 for t in tags_any if t in item.get("tags", [])
-                        )
                     results = sorted(
                         tagged,
                         key=lambda r: (

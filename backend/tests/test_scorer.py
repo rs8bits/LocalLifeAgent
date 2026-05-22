@@ -320,11 +320,10 @@ class TestScorerPartyTypes:
         assert result["score"] > 0.6
         assert any("安静" in reason or "稳定" in reason for reason in result["score_reasons"])
 
-    def test_memory_tags_add_bonus_without_being_required(self):
+    def test_tag_match_count_adds_score_reason(self):
         intent = Intent(
             scene="couple",
             party_type="couple",
-            memory_tags=["日料", "健康"],
             radius_km=8.0,
             avoid_queue_minutes=30,
             people_count=2,
@@ -334,6 +333,7 @@ class TestScorerPartyTypes:
             "activity": {
                 "name": "香氛手作",
                 "distance_km": 2.0,
+                "_match_score": 2,
                 "tags": ["约会", "仪式感"],
                 "rating": 4.7,
                 "queue_minutes": 5,
@@ -343,6 +343,7 @@ class TestScorerPartyTypes:
             "restaurant": {
                 "name": "约会日料",
                 "distance_km": 2.3,
+                "_match_score": 3,
                 "category": "日料",
                 "cuisine": "日料",
                 "tags": ["约会", "纪念日"],
@@ -357,4 +358,4 @@ class TestScorerPartyTypes:
 
         result = score_plan(plan, intent)
 
-        assert any("记忆偏好匹配" in reason for reason in result["score_reasons"])
+        assert any("标签匹配5项" in reason for reason in result["score_reasons"])
