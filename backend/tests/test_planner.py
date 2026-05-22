@@ -124,6 +124,49 @@ class TestPlannerFriends:
         assert has_photo, "朋友拍照场景应该有拍照相关结果"
 
 
+class TestPlannerPartyTypes:
+    """更细同行人画像规划"""
+
+    @pytest.mark.asyncio
+    async def test_parents_are_not_forced_to_child_friendly_plans(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="周末带爸妈在附近吃点清淡的，少走路",
+        )
+        intent = result["intent"]
+        assert intent["party_type"] == "family_elder"
+        assert intent["scene"] == "family"
+        assert intent["child_age"] is None
+        assert intent["needs_less_walking"] is True
+        for plan in result["plans"]:
+            assert plan.get("party_type") == "family_elder"
+
+    @pytest.mark.asyncio
+    async def test_couple_uses_couple_party_type(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_001",
+            message="今晚和老婆吃个纪念日晚餐，想拍照好看一点",
+        )
+        assert result["intent"]["party_type"] == "couple"
+        assert result["intent"]["scene"] == "friends"
+        assert all(not p["title"].startswith("亲子方案") for p in result["plans"])
+
+    @pytest.mark.asyncio
+    async def test_plans_are_sorted_by_score_desc(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="今天下午想和4个朋友出去拍照吃饭，去三里屯附近",
+        )
+        scores = [p.get("score", 0) for p in result["plans"]]
+        assert scores == sorted(scores, reverse=True), scores
+
+
 class TestPlannerToolLogs:
     """工具日志"""
 

@@ -11,6 +11,7 @@ class TestRuleParseFamily:
         msg = "今天下午想和老婆孩子出去玩几个小时，别太远，孩子5岁，老婆最近在减肥"
         intent = _rule_parse(msg)
         assert intent.scene == "family"
+        assert intent.party_type == "family_with_child"
         assert intent.child_age == 5
         assert intent.needs_low_calorie is True
         assert intent.radius_km == 5.0
@@ -20,15 +21,32 @@ class TestRuleParseFamily:
         msg = "周末带4岁宝宝去附近公园，不要太远"
         intent = _rule_parse(msg)
         assert intent.scene == "family"
+        assert intent.party_type == "family_with_child"
         assert intent.child_age == 4
         assert "亲子" in intent.activity_preferences
 
-    def test_family_no_child_age(self):
+    def test_spouse_without_child_is_couple(self):
         msg = "下午和老婆出去逛逛"
         intent = _rule_parse(msg)
-        assert intent.scene == "family"
+        assert intent.scene == "friends"
+        assert intent.party_type == "couple"
         assert intent.child_age is None
         assert intent.people_count == 2
+
+    def test_parents_are_family_elder(self):
+        msg = "周末想带爸妈在附近吃点清淡的，少走路"
+        intent = _rule_parse(msg)
+        assert intent.scene == "family"
+        assert intent.party_type == "family_elder"
+        assert intent.needs_less_walking is True
+        assert intent.needs_low_calorie is True
+        assert any(c.get("role") == "parent" for c in intent.companions)
+
+    def test_relatives_are_family(self):
+        msg = "晚上和亲戚家庭聚餐"
+        intent = _rule_parse(msg)
+        assert intent.scene == "family"
+        assert intent.party_type == "family"
 
 
 class TestRuleParseFriends:
@@ -38,6 +56,7 @@ class TestRuleParseFriends:
         msg = "今天下午想和4个朋友出去拍照吃饭，别太远"
         intent = _rule_parse(msg)
         assert intent.scene == "friends"
+        assert intent.party_type == "friends"
         assert intent.needs_photo_spot is True
         assert intent.people_count >= 4
         assert "拍照" in intent.activity_preferences
@@ -46,13 +65,29 @@ class TestRuleParseFriends:
         msg = "周末和3个同学去玩桌游，然后吃火锅"
         intent = _rule_parse(msg)
         assert intent.scene == "friends"
+        assert intent.party_type == "friends"
         assert intent.people_count == 3
 
     def test_friends_no_count(self):
         msg = "下午和朋友喝咖啡"
         intent = _rule_parse(msg)
         assert intent.scene == "friends"
+        assert intent.party_type == "friends"
         # 朋友场景未指明人数时默认为 None
+
+    def test_business_scene(self):
+        msg = "晚上和客户吃饭，需要安静正式一点"
+        intent = _rule_parse(msg)
+        assert intent.scene == "friends"
+        assert intent.party_type == "business"
+        assert intent.needs_quiet is True
+
+    def test_solo_scene(self):
+        msg = "中午一个人想吃点清淡的"
+        intent = _rule_parse(msg)
+        assert intent.scene == "general"
+        assert intent.party_type == "solo"
+        assert intent.people_count == 1
 
 
 class TestRuleParseGeneral:
@@ -94,6 +129,7 @@ class TestIntentWithoutAPIKey:
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
         intent = await parse_intent("今天下午想和老婆孩子出去玩，孩子5岁")
         assert intent.scene == "family"
+        assert intent.party_type == "family_with_child"
         assert intent.child_age == 5
 
 
@@ -159,6 +195,7 @@ class TestUserMemoryMerge:
         }
         intent = await parse_intent("下午带老婆孩子出去玩", user_memory=memory)
         assert intent.child_age == 5
+        assert intent.party_type == "family_with_child"
         assert intent.radius_km == 8.0
         assert intent.avoid_queue_minutes == 20
         assert intent.needs_low_calorie is True
@@ -196,9 +233,27 @@ class TestFriendsMemoryIsolation:
         }
         intent = await parse_intent("晚上和4个朋友想吃饭喝精酿再唱歌", user_memory=memory)
         assert intent.scene == "friends"
+        assert intent.party_type == "friends"
         assert intent.child_age is None, "朋友场景不应继承 child_age"
         assert intent.needs_low_calorie is False, "朋友场景不应继承配偶减脂偏好"
         # companions 不应包含 child/spouse
         roles = [c.get("role") for c in intent.companions]
         assert "child" not in roles, "朋友场景 companions 不应包含 child"
         assert "spouse" not in roles, "朋友场景 companions 不应包含 spouse"
+
+    @pytest.mark.asyncio
+    async def test_couple_inherits_spouse_diet_but_not_child_age(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        memory = {
+            "user_id": "user_001",
+            "preferences": {
+                "child_age": 5,
+                "spouse_diet": "减脂",
+                "max_distance_km": 8,
+            },
+        }
+        intent = await parse_intent("晚上和老婆吃饭", user_memory=memory)
+        assert intent.party_type == "couple"
+        assert intent.child_age is None
+        assert intent.needs_low_calorie is True

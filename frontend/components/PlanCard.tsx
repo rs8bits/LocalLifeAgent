@@ -23,6 +23,11 @@ export default function PlanCard({
       <div className="flex justify-between items-start">
         <div>
           <h3 className="font-semibold text-base">{plan.title}</h3>
+          {typeof plan.score === "number" && plan.score > 0 && (
+            <p className="text-xs text-blue-700 mt-1">
+              推荐分 {(plan.score * 100).toFixed(0)}
+            </p>
+          )}
         </div>
         <span
           className={`text-xs px-2 py-0.5 rounded ${
@@ -146,6 +151,15 @@ export default function PlanCard({
             <span key={i} className="bg-green-50 px-1.5 py-0.5 rounded">
               {r}
             </span>
+          ))}
+        </div>
+      )}
+
+      {/* 评分理由 */}
+      {plan.score_reasons.length > 0 && (
+        <div className="text-xs text-blue-700 bg-blue-50 p-2 rounded space-y-0.5">
+          {plan.score_reasons.slice(0, 3).map((reason, i) => (
+            <p key={i}>{reason}</p>
           ))}
         </div>
       )}

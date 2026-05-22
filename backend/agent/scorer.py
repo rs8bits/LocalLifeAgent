@@ -7,10 +7,22 @@ from backend.agent.schemas import Intent
 
 def score_plan(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
     """对单个方案评分，返回带分值的方案"""
-    if intent.scene == "family":
+    party_type = intent.party_type
+    if party_type == "family_with_child" or _intent_has_child(intent):
         return _score_family(plan, intent)
-    else:
-        return _score_friends(plan, intent)
+    if party_type in {"family_elder", "family"}:
+        return _score_family_group(plan, intent)
+    if party_type == "couple":
+        return _score_couple(plan, intent)
+    if party_type == "business":
+        return _score_business(plan, intent)
+    if party_type == "solo":
+        return _score_solo(plan, intent)
+    return _score_friends(plan, intent)
+
+
+def _intent_has_child(intent: Intent) -> bool:
+    return intent.child_age is not None or any(c.get("role") == "child" for c in intent.companions)
 
 
 def _score_family(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
@@ -98,6 +110,135 @@ def _score_friends(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
         3,
     )
 
+    plan["score"] = score
+    plan["score_reasons"] = reasons
+    return plan
+
+
+def _score_family_group(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
+    """不带儿童的家庭/长辈场景评分：少折腾、少排队、健康和安静优先。"""
+    activity = plan.get("activity") or {}
+    restaurant = plan.get("restaurant") or {}
+    drink = plan.get("drink") or {}
+    reasons: list[str] = []
+
+    distance = _score_distance(activity, restaurant, drink, intent, reasons)
+    queue = _score_queue(activity, restaurant, drink, intent, reasons)
+    health = _score_restaurant_health(restaurant, intent, reasons)
+    quiet = _score_quiet_comfort(activity, restaurant, drink, intent, reasons)
+    food = _score_food(restaurant, reasons)
+    time_fit = _score_time_fit(activity, restaurant, drink, reasons)
+    price = _score_price(activity, restaurant, drink, intent, reasons)
+
+    if intent.party_type == "family_elder":
+        score = round(
+            distance * 0.25
+            + queue * 0.20
+            + quiet * 0.20
+            + health * 0.15
+            + food * 0.10
+            + time_fit * 0.05
+            + price * 0.05,
+            3,
+        )
+    else:
+        score = round(
+            distance * 0.20
+            + queue * 0.15
+            + health * 0.20
+            + quiet * 0.10
+            + food * 0.15
+            + time_fit * 0.10
+            + price * 0.10,
+            3,
+        )
+
+    plan["score"] = score
+    plan["score_reasons"] = reasons
+    return plan
+
+
+def _score_couple(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
+    """情侣/夫妻二人场景评分：氛围、拍照、品质和距离优先。"""
+    activity = plan.get("activity") or {}
+    restaurant = plan.get("restaurant") or {}
+    drink = plan.get("drink") or {}
+    reasons: list[str] = []
+
+    photo = _score_photo(activity, restaurant, drink, intent, reasons)
+    ambience = _score_ambience(activity, restaurant, drink, reasons)
+    food = _score_food(restaurant, reasons)
+    drink_score = _score_drink(drink, intent, reasons)
+    distance = _score_distance(activity, restaurant, drink, intent, reasons)
+    queue = _score_queue(activity, restaurant, drink, intent, reasons)
+    price = _score_price(activity, restaurant, drink, intent, reasons)
+
+    score = round(
+        ambience * 0.20
+        + photo * 0.20
+        + food * 0.20
+        + drink_score * 0.15
+        + distance * 0.10
+        + queue * 0.10
+        + price * 0.05,
+        3,
+    )
+    plan["score"] = score
+    plan["score_reasons"] = reasons
+    return plan
+
+
+def _score_business(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
+    """商务/客户场景评分：品质、安静、稳定可执行优先。"""
+    activity = plan.get("activity") or {}
+    restaurant = plan.get("restaurant") or {}
+    drink = plan.get("drink") or {}
+    reasons: list[str] = []
+
+    food = _score_food(restaurant, reasons)
+    quiet = _score_quiet_comfort(activity, restaurant, drink, intent, reasons)
+    queue = _score_queue(activity, restaurant, drink, intent, reasons)
+    distance = _score_distance(activity, restaurant, drink, intent, reasons)
+    time_fit = _score_time_fit(activity, restaurant, drink, reasons)
+    price = _score_price(activity, restaurant, drink, intent, reasons)
+
+    score = round(
+        food * 0.25
+        + quiet * 0.25
+        + queue * 0.20
+        + distance * 0.15
+        + time_fit * 0.10
+        + price * 0.05,
+        3,
+    )
+    plan["score"] = score
+    plan["score_reasons"] = reasons
+    return plan
+
+
+def _score_solo(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
+    """单人场景评分：近、轻量、性价比和偏好匹配优先。"""
+    activity = plan.get("activity") or {}
+    restaurant = plan.get("restaurant") or {}
+    drink = plan.get("drink") or {}
+    reasons: list[str] = []
+
+    distance = _score_distance(activity, restaurant, drink, intent, reasons)
+    food = _score_food(restaurant, reasons)
+    drink_score = _score_drink(drink, intent, reasons)
+    queue = _score_queue(activity, restaurant, drink, intent, reasons)
+    time_fit = _score_time_fit(activity, restaurant, drink, reasons)
+    price = _score_price(activity, restaurant, drink, intent, reasons)
+
+    score = round(
+        distance * 0.25
+        + food * 0.20
+        + drink_score * 0.15
+        + queue * 0.15
+        + time_fit * 0.10
+        + price * 0.15,
+        3,
+    )
     plan["score"] = score
     plan["score_reasons"] = reasons
     return plan
@@ -333,6 +474,62 @@ def _score_food(restaurant: dict, reasons: list[str]) -> float:
     else:
         score += 0.1
 
+    return min(score, 1.0)
+
+
+def _score_quiet_comfort(
+    activity: dict, restaurant: dict, drink: dict | None, intent: Intent, reasons: list[str]
+) -> float:
+    """安静舒适/少走路评分，服务长辈和商务场景。"""
+    score = 0.5
+    all_tags = (
+        (activity.get("tags", []) if activity else [])
+        + (restaurant.get("tags", []) if restaurant else [])
+        + (drink.get("tags", []) if drink else [])
+    )
+    if any(t in all_tags for t in ["安静", "包间", "高品质", "约会", "舒适"]):
+        score += 0.25
+        reasons.append("标签匹配安静/舒适需求")
+    if restaurant.get("bookable") or restaurant.get("available"):
+        score += 0.10
+        reasons.append("餐厅可订/可用，适合稳定安排")
+    if intent.needs_less_walking:
+        max_dist = max(
+            activity.get("distance_km", 0) if activity else 0,
+            restaurant.get("distance_km", 0) if restaurant else 0,
+            drink.get("distance_km", 0) if drink else 0,
+        )
+        if max_dist <= min(intent.radius_km, 5):
+            score += 0.15
+            reasons.append("距离较近，适合少走路")
+        else:
+            score -= 0.15
+            reasons.append("距离偏远，长辈/少走路场景扣分")
+    if intent.needs_quiet and not any(t in all_tags for t in ["安静", "包间", "高品质", "约会", "舒适"]):
+        score -= 0.10
+        reasons.append("缺少安静/私密标签")
+    return max(0.0, min(score, 1.0))
+
+
+def _score_ambience(activity: dict, restaurant: dict, drink: dict | None, reasons: list[str]) -> float:
+    """约会/二人场景氛围评分。"""
+    all_tags = (
+        (activity.get("tags", []) if activity else [])
+        + (restaurant.get("tags", []) if restaurant else [])
+        + (drink.get("tags", []) if drink else [])
+    )
+    score = 0.4
+    if any(t in all_tags for t in ["约会", "拍照", "出片", "网红", "高品质", "音乐"]):
+        score += 0.4
+        reasons.append("氛围/约会标签匹配")
+    rating = max(
+        activity.get("rating", 0) if activity else 0,
+        restaurant.get("rating", 0) if restaurant else 0,
+        drink.get("rating", 0) if drink else 0,
+    )
+    if rating >= 4.5:
+        score += 0.2
+        reasons.append(f"最高评分{rating}，品质较稳")
     return min(score, 1.0)
 
 

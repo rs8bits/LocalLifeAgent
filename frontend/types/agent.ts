@@ -16,6 +16,7 @@ export interface Plan {
   plan_id: string;
   title: string;
   scene: string;
+  party_type?: string;
   timeline: TimelineItem[];
   activity: Record<string, unknown> | null;
   restaurant: Record<string, unknown> | null;

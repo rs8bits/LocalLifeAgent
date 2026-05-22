@@ -19,6 +19,7 @@ from backend.agent.planner import (
     _domain_spec_map,
     _build_place_search_params,
     _build_delivery_search_params,
+    _has_child_context,
 )
 from backend.agent.scorer import score_plan
 
@@ -104,7 +105,7 @@ async def planner_node(state: AgentState) -> AgentState:
                 radius=radius,
                 people=people,
                 queue_limit=queue_limit,
-                child_age=intent.child_age if intent.scene == "family" else None,
+                child_age=intent.child_age if _has_child_context(intent) else None,
                 indoor_pref=indoor_pref,
             )
             result = await _run_tool("search_places", tool_logs, **params)
@@ -220,6 +221,7 @@ async def planner_node(state: AgentState) -> AgentState:
         _ensure_plan_actions(plan, intent)
     for plan in plans:
         score_plan(plan, intent)
+    plans.sort(key=lambda p: p.get("score", 0.0), reverse=True)
 
     # 输出 plan_delta
     for i, plan in enumerate(plans[:4]):

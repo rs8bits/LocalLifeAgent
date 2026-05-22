@@ -65,7 +65,7 @@ async def plan_for_message(
                 radius=radius,
                 people=people,
                 queue_limit=queue_limit,
-                child_age=intent.child_age if intent.scene == "family" else None,
+                child_age=intent.child_age if _has_child_context(intent) else None,
                 indoor_pref=indoor_pref,
             )
             result = await _run_tool("search_places", tool_logs, **params)
@@ -160,6 +160,7 @@ async def plan_for_message(
         _ensure_plan_actions(plan, intent)
     for plan in plans:
         score_plan(plan, intent)
+    plans.sort(key=lambda p: p.get("score", 0.0), reverse=True)
 
     return PlannerOutput(
         intent=intent_dict,
@@ -311,7 +312,7 @@ def _build_diverse_plans(
     plans: list[dict] = []
 
     # 过滤：确保活动适宜
-    if intent.scene == "family":
+    if _has_child_context(intent):
         activities = [a for a in activities if a.get("child_friendly")]
         restaurants = [r for r in restaurants if r.get("child_friendly")]
 
@@ -320,9 +321,15 @@ def _build_diverse_plans(
         restaurants = [r for r in restaurants if r.get("meal_suitable") is not False]
 
     # 排序：场景适配优先
-    if intent.scene == "family":
+    if _has_child_context(intent):
         activities.sort(key=_family_act_key(intent), reverse=True)
         restaurants.sort(key=_family_rest_key(intent), reverse=True)
+    elif intent.party_type in {"family_elder", "family"}:
+        activities.sort(key=_family_group_act_key(intent), reverse=True)
+        restaurants.sort(key=_family_group_rest_key(intent), reverse=True)
+    elif intent.party_type in {"couple", "business", "solo"}:
+        activities.sort(key=_general_act_key(intent), reverse=True)
+        restaurants.sort(key=_general_rest_key(intent), reverse=True)
     else:
         activities.sort(key=_friends_act_key(), reverse=True)
         restaurants.sort(key=_friends_rest_key(), reverse=True)
@@ -372,6 +379,12 @@ def _build_diverse_plans(
     return unique_plans
 
 
+def _has_child_context(intent: Intent) -> bool:
+    return intent.party_type == "family_with_child" or intent.child_age is not None or any(
+        c.get("role") == "child" for c in intent.companions
+    )
+
+
 def _family_act_key(intent: Intent):
     def key(a: dict) -> float:
         s = a.get("_match_score", 0) * 2.0
@@ -392,6 +405,77 @@ def _family_rest_key(intent: Intent):
             if r.get("low_calorie_options"): s += 3.0
             if any(t in r.get("tags", []) for t in ["健康", "轻食", "低卡", "减脂"]):
                 s += 1.0
+        s -= r.get("distance_km", 0) * 0.1
+        s -= r.get("queue_minutes", 0) * 0.01
+        return s
+    return key
+
+
+def _family_group_act_key(intent: Intent):
+    def key(a: dict) -> float:
+        s = a.get("_match_score", 0) * 2.0
+        tags = a.get("tags", [])
+        if any(t in tags for t in ["户外", "公园", "展览", "艺术", "轻松"]):
+            s += 1.5
+        if intent.needs_less_walking:
+            s -= a.get("distance_km", 0) * 0.25
+            s -= a.get("queue_minutes", 0) * 0.03
+        else:
+            s -= a.get("distance_km", 0) * 0.1
+            s -= a.get("queue_minutes", 0) * 0.01
+        s += a.get("rating", 0) * 0.2
+        return s
+    return key
+
+
+def _family_group_rest_key(intent: Intent):
+    def key(r: dict) -> float:
+        s = r.get("_match_score", 0) * 2.0
+        tags = r.get("tags", [])
+        if any(t in tags for t in ["健康", "轻食", "低卡", "高品质", "聚会"]):
+            s += 2.0
+        if r.get("available"):
+            s += 1.0
+        if intent.needs_less_walking:
+            s -= r.get("distance_km", 0) * 0.25
+            s -= r.get("queue_minutes", 0) * 0.04
+        else:
+            s -= r.get("distance_km", 0) * 0.1
+            s -= r.get("queue_minutes", 0) * 0.01
+        return s
+    return key
+
+
+def _general_act_key(intent: Intent):
+    def key(a: dict) -> float:
+        s = a.get("_match_score", 0) * 2.0
+        tags = a.get("tags", [])
+        if intent.party_type == "couple" and any(t in tags for t in ["拍照", "艺术", "音乐", "约会"]):
+            s += 3.0
+        if intent.party_type == "business" and any(t in tags for t in ["高品质", "展览", "艺术"]):
+            s += 2.0
+        if intent.party_type == "solo" and any(t in tags for t in ["咖啡", "公园", "艺术", "观影"]):
+            s += 1.5
+        s += a.get("rating", 0) * 0.2
+        s -= a.get("distance_km", 0) * 0.1
+        s -= a.get("queue_minutes", 0) * 0.01
+        return s
+    return key
+
+
+def _general_rest_key(intent: Intent):
+    def key(r: dict) -> float:
+        s = r.get("_match_score", 0) * 2.0
+        tags = r.get("tags", [])
+        if intent.party_type == "couple" and any(t in tags for t in ["约会", "拍照", "高品质", "出片"]):
+            s += 3.0
+        if intent.party_type == "business" and any(t in tags for t in ["高品质", "聚会", "品质"]):
+            s += 3.0
+        if intent.party_type == "solo" and any(t in tags for t in ["健康", "轻食", "小吃"]):
+            s += 1.5
+        if r.get("available"):
+            s += 0.8
+        s += r.get("rating", 0) * 0.2
         s -= r.get("distance_km", 0) * 0.1
         s -= r.get("queue_minutes", 0) * 0.01
         return s
@@ -644,10 +728,8 @@ def _make_plan_with_timeline(
         parts.append(drink["name"])
     if restaurant:
         parts.append(restaurant["name"])
-    if scene == "family":
-        title = f"亲子方案{index + 1}：{' + '.join(parts)}" if parts else f"亲子方案{index + 1}"
-    else:
-        title = f"出行方案{index + 1}：{' + '.join(parts)}" if parts else f"出行方案{index + 1}"
+    prefix = _party_title_prefix(intent)
+    title = f"{prefix}{index + 1}：{' + '.join(parts)}" if parts else f"{prefix}{index + 1}"
 
     # 时间线
     start_time, budget_min = _resolve_time_constraints(intent)
@@ -658,7 +740,7 @@ def _make_plan_with_timeline(
     rest_price = restaurant.get("avg_price", 0) if restaurant else 0
     drink_price = drink.get("avg_price", 0) if drink else 0
     per_person = act_price + rest_price + drink_price
-    people = intent.people_count or (3 if scene == "family" else 4)
+    people = intent.people_count or _default_people_count(intent)
     total = per_person * people
 
     # 排队
@@ -733,6 +815,7 @@ def _make_plan_with_timeline(
         "plan_id": plan_id,
         "title": title,
         "scene": scene,
+        "party_type": intent.party_type,
         "timeline": timeline,
         "activity": activity,
         "restaurant": restaurant,
@@ -794,6 +877,7 @@ def _build_delivery_only_plans(intent: Intent, delivery_items: list[dict]) -> li
             "plan_id": f"plan_{idx + 1:03d}",
             "title": f"配送方案{idx + 1}：{item.get('name', '')}",
             "scene": intent.scene,
+            "party_type": intent.party_type,
             "timeline": [{
                 "time": delivery_time,
                 "type": "delivery",
@@ -828,13 +912,37 @@ def _delivery_key(intent: Intent):
         for pref in intent.delivery_preferences or []:
             if pref in tags or pref == item.get("sub_category"):
                 score += 4.0
-        if intent.scene == "family" and "亲子" in tags:
+        if _has_child_context(intent) and "亲子" in tags:
             score += 2.0
         if intent.needs_low_calorie and any(t in tags for t in ["健康", "低卡", "轻食"]):
             score += 3.0
         score -= item.get("estimated_delivery_min", 60) * 0.02
         return score
     return key
+
+
+def _party_title_prefix(intent: Intent) -> str:
+    return {
+        "family_with_child": "亲子方案",
+        "family_elder": "长辈家庭方案",
+        "family": "家庭方案",
+        "friends": "朋友方案",
+        "couple": "约会方案",
+        "business": "商务方案",
+        "solo": "个人方案",
+    }.get(intent.party_type, "出行方案")
+
+
+def _default_people_count(intent: Intent) -> int:
+    return {
+        "family_with_child": 3,
+        "family_elder": 3,
+        "family": 3,
+        "friends": 4,
+        "couple": 2,
+        "business": 2,
+        "solo": 1,
+    }.get(intent.party_type, 2)
 
 
 def _delivery_time_for_plan(plan: dict, item: dict) -> str:
@@ -1039,7 +1147,7 @@ def _sort_timeline(timeline: list[dict]) -> list[dict]:
 
 
 def _recalculate_budget(plan: dict, intent: Intent) -> None:
-    people = intent.people_count or (3 if intent.scene == "family" else 4)
+    people = intent.people_count or _default_people_count(intent)
     per_person = 0
     for key in ["activity", "restaurant", "drink"]:
         if plan.get(key):

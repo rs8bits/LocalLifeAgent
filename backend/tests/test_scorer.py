@@ -7,6 +7,7 @@ from backend.agent.scorer import score_plan
 def _make_family_intent(**overrides) -> Intent:
     defaults = {
         "scene": "family",
+        "party_type": "family_with_child",
         "child_age": 5,
         "needs_low_calorie": True,
         "radius_km": 5.0,
@@ -21,6 +22,7 @@ def _make_family_intent(**overrides) -> Intent:
 def _make_friends_intent(**overrides) -> Intent:
     defaults = {
         "scene": "friends",
+        "party_type": "friends",
         "needs_photo_spot": True,
         "radius_km": 8.0,
         "avoid_queue_minutes": 45,
@@ -235,3 +237,85 @@ class TestScorerWithDrink:
         }
         result = score_plan(plan, intent)
         assert result["score"] > 0.0
+
+
+class TestScorerPartyTypes:
+    """更细同行人画像评分"""
+
+    def test_family_elder_does_not_use_child_penalty(self):
+        intent = Intent(
+            scene="family",
+            party_type="family_elder",
+            needs_less_walking=True,
+            needs_low_calorie=True,
+            radius_km=5.0,
+            avoid_queue_minutes=20,
+            people_count=3,
+        )
+        plan = {
+            "plan_id": "elder_001",
+            "activity": {
+                "name": "安静展览", "distance_km": 2.0,
+                "child_friendly": False, "tags": ["艺术", "安静"],
+                "queue_minutes": 5, "avg_price": 60, "recommended_duration_min": 90,
+            },
+            "restaurant": {
+                "name": "清淡餐厅", "distance_km": 2.0,
+                "low_calorie_options": True, "tags": ["健康", "高品质"],
+                "available": True, "rating": 4.6,
+                "queue_minutes": 5, "avg_price": 90, "recommended_duration_min": 70,
+            },
+        }
+        result = score_plan(plan, intent)
+        assert result["score"] > 0.6
+        assert not any("儿童适配" in reason for reason in result["score_reasons"])
+
+    def test_couple_prefers_ambience(self):
+        intent = Intent(
+            scene="friends",
+            party_type="couple",
+            needs_photo_spot=True,
+            radius_km=8.0,
+            avoid_queue_minutes=30,
+            people_count=2,
+        )
+        plan = {
+            "plan_id": "couple_001",
+            "activity": {
+                "name": "艺术展", "distance_km": 3.0,
+                "tags": ["拍照", "艺术"], "rating": 4.6,
+                "queue_minutes": 5, "avg_price": 120, "recommended_duration_min": 90,
+            },
+            "restaurant": {
+                "name": "约会餐厅", "distance_km": 3.2,
+                "tags": ["约会", "高品质", "出片"], "rating": 4.7,
+                "popularity_score": 80, "party_size_max": 4,
+                "queue_minutes": 5, "avg_price": 180, "recommended_duration_min": 75,
+            },
+        }
+        result = score_plan(plan, intent)
+        assert result["score"] > 0.6
+        assert any("氛围" in reason or "约会" in reason for reason in result["score_reasons"])
+
+    def test_business_prefers_quiet_stable(self):
+        intent = Intent(
+            scene="friends",
+            party_type="business",
+            needs_quiet=True,
+            radius_km=8.0,
+            avoid_queue_minutes=20,
+            people_count=2,
+        )
+        plan = {
+            "plan_id": "biz_001",
+            "activity": None,
+            "restaurant": {
+                "name": "商务餐厅", "distance_km": 2.0,
+                "tags": ["高品质", "包间"], "rating": 4.8,
+                "popularity_score": 75, "available": True,
+                "queue_minutes": 0, "avg_price": 220, "recommended_duration_min": 90,
+            },
+        }
+        result = score_plan(plan, intent)
+        assert result["score"] > 0.6
+        assert any("安静" in reason or "稳定" in reason for reason in result["score_reasons"])

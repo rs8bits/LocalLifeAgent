@@ -8,21 +8,67 @@ from backend.agent.schemas import Intent
 from backend.llm.deepseek_client import deepseek_client, LLMResult
 
 
+CHILD_KW = ["孩子", "儿子", "女儿", "亲子", "宝宝", "小朋友", "儿童", "娃"]
+SPOUSE_KW = ["老婆", "老公", "妻子", "丈夫", "爱人"]
+ELDER_KW = ["爸妈", "父母", "爸爸", "妈妈", "老人", "长辈", "爷爷", "奶奶", "外公", "外婆", "公婆", "岳父", "岳母"]
+RELATIVE_KW = ["亲戚", "亲人", "全家", "一家人", "家里人", "表哥", "表姐", "堂哥", "堂姐", "兄弟姐妹"]
+COUPLE_KW = ["情侣", "约会", "对象", "女朋友", "男朋友", "纪念日", "二人世界"]
+FRIENDS_KW = ["朋友", "同学", "哥们", "闺蜜", "聚会", "拍照", "好玩", "桌游", "喝咖啡"]
+BUSINESS_KW = ["客户", "商务", "领导", "老板", "合作方", "商务饭局", "商务宴请"]
+COLLEAGUE_KW = ["同事", "团队", "团建", "部门"]
+SOLO_KW = ["一个人", "自己", "独自", "单人", "我一个"]
+
+
+def _has_any(message: str, keywords: list[str]) -> bool:
+    return any(kw in message for kw in keywords)
+
+
+def _infer_party_type_and_scene(message: str) -> tuple[str, str]:
+    """推断真实同行人画像和兼容 mock 数据的粗 scene。"""
+    has_child = _has_any(message, CHILD_KW)
+    has_spouse = _has_any(message, SPOUSE_KW)
+    has_elder = _has_any(message, ELDER_KW)
+    has_relative = _has_any(message, RELATIVE_KW)
+    has_couple = _has_any(message, COUPLE_KW)
+    has_friends = _has_any(message, FRIENDS_KW)
+    has_business = _has_any(message, BUSINESS_KW)
+    has_colleague = _has_any(message, COLLEAGUE_KW)
+    has_solo = _has_any(message, SOLO_KW)
+
+    if has_business:
+        return "business", "friends"
+    if has_child:
+        return "family_with_child", "family"
+    if has_elder:
+        return "family_elder", "family"
+    if has_relative:
+        return "family", "family"
+    if has_couple or has_spouse:
+        return "couple", "friends"
+    if has_friends or has_colleague:
+        return "friends", "friends"
+    if has_solo:
+        return "solo", "general"
+    return "general", "general"
+
+
+def _has_child_context(intent: Intent) -> bool:
+    if intent.party_type == "family_with_child" or intent.child_age is not None:
+        return True
+    return any(c.get("role") == "child" for c in intent.companions)
+
+
+def _has_spouse_context(intent: Intent) -> bool:
+    if intent.party_type in {"couple", "family_with_child"}:
+        return True
+    return any(c.get("role") == "spouse" for c in intent.companions)
+
+
 # ── 规则兜底解析 ──────────────────────────────────────────────
 
 def _rule_parse(message: str) -> Intent:
     """基于关键词规则的意图解析，始终可用"""
-    msg = message.lower()
-
-    # 场景
-    family_kw = ["老婆", "孩子", "儿子", "女儿", "亲子", "家庭", "宝宝", "小朋友", "老公"]
-    friends_kw = ["朋友", "同学", "同事", "几个人", "聚会", "拍照", "好玩", "桌游", "喝咖啡"]
-
-    scene = "general"
-    if any(kw in message for kw in family_kw):
-        scene = "family"
-    elif any(kw in message for kw in friends_kw):
-        scene = "friends"
+    party_type, scene = _infer_party_type_and_scene(message)
 
     # 时间窗口
     time_window = "afternoon"
@@ -57,15 +103,21 @@ def _rule_parse(message: str) -> Intent:
         if m:
             people_count = int(m.group(1))
             break
-    # 家庭默认：有老婆+孩子 → 至少 3 人
-    if people_count is None and scene == "family":
+    # 同行人默认人数
+    if people_count is None and party_type == "family_with_child":
         count = 1  # self
-        if any(kw in message for kw in ["老婆", "老公"]):
+        if _has_any(message, SPOUSE_KW):
             count += 1
-        if any(kw in message for kw in ["孩子", "儿子", "女儿", "宝宝", "小朋友"]):
+        if _has_any(message, CHILD_KW):
             count += 1
         if count > 1:
             people_count = count
+    elif people_count is None and party_type == "family_elder":
+        people_count = 3 if "爸妈" in message or "父母" in message else 2
+    elif people_count is None and party_type == "couple":
+        people_count = 2
+    elif people_count is None and party_type == "solo":
+        people_count = 1
 
     # 距离偏好
     radius_km = 5.0
@@ -132,7 +184,7 @@ def _rule_parse(message: str) -> Intent:
     if any(kw in message for kw in ["花", "鲜花", "花束"]):
         delivery_preferences.append("鲜花")
     if any(kw in message for kw in ["礼物", "礼盒", "气球", "惊喜"]):
-        delivery_preferences.append("儿童礼物" if scene == "family" else "惊喜")
+        delivery_preferences.append("儿童礼物" if party_type == "family_with_child" else "惊喜")
     if any(kw in message for kw in ["水果", "水果拼盘"]):
         delivery_preferences.append("水果")
 
@@ -143,6 +195,12 @@ def _rule_parse(message: str) -> Intent:
 
     # 拍照需求
     needs_photo_spot = any(kw in message for kw in ["拍照", "打卡", "好看", "出片"])
+
+    needs_quiet = any(kw in message for kw in ["安静", "别吵", "不吵", "私密", "包间", "适合聊天", "正式"])
+    needs_less_walking = (
+        party_type == "family_elder"
+        or any(kw in message for kw in ["少走路", "别太累", "不累", "腿脚", "老人方便", "好停车"])
+    )
 
     # 排队容忍
     avoid_queue_minutes = 30
@@ -161,11 +219,12 @@ def _rule_parse(message: str) -> Intent:
 
     return Intent(
         scene=scene,
+        party_type=party_type,
         date=date,
         time_window=time_window,
         duration_hours=duration_hours,
         people_count=people_count,
-        companions=_build_companions(message, scene, child_age),
+        companions=_build_companions(message, party_type, child_age),
         radius_km=radius_km,
         distance_preference=distance_preference,
         budget_per_person=budget_per_person,
@@ -176,20 +235,29 @@ def _rule_parse(message: str) -> Intent:
         child_age=child_age,
         needs_low_calorie=needs_low_calorie,
         needs_photo_spot=needs_photo_spot,
+        needs_quiet=needs_quiet,
+        needs_less_walking=needs_less_walking,
         avoid_queue_minutes=avoid_queue_minutes,
     )
 
 
-def _build_companions(message: str, scene: str, child_age: Optional[int]) -> list[dict]:
+def _build_companions(message: str, party_type: str, child_age: Optional[int]) -> list[dict]:
     """从消息中提取同行人信息"""
     companions = []
-    if "老婆" in message:
+    if "老婆" in message or "妻子" in message:
         companions.append({"role": "spouse", "diet_preference": "减脂" if "减肥" in message else None})
-    if "老公" in message:
+    if "老公" in message or "丈夫" in message:
         companions.append({"role": "spouse"})
-    if any(kw in message for kw in ["孩子", "儿子", "女儿", "宝宝", "小朋友"]):
+    if _has_any(message, CHILD_KW):
         companions.append({"role": "child", "age": child_age})
-    if scene == "friends":
+    if _has_any(message, ELDER_KW):
+        role = "parent" if any(kw in message for kw in ["爸妈", "父母", "爸爸", "妈妈"]) else "elder"
+        companions.append({"role": role, "mobility": "low" if party_type == "family_elder" else None})
+    if _has_any(message, RELATIVE_KW):
+        companions.append({"role": "relative"})
+    if party_type == "business":
+        companions.append({"role": "client" if "客户" in message else "colleague"})
+    if party_type == "friends":
         # 提取朋友人数
         m = re.search(r"(\d+)\s*(个|位)", message)
         count = int(m.group(1)) if m else 2
@@ -204,6 +272,7 @@ INTENT_SYSTEM_PROMPT = """你是一个意图解析器。根据用户输入，提
 
 {
   "scene": "family" | "friends" | "general",
+  "party_type": "family_with_child" | "family_elder" | "family" | "friends" | "couple" | "solo" | "business" | "general",
   "date": "today" | "tomorrow" | 具体日期,
   "time_window": "morning" | "afternoon" | "evening" | "unknown",
   "duration_hours": int | null,
@@ -219,13 +288,18 @@ INTENT_SYSTEM_PROMPT = """你是一个意图解析器。根据用户输入，提
   "child_age": int | null,
   "needs_low_calorie": bool,
   "needs_photo_spot": bool,
+  "needs_quiet": bool,
+  "needs_less_walking": bool,
   "avoid_queue_minutes": int
 }
 
 规则：
-- scene: 提到老婆/孩子/亲子 → family；朋友/同学/聚会 → friends
+- scene 是兼容搜索字段：亲子/爸妈/亲戚 → family；朋友/同事/情侣/商务 → friends；单人/不明确 → general
+- party_type 是真实同行人画像：带孩子 → family_with_child；爸妈/老人 → family_elder；亲戚/全家 → family；情侣/夫妻二人 → couple；朋友/同学/同事 → friends；客户/商务/领导 → business；一个人 → solo
 - child_age: 从"孩子X岁"中提取
 - needs_low_calorie: 提到减肥/减脂/清淡/低卡 → true
+- needs_quiet: 提到安静/包间/私密/正式 → true
+- needs_less_walking: 提到爸妈/老人/少走路/别太累/腿脚不便 → true
 - drink_preferences: 提到咖啡/奶茶 → ["coffee_tea"]，精酿/啤酒/酒吧 → ["bar"]
 - delivery_preferences: 提到外卖/闪送/蛋糕/鲜花/礼物/送到餐厅 → 提取对应商品或配送偏好
 - avoid_queue_minutes: 默认为30，提到不想排队→10，网红/排队久→60
@@ -269,12 +343,13 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
     if intent_dict:
         # LLM 结果补充（不覆盖规则推导的基本字段，但信任 LLM 的正确解析）
         try:
-            for key in ["scene", "date", "time_window", "duration_hours",
+            for key in ["scene", "party_type", "date", "time_window", "duration_hours",
                         "people_count", "radius_km", "distance_preference",
                         "budget_per_person", "child_age", "needs_low_calorie",
-                        "needs_photo_spot", "avoid_queue_minutes"]:
+                        "needs_photo_spot", "needs_quiet", "needs_less_walking",
+                        "avoid_queue_minutes"]:
                 if key in intent_dict and _valid_llm_field(key, intent_dict[key]):
-                    if key in {"needs_low_calorie", "needs_photo_spot"}:
+                    if key in {"needs_low_calorie", "needs_photo_spot", "needs_quiet", "needs_less_walking"}:
                         setattr(intent, key, bool(getattr(intent, key) or intent_dict[key]))
                     else:
                         setattr(intent, key, intent_dict[key])
@@ -289,12 +364,13 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
         except Exception:
             pass  # LLM 部分字段解析失败，保留规则结果
 
+    _normalize_party_fields(intent)
+
     # 合并用户记忆（用户输入优先，记忆仅作为默认值）
     # 家庭/个人属性仅在家场景或用户明确提到家庭成员时合并
     if user_memory:
         prefs = user_memory.get("preferences", {})
-        is_family_context = intent.scene == "family"
-        if not intent.child_age and prefs.get("child_age") and is_family_context:
+        if not intent.child_age and prefs.get("child_age") and _has_child_context(intent):
             intent.child_age = prefs["child_age"]
         if intent.radius_km == 5.0 and prefs.get("max_distance_km"):
             intent.radius_km = float(prefs["max_distance_km"])
@@ -302,18 +378,71 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
             intent.avoid_queue_minutes = prefs["max_queue_minutes"]
         if not intent.food_preferences and prefs.get("cuisine_likes"):
             intent.food_preferences = [tag for tag in prefs.get("cuisine_likes", [])]
-        if prefs.get("spouse_diet") == "减脂" and is_family_context:
+        if prefs.get("spouse_diet") == "减脂" and _has_spouse_context(intent):
             intent.needs_low_calorie = True
 
         # companions: 朋友场景不加入 child/spouse
-        if is_family_context and not intent.companions:
-            if prefs.get("child_age") and prefs.get("child_name"):
+        if not intent.companions:
+            if _has_child_context(intent) and prefs.get("child_age") and prefs.get("child_name"):
                 intent.companions.append({"role": "child", "age": prefs["child_age"]})
-            if prefs.get("spouse_diet"):
+            if _has_spouse_context(intent) and prefs.get("spouse_diet"):
                 intent.companions.append({"role": "spouse", "diet_preference": prefs["spouse_diet"]})
 
     _normalize_preferences(intent)
+    _normalize_party_fields(intent)
     return intent
+
+
+def _normalize_party_fields(intent: Intent) -> None:
+    """把 LLM/规则输出统一到 party_type + 兼容 scene。"""
+    party_map = {
+        "family_child": "family_with_child",
+        "family_with_kids": "family_with_child",
+        "with_child": "family_with_child",
+        "elder": "family_elder",
+        "family_parent": "family_elder",
+        "parents": "family_elder",
+        "date": "couple",
+        "dating": "couple",
+        "friend": "friends",
+        "colleagues": "friends",
+        "business_meal": "business",
+        "alone": "solo",
+    }
+    scene_party_map = {
+        "family_with_child": "family_with_child",
+        "family_elder": "family_elder",
+        "family": "family",
+        "friends": "friends",
+        "couple": "couple",
+        "date": "couple",
+        "solo": "solo",
+        "business": "business",
+        "general": "general",
+    }
+    party = party_map.get(intent.party_type, intent.party_type)
+    if party == "general" and intent.scene in scene_party_map:
+        party = scene_party_map[intent.scene]
+    if intent.child_age is not None or any(c.get("role") == "child" for c in intent.companions):
+        party = "family_with_child"
+    if party not in {
+        "family_with_child", "family_elder", "family", "friends",
+        "couple", "solo", "business", "general",
+    }:
+        party = "general"
+    intent.party_type = party
+
+    if party in {"family_with_child", "family_elder", "family"}:
+        intent.scene = "family"
+    elif party in {"friends", "couple", "business"}:
+        intent.scene = "friends"
+    else:
+        intent.scene = "general"
+
+    if party == "family_elder":
+        intent.needs_less_walking = True
+    if party == "business":
+        intent.needs_quiet = True
 
 
 def _normalize_preferences(intent: Intent) -> None:

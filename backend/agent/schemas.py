@@ -5,13 +5,17 @@ from pydantic import BaseModel, Field
 
 
 class Companion(BaseModel):
-    role: str  # "spouse" | "child" | "friend"
+    role: str  # "spouse" | "child" | "friend" | "parent" | "elder" | "relative" | "client" | "colleague"
     age: Optional[int] = None
     diet_preference: Optional[str] = None
+    mobility: Optional[str] = None
 
 
 class Intent(BaseModel):
+    # scene 保持旧 mock 工具兼容，只作为 coarse search scene 使用。
     scene: str = "general"  # "family" | "friends" | "general"
+    # party_type 表达真实同行人画像，用于规划、评分和解释。
+    party_type: str = "general"  # family_with_child | family_elder | family | friends | couple | solo | business | general
     date: str = "today"
     time_window: str = "afternoon"  # "afternoon" | "evening" | "unknown"
     duration_hours: Optional[int] = None
@@ -27,6 +31,8 @@ class Intent(BaseModel):
     child_age: Optional[int] = None
     needs_low_calorie: bool = False
     needs_photo_spot: bool = False
+    needs_quiet: bool = False
+    needs_less_walking: bool = False
     avoid_queue_minutes: int = 30
 
 
@@ -48,6 +54,7 @@ class Plan(BaseModel):
     plan_id: str
     title: str
     scene: str
+    party_type: str = "general"
     timeline: list[dict[str, Any]] = Field(default_factory=list)
     activity: Optional[dict[str, Any]] = None
     restaurant: Optional[dict[str, Any]] = None
