@@ -39,6 +39,7 @@ def create_session(user_id: str, message: str, planner_output: dict) -> dict:
         "user_id": user_id,
         "message": message,
         "intent": planner_output.get("intent", {}),
+        "tag_resolve_result": planner_output.get("tag_resolve_result", {}),
         "plans": planner_output.get("plans", []),
         "tool_logs": planner_output.get("tool_logs", []),
         "status": "planned",

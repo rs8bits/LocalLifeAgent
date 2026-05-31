@@ -8,6 +8,11 @@ class AgentPlanRequest(BaseModel):
     message: str
 
 
+class AgentReviseRequest(BaseModel):
+    session_id: str
+    message: str
+
+
 class AgentPlanResponse(BaseModel):
     session_id: str
     user_id: str

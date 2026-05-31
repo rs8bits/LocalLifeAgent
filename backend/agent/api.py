@@ -7,11 +7,13 @@ from fastapi.responses import StreamingResponse
 
 from backend.schemas.agent_api import (
     AgentPlanRequest,
+    AgentReviseRequest,
     AgentPlanResponse,
     AgentConfirmRequest,
     AgentConfirmResponse,
 )
 from backend.agent.session_store import create_session, get_session, update_session
+from backend.agent.revision import build_revision_message
 
 # Graph 导入
 from backend.agent.graph import (
@@ -22,6 +24,48 @@ from backend.agent.graph import (
 )
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
+
+
+def _graph_result_to_planner_output(graph_result: dict) -> tuple[dict, list[str], bool, bool]:
+    errors = list(graph_result.get("errors", []))
+    guardrail_result = graph_result.get("guardrail_result", {})
+    input_safety_result = graph_result.get("input_safety_result", {})
+    plans = graph_result.get("plans", [])
+    guardrail_failed = bool(guardrail_result) and not guardrail_result.get("passed", True)
+    input_blocked = bool(input_safety_result.get("blocked"))
+
+    if guardrail_failed:
+        for issue in guardrail_result.get("issues", []):
+            if issue not in errors:
+                errors.append(issue)
+    if input_blocked:
+        safe_message = input_safety_result.get("safe_message", "输入被拦截")
+        if safe_message not in errors:
+            errors.append(safe_message)
+    if guardrail_failed or input_blocked:
+        plans = []
+
+    planner_output = {
+        "intent": graph_result.get("intent", {}),
+        "tag_resolve_result": graph_result.get("tag_resolve_result", {}),
+        "plans": plans,
+        "tool_logs": graph_result.get("tool_logs", []),
+        "errors": errors,
+    }
+    return planner_output, errors, guardrail_failed, input_blocked
+
+
+def _update_session_with_graph_context(session_id: str, graph_result: dict, extra: dict | None = None) -> None:
+    patch = {
+        "tag_resolve_result": graph_result.get("tag_resolve_result", {}),
+        "reflection_result": graph_result.get("reflection_result", {}),
+        "guardrail_result": graph_result.get("guardrail_result", {}),
+        "input_safety_result": graph_result.get("input_safety_result", {}),
+        "rewrite_result": graph_result.get("rewrite_result", {}),
+    }
+    if extra:
+        patch.update(extra)
+    update_session(session_id, patch)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -40,33 +84,10 @@ async def agent_plan(req: AgentPlanRequest):
         message=req.message,
     )
 
-    # 转换为兼容格式
-    errors = list(graph_result.get("errors", []))
-    guardrail_result = graph_result.get("guardrail_result", {})
-    input_safety_result = graph_result.get("input_safety_result", {})
-    plans = graph_result.get("plans", [])
-    guardrail_failed = bool(guardrail_result) and not guardrail_result.get("passed", True)
-
-    if guardrail_failed:
-        for issue in guardrail_result.get("issues", []):
-            if issue not in errors:
-                errors.append(issue)
-    if input_safety_result.get("blocked"):
-        safe_message = input_safety_result.get("safe_message", "输入被拦截")
-        if safe_message not in errors:
-            errors.append(safe_message)
-    if guardrail_failed or input_safety_result.get("blocked"):
-        plans = []
-
-    planner_output = {
-        "intent": graph_result.get("intent", {}),
-        "plans": plans,
-        "tool_logs": graph_result.get("tool_logs", []),
-        "errors": errors,
-    }
+    planner_output, errors, guardrail_failed, input_blocked = _graph_result_to_planner_output(graph_result)
 
     session_id = ""
-    if not guardrail_failed and not input_safety_result.get("blocked"):
+    if not guardrail_failed and not input_blocked:
         session = create_session(
             user_id=req.user_id,
             message=req.message,
@@ -75,12 +96,7 @@ async def agent_plan(req: AgentPlanRequest):
 
         # 将 graph 的 reflection/guardrails/新字段结果写入 session
         session_id = session["session_id"]
-        update_session(session_id, {
-            "reflection_result": graph_result.get("reflection_result", {}),
-            "guardrail_result": graph_result.get("guardrail_result", {}),
-            "input_safety_result": graph_result.get("input_safety_result", {}),
-            "rewrite_result": graph_result.get("rewrite_result", {}),
-        })
+        _update_session_with_graph_context(session_id, graph_result)
 
     return AgentPlanResponse(
         session_id=session_id,
@@ -90,6 +106,61 @@ async def agent_plan(req: AgentPlanRequest):
         plans=planner_output.get("plans", []),
         tool_logs=planner_output.get("tool_logs", []),
         errors=planner_output.get("errors", []),
+        input_safety_result=graph_result.get("input_safety_result", {}),
+        rewrite_result=graph_result.get("rewrite_result", {}),
+        reflection_result=graph_result.get("reflection_result", {}),
+        guardrail_result=graph_result.get("guardrail_result", {}),
+    )
+
+
+@router.post("/revise", response_model=AgentPlanResponse)
+async def agent_revise(req: AgentReviseRequest):
+    """基于上一轮 session 的多轮修改规划接口。"""
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="message 不能为空")
+
+    previous_session = get_session(req.session_id)
+    if previous_session is None:
+        raise HTTPException(status_code=404, detail=f"Session 不存在: {req.session_id}")
+
+    user_id = previous_session.get("user_id", "user_001")
+    revised_message = build_revision_message(previous_session, req.message)
+    graph_result = await run_planning_graph(
+        user_id=user_id,
+        message=revised_message,
+    )
+    planner_output, errors, guardrail_failed, input_blocked = _graph_result_to_planner_output(graph_result)
+
+    session_id = ""
+    if not guardrail_failed and not input_blocked:
+        session = create_session(
+            user_id=user_id,
+            message=revised_message,
+            planner_output=planner_output,
+        )
+        session_id = session["session_id"]
+        _update_session_with_graph_context(session_id, graph_result, {
+            "parent_session_id": req.session_id,
+            "revision_message": req.message,
+            "previous_intent": previous_session.get("intent", {}),
+            "previous_tag_resolve_result": previous_session.get("tag_resolve_result", {}),
+        })
+        history = list(previous_session.get("revision_history", []))
+        history.append({
+            "from_session_id": req.session_id,
+            "to_session_id": session_id,
+            "message": req.message,
+        })
+        update_session(req.session_id, {"revision_history": history})
+
+    return AgentPlanResponse(
+        session_id=session_id,
+        user_id=user_id,
+        message=revised_message,
+        intent=planner_output.get("intent", {}),
+        plans=planner_output.get("plans", []),
+        tool_logs=planner_output.get("tool_logs", []),
+        errors=errors,
         input_safety_result=graph_result.get("input_safety_result", {}),
         rewrite_result=graph_result.get("rewrite_result", {}),
         reflection_result=graph_result.get("reflection_result", {}),

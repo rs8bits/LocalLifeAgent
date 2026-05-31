@@ -33,6 +33,21 @@ export async function confirmPlan(
   return resp.json();
 }
 
+export async function revisePlan(
+  sessionId: string,
+  message: string
+): Promise<PlanResponse> {
+  const resp = await fetch(`${API_BASE}/api/agent/revise`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, message }),
+  });
+  if (!resp.ok) {
+    throw new Error(`请求失败 (${resp.status}): ${await resp.text()}`);
+  }
+  return resp.json();
+}
+
 export async function getSession(sessionId: string): Promise<Record<string, unknown>> {
   const resp = await fetch(`${API_BASE}/api/agent/session/${sessionId}`);
   if (!resp.ok) {

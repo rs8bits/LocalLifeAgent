@@ -93,6 +93,51 @@ class TestAgentSession:
         assert resp.status_code == 404
 
 
+class TestAgentRevise:
+    """POST /api/agent/revise"""
+
+    def test_revise_updates_intent_and_stores_parent_context(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        first = client.post("/api/agent/plan", json={
+            "user_id": "user_001",
+            "message": "明天朋友早上到，帮我安排一下带他们逛逛",
+        })
+        assert first.status_code == 200
+        first_data = first.json()
+
+        revised = client.post("/api/agent/revise", json={
+            "session_id": first_data["session_id"],
+            "message": "我明天不带小孩，晚上想喝酒",
+        })
+        assert revised.status_code == 200
+        data = revised.json()
+
+        assert data["session_id"] != first_data["session_id"]
+        assert data["intent"]["party_type"] == "friends"
+        assert data["intent"].get("child_age") is None
+        assert "亲子" not in data["intent"].get("tags", [])
+        assert "bar" in data["intent"].get("drink_preferences", [])
+        assert any(
+            "domain=drink" in log["message"] and ("bar" in log["message"] or "精酿" in log["message"])
+            for log in data["tool_logs"]
+            if log["tool"] == "search_places"
+        )
+
+        session = client.get(f"/api/agent/session/{data['session_id']}").json()
+        assert session["parent_session_id"] == first_data["session_id"]
+        assert session["previous_intent"]
+        assert session["tag_resolve_result"]
+
+    def test_revise_nonexistent_session_returns_404(self):
+        resp = client.post("/api/agent/revise", json={
+            "session_id": "session_missing",
+            "message": "晚上想喝酒",
+        })
+        assert resp.status_code == 404
+
+
 class TestAgentConfirm:
     """POST /api/agent/confirm"""
 

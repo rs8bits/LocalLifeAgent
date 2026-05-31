@@ -212,6 +212,7 @@ async def run_planning_graph_stream(
 
     planner_output = {
         "intent": accumulated.get("intent", {}),
+        "tag_resolve_result": accumulated.get("tag_resolve_result", {}),
         "plans": plans,
         "tool_logs": accumulated.get("tool_logs", []),
         "errors": errors,
@@ -228,6 +229,7 @@ async def run_planning_graph_stream(
         )
         session_id = session["session_id"]
         update_session(session_id, {
+            "tag_resolve_result": accumulated.get("tag_resolve_result", {}),
             "reflection_result": accumulated.get("reflection_result", {}),
             "guardrail_result": accumulated.get("guardrail_result", {}),
             "input_safety_result": accumulated.get("input_safety_result", {}),

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { PlanResponse, ConfirmResponse, Plan, BookingResult, OrderResult } from "@/types/agent";
-import { planTrip, confirmPlan, planTripStream, confirmPlanStream } from "@/lib/api";
+import { planTrip, confirmPlan, revisePlan, planTripStream, confirmPlanStream } from "@/lib/api";
 import ToolLogList from "@/components/ToolLogList";
 import PlanCard from "@/components/PlanCard";
 import ExecutionResult from "@/components/ExecutionResult";
@@ -21,10 +21,12 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [revising, setRevising] = useState(false);
   const [result, setResult] = useState<PlanResponse | null>(null);
   const [confirmResult, setConfirmResult] = useState<ConfirmResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [revisionMessage, setRevisionMessage] = useState("");
 
   // 流式过程日志
   const [streamLogs, setStreamLogs] = useState<StreamLogItem[]>([]);
@@ -175,6 +177,29 @@ export default function Home() {
     }
   };
 
+  const handleRevise = async () => {
+    if (!result?.session_id || !revisionMessage.trim()) return;
+    setRevising(true);
+    setError(null);
+    setConfirmResult(null);
+    addStreamLog("revision_start", "正在根据修改建议重新规划...");
+
+    try {
+      const revised = await revisePlan(result.session_id, revisionMessage);
+      setResult(revised);
+      setRevisionMessage("");
+      addStreamLog("revision_done", `修改完成，生成 ${revised.plans.length} 个候选方案`);
+      if (revised.errors && revised.errors.length > 0) {
+        setError(revised.errors.join("; "));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "修改规划失败");
+      addStreamLog("revision_error", "修改规划失败");
+    } finally {
+      setRevising(false);
+    }
+  };
+
   const handleCopy = () => {
     if (confirmResult?.share_message) {
       navigator.clipboard.writeText(confirmResult.share_message).catch(() => {});
@@ -299,6 +324,26 @@ export default function Home() {
               </span>
             ))}
           </div>
+        </section>
+      )}
+
+      {result?.session_id && (
+        <section className="bg-white rounded-lg p-4 shadow-sm space-y-3">
+          <h3 className="font-semibold text-sm">继续修改方案</h3>
+          <textarea
+            value={revisionMessage}
+            onChange={(e) => setRevisionMessage(e.target.value)}
+            placeholder="例如：我明天不带小孩，晚上想喝酒"
+            rows={2}
+            className="w-full border rounded px-3 py-2 text-sm resize-none"
+          />
+          <button
+            onClick={handleRevise}
+            disabled={revising || !revisionMessage.trim()}
+            className="px-4 py-2 bg-indigo-600 text-white rounded font-medium hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+          >
+            {revising ? "修改中..." : "重新规划"}
+          </button>
         </section>
       )}
 

@@ -77,6 +77,22 @@ class TestRuleParseFriends:
         assert intent.party_type == "friends"
         # 朋友场景未指明人数时默认为 None
 
+    @pytest.mark.asyncio
+    async def test_revision_not_bringing_child_clears_child_context(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        memory = {"preferences": {"child_age": 5, "child_name": "小宝", "max_distance_km": 10}}
+
+        intent = await parse_intent(
+            "上一轮需求：明天朋友早上到，帮我安排一下带他们逛逛。用户本轮修改：我明天不带小孩，晚上想喝酒",
+            user_memory=memory,
+        )
+
+        assert intent.party_type == "friends"
+        assert intent.child_age is None
+        assert "亲子" not in intent.tags
+        assert "bar" in intent.drink_preferences
+
     def test_business_scene(self):
         msg = "晚上和客户吃饭，需要安静正式一点"
         intent = _rule_parse(msg)

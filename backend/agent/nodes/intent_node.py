@@ -16,9 +16,8 @@ async def intent_node(state: AgentState) -> AgentState:
             if "preferences" in user_profile
             else {"preferences": user_profile}
         )
-        # 使用 rewrite 后的消息（如果有），否则用原始消息
-        rewrite = state.get("rewrite_result", {})
-        effective_message = rewrite.get("rewritten_message") or state["user_message"]
+        # 意图里的同行人/否定约束以用户原话为准，避免 rewrite 将长期记忆误当成当次同行人。
+        effective_message = state["user_message"]
         intent = await parse_intent(
             message=effective_message,
             user_memory=user_memory,

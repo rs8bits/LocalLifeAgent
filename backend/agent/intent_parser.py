@@ -59,9 +59,23 @@ def _has_explicit_distance_preference(message: str) -> bool:
     return bool(DISTANCE_RE.search(message)) or _has_any(message, DISTANCE_KW)
 
 
+def _has_negated_child_context(message: str) -> bool:
+    patterns = [
+        r"不带(小孩|孩子|儿童|宝宝|娃)",
+        r"没带(小孩|孩子|儿童|宝宝|娃)",
+        r"没有(小孩|孩子|儿童|宝宝|娃)",
+        r"无(小孩|孩子|儿童|宝宝|娃)",
+        r"不.*亲子",
+        r"不是亲子",
+        r"不要亲子",
+    ]
+    return any(re.search(pattern, message) for pattern in patterns)
+
+
 def _infer_party_type_and_scene(message: str) -> tuple[str, str]:
     """推断真实同行人画像，并让兼容字段 scene 与 party_type 保持一致。"""
-    has_child = _has_any(message, CHILD_KW)
+    negated_child = _has_negated_child_context(message)
+    has_child = _has_any(message, CHILD_KW) and not negated_child
     has_spouse = _has_any(message, SPOUSE_KW)
     has_elder = _has_any(message, ELDER_KW)
     has_relative = _has_any(message, RELATIVE_KW)
@@ -115,6 +129,8 @@ def _extract_intent_tags(message: str, party_type: str) -> list[str]:
     for keywords, tag in TAG_RULES:
         if _has_any(message, keywords):
             _append_unique(tags, tag)
+    if _has_negated_child_context(message):
+        tags = [tag for tag in tags if tag != "亲子"]
 
     defaults_by_party = {
         "family_with_child": ["亲子"],
@@ -215,15 +231,16 @@ def _rule_parse(message: str) -> Intent:
 
     # 儿童年龄
     child_age = None
-    age_match = re.search(r"孩子\s*(\d+)\s*岁", message)
-    if not age_match:
-        age_match = re.search(r"(\d+)\s*岁.*孩", message)
-    if not age_match:
-        age_match = re.search(r"宝宝\s*(\d+)\s*岁", message)
-    if not age_match:
-        age_match = re.search(r"(\d+)\s*岁\s*宝宝", message)
-    if age_match:
-        child_age = int(age_match.group(1))
+    if not _has_negated_child_context(message):
+        age_match = re.search(r"孩子\s*(\d+)\s*岁", message)
+        if not age_match:
+            age_match = re.search(r"(\d+)\s*岁.*孩", message)
+        if not age_match:
+            age_match = re.search(r"宝宝\s*(\d+)\s*岁", message)
+        if not age_match:
+            age_match = re.search(r"(\d+)\s*岁\s*宝宝", message)
+        if age_match:
+            child_age = int(age_match.group(1))
 
     # 饮食偏好
     food_preferences = []
@@ -345,7 +362,7 @@ def _build_companions(message: str, party_type: str, child_age: Optional[int]) -
         companions.append({"role": "spouse", "diet_preference": "减脂" if "减肥" in message else None})
     if "老公" in message or "丈夫" in message:
         companions.append({"role": "spouse"})
-    if _has_any(message, CHILD_KW):
+    if _has_any(message, CHILD_KW) and not _has_negated_child_context(message):
         companions.append({"role": "child", "age": child_age})
     if _has_any(message, ELDER_KW):
         role = "parent" if any(kw in message for kw in ["爸妈", "父母", "爸爸", "妈妈"]) else "elder"
@@ -470,6 +487,7 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
         except Exception:
             pass  # LLM 部分字段解析失败，保留规则结果
 
+    _apply_negative_child_override(intent, message)
     _normalize_time_fields(intent)
     _normalize_party_fields(intent)
 
@@ -493,8 +511,10 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
                 intent.companions.append({"role": "spouse", "diet_preference": prefs["spouse_diet"]})
 
     _normalize_preferences(intent)
+    _apply_negative_child_override(intent, message)
     _normalize_time_fields(intent)
     _normalize_party_fields(intent)
+    _apply_negative_child_override(intent, message)
     return intent
 
 
@@ -568,6 +588,23 @@ def _normalize_party_fields(intent: Intent) -> None:
         _append_unique(intent.tags, "独处")
     if party == "family_with_child":
         _append_unique(intent.tags, "亲子")
+
+
+def _apply_negative_child_override(intent: Intent, message: str) -> None:
+    """处理“这次不带小孩/不是亲子”这类显式纠偏。"""
+    if not _has_negated_child_context(message):
+        return
+    intent.child_age = None
+    intent.companions = [c for c in intent.companions if c.get("role") != "child"]
+    intent.tags = [tag for tag in intent.tags if tag != "亲子"]
+    if intent.party_type == "family_with_child":
+        if _has_any(message, FRIENDS_KW) or _has_any(message, COLLEAGUE_KW):
+            intent.party_type = "friends"
+        elif _has_any(message, COUPLE_KW) or _has_any(message, SPOUSE_KW):
+            intent.party_type = "couple"
+        else:
+            intent.party_type = "general"
+        intent.scene = intent.party_type
 
 
 def _merge_memory_tags(intent: Intent, prefs: dict) -> None:
