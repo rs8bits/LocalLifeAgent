@@ -1,7 +1,13 @@
 """Planner 测试"""
 
 import pytest
-from backend.agent.planner import plan_for_message
+from backend.agent.planner import (
+    _build_place_search_params,
+    _run_place_search_with_relaxation,
+    _run_tool,
+    plan_for_message,
+)
+from backend.agent.schemas import Intent
 from backend.llm.deepseek_client import LLMResult
 
 
@@ -163,6 +169,49 @@ class TestPlannerPartyTypes:
         timeline_types = [item["type"] for item in first["timeline"]]
         assert "activity" in timeline_types
         assert "restaurant" in timeline_types
+
+    def test_intent_tags_are_merged_into_recall_tags(self):
+        intent = Intent(
+            party_type="family_elder",
+            tags=["父母", "sightseeing", "游玩"],
+            activity_preferences=["购物"],
+            needs_less_walking=True,
+        )
+        params = _build_place_search_params(
+            domain_name="play",
+            spec={"domain": "play", "categories": ["展览"], "tags": ["长辈友好"], "sub_categories": []},
+            party_type=intent.party_type,
+            radius=2.0,
+            people=3,
+            queue_limit=60,
+            child_age=None,
+            indoor_pref=True,
+            intent=intent,
+        )
+        tags = params["tags_any"]
+        assert "父母" in tags
+        assert "sightseeing" in tags
+        assert "历史文化" in tags
+        assert "商场" in tags
+        assert "少走路" in tags
+
+    @pytest.mark.asyncio
+    async def test_relaxed_search_expands_radius_before_dropping_tags(self):
+        tool_logs = []
+        params = {
+            "domain": "play",
+            "party_type": "family_elder",
+            "radius_km": 2.0,
+            "indoor": True,
+            "tags_any": ["长辈友好", "少走路", "安静", "历史文化", "展览"],
+        }
+        result = await _run_place_search_with_relaxation(_run_tool, tool_logs, "play", params)
+
+        assert result.status == "ok"
+        assert any(item["id"] == "act_017" for item in result.data)
+        assert "radius_km=10.0" in tool_logs[-1]["message"]
+        assert "tags_any=" in tool_logs[-1]["message"], "成功召回应保留标签 OR 条件"
+        assert "放宽标签/类目" not in tool_logs[-1]["message"]
 
     @pytest.mark.asyncio
     async def test_couple_uses_couple_party_type(self, monkeypatch):

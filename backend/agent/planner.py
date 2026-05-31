@@ -69,6 +69,7 @@ async def plan_for_message(
                 queue_limit=queue_limit,
                 child_age=intent.child_age if _has_child_context(intent) else None,
                 indoor_pref=indoor_pref,
+                intent=intent,
             )
             result = await _run_place_search_with_relaxation(_run_tool, tool_logs, domain_name, params)
 
@@ -224,6 +225,7 @@ async def _run_place_search_with_relaxation(
         retry = await runner("search_places", tool_logs, **relaxed_params)
         if _has_tool_data(retry):
             retry.error = _join_warnings(retry.error, reason)
+            _annotate_latest_tool_log(tool_logs, reason)
             return retry
     return result
 
@@ -232,29 +234,109 @@ def _has_tool_data(result: Any) -> bool:
     return bool(result and result.status == "ok" and result.data)
 
 
+def _annotate_latest_tool_log(tool_logs: list[dict], reason: str) -> None:
+    if not tool_logs:
+        return
+    latest = tool_logs[-1]
+    latest["detail"] = _join_warnings(latest.get("detail"), reason)
+    latest["message"] = f"{latest.get('message', '')} | relaxed={reason}"
+
+
 def _relaxed_place_search_params(
     domain_name: str,
     params: dict[str, Any],
 ) -> list[tuple[dict[str, Any], str]]:
     attempts: list[tuple[dict[str, Any], str]] = []
-    soft_keys = {"tag", "tags_any", "tags_all", "category", "categories_any", "sub_category"}
-    without_tags = {k: v for k, v in params.items() if k not in soft_keys}
-    if without_tags != params:
-        attempts.append((without_tags, "首次搜索无结果，已放宽标签/类目条件"))
+    seen: set[tuple] = set()
+    base_normalized = _clean_search_params(params)
+
+    def add(candidate: dict[str, Any], reason: str) -> None:
+        normalized = _clean_search_params(candidate)
+        signature = tuple(sorted((k, _hashable_value(v)) for k, v in normalized.items()))
+        if signature not in seen and normalized != base_normalized:
+            seen.add(signature)
+            attempts.append((normalized, reason))
+
+    def with_radius_variants(base: dict[str, Any], reason: str) -> None:
+        for radius in _expanded_radius_values(base.get("radius_km")):
+            candidate = dict(base)
+            candidate["radius_km"] = radius
+            add(candidate, f"{reason}，扩大搜索半径至{radius:g}km")
+
+    # 先保留 tags_any，优先放宽更容易误伤召回的软条件。
+    with_radius_variants(params, "首次搜索无结果")
 
     if domain_name == "play" and params.get("indoor") is not None:
-        without_indoor = dict(without_tags)
+        without_indoor = dict(params)
         without_indoor.pop("indoor", None)
-        if without_indoor != without_tags:
-            attempts.append((without_indoor, "首次搜索无结果，已放宽室内外条件"))
+        add(without_indoor, "首次搜索无结果，已放宽室内外条件")
+        with_radius_variants(without_indoor, "首次搜索无结果，已放宽室内外条件")
 
-    # 部分泛化行程的 mock 数据没有细分 party_types，最后保留距离/人数等硬约束再放宽画像。
+    if domain_name == "eat" and params.get("max_queue_minutes") is not None:
+        without_queue = dict(params)
+        without_queue.pop("max_queue_minutes", None)
+        add(without_queue, "首次搜索无结果，已放宽排队时长条件")
+        with_radius_variants(without_queue, "首次搜索无结果，已放宽排队时长条件")
+
+    # 部分泛化行程的 mock 数据没有细分 party_types，画像应晚于半径/天气偏好再放宽。
     if params.get("party_type"):
-        without_party = dict(without_tags)
+        without_party = dict(params)
         without_party.pop("party_type", None)
-        if without_party != without_tags:
-            attempts.append((without_party, "首次搜索无结果，已放宽同行人画像条件"))
+        add(without_party, "首次搜索无结果，已放宽同行人画像条件")
+        with_radius_variants(without_party, "首次搜索无结果，已放宽同行人画像条件")
+
+        if domain_name == "play" and without_party.get("indoor") is not None:
+            without_party_indoor = dict(without_party)
+            without_party_indoor.pop("indoor", None)
+            add(without_party_indoor, "首次搜索无结果，已放宽同行人画像与室内外条件")
+            with_radius_variants(without_party_indoor, "首次搜索无结果，已放宽同行人画像与室内外条件")
+
+        if domain_name == "eat" and without_party.get("max_queue_minutes") is not None:
+            without_party_queue = dict(without_party)
+            without_party_queue.pop("max_queue_minutes", None)
+            add(without_party_queue, "首次搜索无结果，已放宽同行人画像与排队条件")
+            with_radius_variants(without_party_queue, "首次搜索无结果，已放宽同行人画像与排队条件")
+
+    # tags_any 是召回线索，最后才整体移除，避免一开始就丢掉意图标签。
+    soft_keys = {"tag", "tags_any", "tags_all", "category", "categories_any", "sub_category"}
+    without_tags = {k: v for k, v in params.items() if k not in soft_keys}
+    add(without_tags, "首次搜索无结果，已放宽标签/类目条件")
+    with_radius_variants(without_tags, "首次搜索无结果，已放宽标签/类目条件")
+
+    if domain_name == "play" and without_tags.get("indoor") is not None:
+        without_tags_indoor = dict(without_tags)
+        without_tags_indoor.pop("indoor", None)
+        add(without_tags_indoor, "首次搜索无结果，已放宽标签/类目与室内外条件")
+        with_radius_variants(without_tags_indoor, "首次搜索无结果，已放宽标签/类目与室内外条件")
+
+    if without_tags.get("party_type"):
+        without_tags_party = dict(without_tags)
+        without_tags_party.pop("party_type", None)
+        add(without_tags_party, "首次搜索无结果，已放宽标签/类目与同行人画像条件")
+        with_radius_variants(without_tags_party, "首次搜索无结果，已放宽标签/类目与同行人画像条件")
     return attempts
+
+
+def _hashable_value(value: Any) -> Any:
+    if isinstance(value, list):
+        return tuple(value)
+    if isinstance(value, dict):
+        return tuple(sorted(value.items()))
+    return value
+
+
+def _clean_search_params(params: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in params.items() if v is not None and v != []}
+
+
+def _expanded_radius_values(current: Any) -> list[float]:
+    if current is None:
+        return []
+    try:
+        current_float = float(current)
+    except (TypeError, ValueError):
+        return []
+    return [radius for radius in (5.0, 10.0, 15.0, 20.0) if radius > current_float]
 
 
 def _join_warnings(*warnings: str | None) -> str | None:
@@ -309,13 +391,80 @@ def _domain_spec_map(tag_result: dict) -> dict[str, dict]:
     return result
 
 
-def _apply_domain_spec_filters(params: dict[str, Any], spec: dict) -> None:
+def _apply_domain_spec_filters(params: dict[str, Any], spec: dict, intent: Intent | None = None) -> None:
     categories = spec.get("categories") or []
     tags = spec.get("tags") or []
     sub_categories = spec.get("sub_categories") or []
+    domain_name = spec.get("domain", "")
     tag_signals = [*categories, *tags, *sub_categories]
+    if intent is not None:
+        tag_signals.extend(_intent_recall_tags(domain_name, intent))
     if tag_signals:
         params["tags_any"] = _unique_values(tag_signals)
+
+
+_COMMON_INTENT_TAG_ALIASES = {
+    "爸妈": ["长辈友好", "少走路", "安静"],
+    "父母": ["长辈友好", "少走路", "安静"],
+    "爸爸": ["长辈友好", "少走路", "安静"],
+    "妈妈": ["长辈友好", "少走路", "安静"],
+    "老人": ["长辈友好", "少走路", "安静"],
+    "长辈": ["长辈友好", "少走路", "安静"],
+    "sightseeing": ["历史文化", "散步", "展览"],
+    "观光": ["历史文化", "散步", "展览"],
+}
+
+_DOMAIN_INTENT_TAG_ALIASES = {
+    "play": {
+        "游玩": ["散步", "展览", "公园", "商场", "历史文化"],
+        "逛逛": ["散步", "公园", "商场", "历史文化"],
+        "逛街": ["商场", "购物"],
+        "购物": ["商场", "购物"],
+        "来我的城市": ["散步", "历史文化", "展览"],
+        "带他们逛": ["散步", "历史文化", "展览"],
+    },
+    "eat": {
+        "清淡": ["清淡", "健康", "中餐"],
+        "健康": ["健康", "健康轻食", "低卡"],
+        "低卡": ["低卡", "轻食", "健康轻食"],
+        "聚餐": ["聚会", "中餐"],
+    },
+    "drink": {
+        "喝茶": ["茶饮", "安静"],
+        "茶": ["茶饮", "安静"],
+        "休息": ["安静", "茶饮"],
+    },
+}
+
+
+def _intent_recall_tags(domain_name: str, intent: Intent) -> list[str]:
+    signals: list[str] = []
+    raw_values = list(intent.tags)
+    if domain_name == "play":
+        raw_values.extend(intent.activity_preferences)
+    elif domain_name == "eat":
+        raw_values.extend(intent.food_preferences)
+    elif domain_name == "drink":
+        raw_values.extend(intent.drink_preferences)
+
+    if intent.party_type == "family_elder":
+        raw_values.extend(["长辈友好", "少走路", "安静"])
+    if intent.needs_less_walking:
+        raw_values.extend(["少走路", "长辈友好"])
+    if intent.needs_quiet:
+        raw_values.append("安静")
+    if intent.needs_photo_spot:
+        raw_values.append("拍照")
+    if domain_name == "eat" and intent.needs_low_calorie:
+        raw_values.extend(["清淡", "健康", "低卡", "轻食"])
+
+    for value in raw_values:
+        if not value:
+            continue
+        signals.append(value)
+        signals.extend(_COMMON_INTENT_TAG_ALIASES.get(value, []))
+        signals.extend(_DOMAIN_INTENT_TAG_ALIASES.get(domain_name, {}).get(value, []))
+    return signals
 
 
 def _unique_values(values: list[str]) -> list[str]:
@@ -338,6 +487,7 @@ def _build_place_search_params(
     queue_limit: int,
     child_age: int | None,
     indoor_pref: bool | None,
+    intent: Intent | None = None,
 ) -> dict[str, Any]:
     params: dict[str, Any] = {
         "domain": domain_name,
@@ -345,7 +495,7 @@ def _build_place_search_params(
     }
     if party_type != "general":
         params["party_type"] = party_type
-    _apply_domain_spec_filters(params, spec)
+    _apply_domain_spec_filters(params, spec, intent)
     if domain_name == "play":
         params["child_age"] = child_age
         params["indoor"] = indoor_pref

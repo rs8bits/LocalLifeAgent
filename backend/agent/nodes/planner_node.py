@@ -108,6 +108,7 @@ async def planner_node(state: AgentState) -> AgentState:
                 queue_limit=queue_limit,
                 child_age=intent.child_age if _has_child_context(intent) else None,
                 indoor_pref=indoor_pref,
+                intent=intent,
             )
             result = await _run_place_search_with_relaxation(
                 _run_tool, tool_logs, domain_name, params
