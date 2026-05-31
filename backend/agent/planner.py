@@ -265,11 +265,14 @@ def _join_warnings(*warnings: str | None) -> str | None:
 
 
 def _format_tool_query(params: dict[str, Any]) -> str:
-    keys = ["domain", "party_type", "category", "categories_any", "sub_category", "tags_any", "tags_all"]
+    keys = [
+        "domain", "party_type", "radius_km", "indoor", "available", "max_queue_minutes",
+        "category", "categories_any", "sub_category", "tags_any", "tags_all",
+    ]
     parts = []
     for key in keys:
         value = params.get(key)
-        if value:
+        if value is not None and value != "" and value != []:
             parts.append(f"{key}={value}")
     return ", ".join(parts)
 

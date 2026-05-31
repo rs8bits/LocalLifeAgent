@@ -198,6 +198,43 @@ class TestIntentPreferenceNormalization:
         assert intent.food_preferences == ["健康"]
         assert intent.needs_low_calorie is True
 
+    @pytest.mark.asyncio
+    async def test_llm_radius_without_distance_hint_does_not_override(self, monkeypatch):
+        async def fake_llm_parse(message: str):
+            return {
+                "scene": "family_elder",
+                "party_type": "family_elder",
+                "radius_km": 1.0,
+                "distance_preference": "nearby",
+            }
+
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", True)
+        monkeypatch.setattr("backend.agent.intent_parser._llm_parse", fake_llm_parse)
+
+        memory = {"preferences": {"max_distance_km": 10}}
+        intent = await parse_intent("明天爸妈来我的城市，我想带他们逛逛", user_memory=memory)
+
+        assert intent.party_type == "family_elder"
+        assert intent.radius_km == 10.0
+
+    @pytest.mark.asyncio
+    async def test_llm_radius_with_distance_hint_can_override(self, monkeypatch):
+        async def fake_llm_parse(message: str):
+            return {
+                "scene": "family_elder",
+                "party_type": "family_elder",
+                "radius_km": 2.0,
+                "distance_preference": "nearby",
+            }
+
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", True)
+        monkeypatch.setattr("backend.agent.intent_parser._llm_parse", fake_llm_parse)
+
+        memory = {"preferences": {"max_distance_km": 10}}
+        intent = await parse_intent("周末想带爸妈在附近吃点清淡的", user_memory=memory)
+
+        assert intent.radius_km == 2.0
+
 
 class TestUserMemoryMerge:
     """用户记忆合并"""
