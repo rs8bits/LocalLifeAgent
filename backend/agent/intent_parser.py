@@ -5,6 +5,12 @@ import json
 from typing import Optional
 
 from backend.agent.schemas import Intent
+from backend.agent.time_utils import (
+    detect_time_window,
+    extract_start_time,
+    infer_time_window_from_clock,
+    normalize_time_window,
+)
 from backend.llm.deepseek_client import deepseek_client, LLMResult
 
 
@@ -77,6 +83,23 @@ def _append_unique(values: list[str], value: str) -> None:
         values.append(value)
 
 
+def _chinese_digit_to_int(value: str | None) -> int | None:
+    mapping = {
+        "一": 1,
+        "二": 2,
+        "两": 2,
+        "三": 3,
+        "四": 4,
+        "五": 5,
+        "六": 6,
+        "七": 7,
+        "八": 8,
+        "九": 9,
+        "十": 10,
+    }
+    return mapping.get(value or "")
+
+
 def _extract_intent_tags(message: str, party_type: str) -> list[str]:
     tags: list[str] = []
     for keywords, tag in TAG_RULES:
@@ -116,13 +139,10 @@ def _rule_parse(message: str) -> Intent:
     party_type, scene = _infer_party_type_and_scene(message)
 
     # 时间窗口
-    time_window = "afternoon"
-    if any(kw in message for kw in ["傍晚", "晚上", "今晚", "晚餐", "晚饭", "夜间"]):
-        time_window = "evening"
-    elif any(kw in message for kw in ["上午", "早上"]):
-        time_window = "morning"
-    elif "中午" in message:
-        time_window = "afternoon"
+    time_window = detect_time_window(message) or "afternoon"
+    start_time, inferred_window = extract_start_time(message)
+    if start_time and inferred_window:
+        time_window = inferred_window
 
     # 日期
     date = "today"
@@ -131,9 +151,13 @@ def _rule_parse(message: str) -> Intent:
 
     # 时长
     duration_hours = None
-    dur_match = re.search(r"(\d+)\s*个小?时", message)
+    dur_match = re.search(r"(\d+)\s*个小?时|(\d+)\s*小时", message)
     if dur_match:
-        duration_hours = int(dur_match.group(1))
+        duration_hours = int(dur_match.group(1) or dur_match.group(2))
+    else:
+        cn_dur_match = re.search(r"([一二两三四五六七八九十])\s*个小?时|([一二两三四五六七八九十])\s*小时", message)
+        if cn_dur_match:
+            duration_hours = _chinese_digit_to_int(cn_dur_match.group(1) or cn_dur_match.group(2))
 
     # 人数
     people_count = None
@@ -208,6 +232,10 @@ def _rule_parse(message: str) -> Intent:
         activity_preferences.append("拍照")
     if any(kw in message for kw in ["户外", "公园", "散步"]):
         activity_preferences.append("户外")
+    if any(kw in message for kw in ["逛逛", "逛一逛", "走走", "游览", "参观", "citywalk", "Citywalk", "来我的城市", "带他们逛"]):
+        activity_preferences.append("散步")
+    if party_type == "family_elder" and any(kw in message for kw in ["逛逛", "走走", "城市", "参观", "游览", "爸妈", "父母"]):
+        activity_preferences.append("安静")
     if any(kw in message for kw in ["KTV", "唱歌", "密室", "撸猫", "电竞", "蹦床", "LiveHouse", "livehouse", "演出"]):
         activity_preferences.append("社交")
     if any(kw in message for kw in ["电影", "看电影", "影院", "电影院"]):
@@ -280,6 +308,7 @@ def _rule_parse(message: str) -> Intent:
         tags=tags,
         date=date,
         time_window=time_window,
+        start_time=start_time,
         duration_hours=duration_hours,
         people_count=people_count,
         companions=_build_companions(message, party_type, child_age),
@@ -332,7 +361,8 @@ INTENT_SYSTEM_PROMPT = """你是一个意图解析器。根据用户输入，提
   "party_type": "family_with_child" | "family_elder" | "family" | "friends" | "couple" | "solo" | "business" | "general",
   "tags": [string],
   "date": "today" | "tomorrow" | 具体日期,
-  "time_window": "morning" | "afternoon" | "evening" | "unknown",
+  "time_window": "morning" | "lunch" | "afternoon" | "dinner" | "evening" | "night" | "unknown",
+  "start_time": "HH:MM" | null,
   "duration_hours": int | null,
   "people_count": int | null,
   "companions": [{"role": "...", "age": null | int, "diet_preference": null | string}],
@@ -358,6 +388,8 @@ INTENT_SYSTEM_PROMPT = """你是一个意图解析器。根据用户输入，提
 - needs_low_calorie: 提到减肥/减脂/清淡/低卡 → true
 - needs_quiet: 提到安静/包间/私密/正式 → true
 - needs_less_walking: 提到爸妈/老人/少走路/别太累/腿脚不便 → true
+- time_window: 中午/午饭/午餐 → lunch；晚饭/晚餐/晚上吃饭 → dinner；晚上活动 → evening；宵夜/深夜 → night
+- start_time: 提取精确开始时间，如"下午三点"→"15:00"，"15:30"→"15:30"，"两点半"默认按下午理解为"14:30"
 - drink_preferences: 提到咖啡/奶茶 → ["coffee_tea"]，精酿/啤酒/酒吧 → ["bar"]
 - delivery_preferences: 提到外卖/闪送/蛋糕/鲜花/礼物/送到餐厅 → 提取对应商品或配送偏好
 - avoid_queue_minutes: 默认为30，提到不想排队→10，网红/排队久→60
@@ -401,7 +433,7 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
     if intent_dict:
         # LLM 结果补充（不覆盖规则推导的基本字段，但信任 LLM 的正确解析）
         try:
-            for key in ["party_type", "date", "time_window", "duration_hours",
+            for key in ["party_type", "date", "time_window", "start_time", "duration_hours",
                         "people_count", "radius_km", "distance_preference",
                         "budget_per_person", "child_age", "needs_low_calorie",
                         "needs_photo_spot", "needs_quiet", "needs_less_walking",
@@ -426,6 +458,7 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
         except Exception:
             pass  # LLM 部分字段解析失败，保留规则结果
 
+    _normalize_time_fields(intent)
     _normalize_party_fields(intent)
 
     # 合并用户记忆（用户输入优先，记忆仅作为默认值）
@@ -448,8 +481,25 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
                 intent.companions.append({"role": "spouse", "diet_preference": prefs["spouse_diet"]})
 
     _normalize_preferences(intent)
+    _normalize_time_fields(intent)
     _normalize_party_fields(intent)
     return intent
+
+
+def _normalize_time_fields(intent: Intent) -> None:
+    """统一 LLM/规则输出的时间段和精确时间。"""
+    intent.time_window = normalize_time_window(intent.time_window, default="afternoon")
+    if intent.start_time:
+        if not re.fullmatch(r"[0-2]?\d:[0-5]\d", intent.start_time):
+            intent.start_time = None
+            return
+        hour, minute = [int(part) for part in intent.start_time.split(":", 1)]
+        if hour > 23:
+            intent.start_time = None
+            return
+        intent.start_time = f"{hour:02d}:{minute:02d}"
+        if intent.time_window == "unknown":
+            intent.time_window = infer_time_window_from_clock(intent.start_time)
 
 
 def _normalize_party_fields(intent: Intent) -> None:

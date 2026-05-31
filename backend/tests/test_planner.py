@@ -145,6 +145,26 @@ class TestPlannerPartyTypes:
             assert plan.get("party_type") == "family_elder"
 
     @pytest.mark.asyncio
+    async def test_parent_city_visit_generates_full_itinerary(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="明天爸妈来我的城市，我想带他们逛逛，帮我安排一下",
+        )
+        assert result["errors"] == []
+        assert result["intent"]["party_type"] == "family_elder"
+        assert result["intent"]["date"] == "tomorrow"
+        assert result["plans"], "长辈来访应生成完整行程"
+        first = result["plans"][0]
+        assert first.get("activity"), "不应只返回吃饭项目"
+        assert first.get("restaurant")
+        assert first.get("drink")
+        timeline_types = [item["type"] for item in first["timeline"]]
+        assert "activity" in timeline_types
+        assert "restaurant" in timeline_types
+
+    @pytest.mark.asyncio
     async def test_couple_uses_couple_party_type(self, monkeypatch):
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)

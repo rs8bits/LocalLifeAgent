@@ -110,6 +110,22 @@ class TestRuleParseGeneral:
         intent = _rule_parse(msg)
         assert intent.time_window == "morning"
 
+    def test_lunch_time_window(self):
+        msg = "中午一个人想吃点清淡的"
+        intent = _rule_parse(msg)
+        assert intent.time_window == "lunch"
+
+    def test_precise_afternoon_start_time(self):
+        msg = "明天下午三点带爸妈逛逛"
+        intent = _rule_parse(msg)
+        assert intent.time_window == "afternoon"
+        assert intent.start_time == "15:00"
+
+    def test_ambiguous_half_hour_defaults_to_afternoon(self):
+        msg = "明天两点半带爸妈去参观展览"
+        intent = _rule_parse(msg)
+        assert intent.start_time == "14:30"
+
     def test_duration(self):
         msg = "想玩3个小时"
         intent = _rule_parse(msg)

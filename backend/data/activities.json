@@ -1143,5 +1143,158 @@
       "restroom": true
     },
     "domain": "play"
+  },
+  {
+    "id": "act_017",
+    "name": "国博经典展厅慢逛",
+    "category": "展览",
+    "area": "国贸商圈",
+    "address": "东城区东长安街16号",
+    "lat": 39.9051,
+    "lng": 116.3976,
+    "distance_km": 5.4,
+    "avg_price": 0,
+    "tags": [
+      "室内",
+      "历史文化",
+      "安静",
+      "长辈友好",
+      "少走路",
+      "艺术",
+      "好停车"
+    ],
+    "party_types": [
+      "family_elder",
+      "family",
+      "business",
+      "solo"
+    ],
+    "scene": "family_elder",
+    "indoor": true,
+    "suitable_age_min": 8,
+    "suitable_age_max": 99,
+    "child_friendly": false,
+    "has_nursing_room": false,
+    "has_kids_meal": false,
+    "queue_minutes": 5,
+    "available_slots": [
+      "09:30",
+      "10:30",
+      "13:30",
+      "15:00"
+    ],
+    "bookable": true,
+    "risk": "需提前实名预约，闭馆前1小时停止入场",
+    "description": "适合带爸妈慢慢看的历史文化展厅，室内动线平缓，附近停车和打车都方便",
+    "poi_type": "activity",
+    "meituan_poi_id": "mt_act_017",
+    "city": "北京",
+    "district": "东城区",
+    "suitable_scenes": [
+      "family_elder",
+      "family",
+      "business",
+      "solo",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "09:00-17:00",
+    "rating": 4.9,
+    "review_count": 9360,
+    "monthly_sales": 0,
+    "popularity_score": 93,
+    "recommended_duration_min": 90,
+    "stock_remaining": 60,
+    "booking_required": true,
+    "reservation_notice": "需提前预约入馆时段，建议携带身份证件",
+    "peak_hours": [
+      "10:00-12:00",
+      "14:00-16:00"
+    ],
+    "refund_policy": "免费预约，无费用退款",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": true,
+      "nursing_room": false,
+      "stroller_friendly": true,
+      "kids_meal": false,
+      "restroom": true
+    },
+    "domain": "play"
+  },
+  {
+    "id": "act_018",
+    "name": "亮马河滨水轻松散步",
+    "category": "公园",
+    "area": "亮马河商圈",
+    "address": "朝阳区亮马河畔",
+    "lat": 39.9468,
+    "lng": 116.4704,
+    "distance_km": 3.6,
+    "avg_price": 0,
+    "tags": [
+      "户外",
+      "散步",
+      "自然",
+      "长辈友好",
+      "少走路",
+      "安静",
+      "好停车",
+      "拍照"
+    ],
+    "party_types": [
+      "family_elder",
+      "family",
+      "couple",
+      "solo"
+    ],
+    "scene": "family_elder",
+    "indoor": false,
+    "suitable_age_min": 0,
+    "suitable_age_max": 99,
+    "child_friendly": true,
+    "has_nursing_room": false,
+    "has_kids_meal": false,
+    "queue_minutes": 0,
+    "available_slots": [],
+    "bookable": false,
+    "risk": "户外步道受天气影响，雨天建议改为室内展馆",
+    "description": "平缓滨水步道，适合带父母饭前饭后散步看城市夜景，沿线休息座椅较多",
+    "poi_type": "activity",
+    "meituan_poi_id": "mt_act_018",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "family_elder",
+      "family",
+      "couple",
+      "solo",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "06:00-22:00",
+    "rating": 4.7,
+    "review_count": 2860,
+    "monthly_sales": 0,
+    "popularity_score": 84,
+    "recommended_duration_min": 75,
+    "stock_remaining": null,
+    "booking_required": false,
+    "reservation_notice": "无需在线预约或暂不支持预约",
+    "peak_hours": [
+      "16:00-19:00"
+    ],
+    "refund_policy": "免费开放，无需购买",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": true,
+      "nursing_room": false,
+      "stroller_friendly": true,
+      "kids_meal": false,
+      "restroom": true
+    },
+    "domain": "play"
   }
 ]

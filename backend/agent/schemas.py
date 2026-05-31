@@ -21,7 +21,8 @@ class Intent(BaseModel):
     # memory_tags 来自用户长期记忆，只用于排序/打分，不参与搜索硬过滤。
     memory_tags: list[str] = Field(default_factory=list)
     date: str = "today"
-    time_window: str = "afternoon"  # "afternoon" | "evening" | "unknown"
+    time_window: str = "afternoon"  # morning | lunch | afternoon | dinner | evening | night | unknown
+    start_time: Optional[str] = None  # 精确开始时间，HH:MM
     duration_hours: Optional[int] = None
     people_count: Optional[int] = None
     companions: list[dict[str, Any]] = Field(default_factory=list)

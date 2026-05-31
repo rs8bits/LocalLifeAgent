@@ -374,12 +374,17 @@
       "仪式感",
       "高端",
       "安静",
-      "商务"
+      "商务",
+      "长辈友好",
+      "少走路",
+      "好停车"
     ],
     "party_types": [
       "couple",
       "business",
-      "solo"
+      "solo",
+      "family_elder",
+      "family"
     ],
     "scene": "couple",
     "indoor": true,
@@ -392,7 +397,7 @@
     ],
     "bookable": true,
     "risk": null,
-    "description": "酒店大堂茶廊，环境安静，适合约会收尾或商务聊天",
+    "description": "酒店大堂茶廊，环境安静，适合约会收尾、商务聊天，也适合带长辈短暂停留喝茶",
     "poi_type": "drink",
     "meituan_poi_id": "mt_drink_007",
     "city": "北京",
@@ -401,6 +406,8 @@
       "couple",
       "business",
       "solo",
+      "family_elder",
+      "family",
       "general"
     ],
     "source": "mock_meituan_local_life",

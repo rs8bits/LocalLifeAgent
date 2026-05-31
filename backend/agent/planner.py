@@ -1,5 +1,6 @@
 """Planner - 标签对齐 → 场所搜索 → 方案组合"""
 
+from datetime import datetime
 from typing import Any, Optional
 
 from backend.agent.schemas import Intent, PlannerOutput
@@ -7,6 +8,7 @@ from backend.agent.intent_parser import parse_intent
 from backend.agent.tag_resolver import resolve_domain_tags
 from backend.agent.plan_composer import compose_plan_specs_with_llm
 from backend.agent.scorer import score_plan
+from backend.agent.time_utils import infer_time_window_from_clock
 from backend.tools.registry import get_tool
 from backend.mock_api.storage import read_json
 
@@ -531,20 +533,49 @@ def _drink_key(intent: Intent):
 # 时间感知方案构建
 # ═══════════════════════════════════════════════════════════════
 
-def _resolve_time_constraints(intent: Intent) -> tuple[str, int]:
-    """根据意图确定开始时间和可用分钟数"""
+def _resolve_time_constraints(intent: Intent) -> tuple[str, int, str]:
+    """根据意图确定开始时间、可用分钟数和实际排期时间段。"""
     window_starts = {
         "morning": "09:00",
-        "afternoon": "13:00",
-        "evening": "17:00",
+        "lunch": "11:30",
+        "afternoon": "13:30",
+        "dinner": "17:30",
+        "evening": "18:30",
+        "night": "20:30",
         "unknown": "14:00",
     }
-    start = window_starts.get(intent.time_window, "14:00")
+    start = intent.start_time or window_starts.get(intent.time_window, "14:00")
+    start = _adjust_today_start_time(intent, start)
+    effective_window = infer_time_window_from_clock(start)
     default_hours = {
-        "morning": 3, "afternoon": 6, "evening": 4, "unknown": 4,
+        "morning": 3,
+        "lunch": 2,
+        "afternoon": 6,
+        "dinner": 3,
+        "evening": 4,
+        "night": 3,
+        "unknown": 4,
     }
     hours = intent.duration_hours or default_hours.get(intent.time_window, 4)
-    return start, hours * 60
+    return start, hours * 60, effective_window
+
+
+def _adjust_today_start_time(intent: Intent, start: str) -> str:
+    """今天的非精确时间不排到已经过去的整点。"""
+    if intent.date != "today" or intent.start_time:
+        return start
+    try:
+        now = datetime.now()
+        now_min = now.hour * 60 + now.minute
+        start_min = _time_to_minutes(start)
+    except Exception:
+        return start
+    if now_min <= start_min:
+        return start
+    if now_min >= 23 * 60:
+        return start
+    adjusted = ((now_min + 29) // 30) * 30
+    return _minutes_to_time(adjusted)
 
 
 def _time_to_minutes(t: str) -> int:
@@ -630,11 +661,17 @@ def _schedule_slots(
     timeline = []
     current_min = _time_to_minutes(start_time)
 
-    if time_window == "evening":
+    if time_window in {"lunch", "dinner", "evening"}:
         slots = [
             ("restaurant", restaurant),
             ("drink", drink),
             ("activity", activity),
+        ]
+    elif time_window == "night":
+        slots = [
+            ("drink", drink),
+            ("activity", activity),
+            ("restaurant", restaurant),
         ]
     else:
         slots = [
@@ -738,8 +775,8 @@ def _make_plan_with_timeline(
     title = f"{prefix}{index + 1}：{' + '.join(parts)}" if parts else f"{prefix}{index + 1}"
 
     # 时间线
-    start_time, budget_min = _resolve_time_constraints(intent)
-    timeline = _schedule_slots(start_time, budget_min, activity, drink, restaurant, intent.time_window)
+    start_time, budget_min, effective_window = _resolve_time_constraints(intent)
+    timeline = _schedule_slots(start_time, budget_min, activity, drink, restaurant, effective_window)
 
     # 预算
     act_price = activity.get("avg_price", 0) if activity else 0
@@ -775,7 +812,7 @@ def _make_plan_with_timeline(
     if drink:
         if drink.get("risk"):
             risk_tips.append(drink["risk"])
-        if drink.get("sub_category") == "bar" and intent.time_window in ("morning", "afternoon"):
+        if drink.get("sub_category") == "bar" and intent.time_window in ("morning", "lunch", "afternoon"):
             risk_tips.append(f"酒吧「{drink['name']}」下午可能尚未营业")
         drink_bh = _parse_business_hours(drink.get("business_hours"))
         if drink_bh:
@@ -906,7 +943,7 @@ def _build_delivery_only_plans(intent: Intent, delivery_items: list[dict]) -> li
     """用户只要求外卖/闪送时生成可执行的配送方案。"""
     plans = []
     for idx, item in enumerate(sorted(delivery_items, key=_delivery_key(intent), reverse=True)[:3]):
-        delivery_time = "15:30" if intent.time_window != "evening" else "18:00"
+        delivery_time = "18:00" if intent.time_window in {"dinner", "evening", "night"} else "15:30"
         plan = {
             "plan_id": f"plan_{idx + 1:03d}",
             "title": f"配送方案{idx + 1}：{item.get('name', '')}",
