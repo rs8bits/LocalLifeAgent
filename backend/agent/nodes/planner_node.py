@@ -18,6 +18,7 @@ from backend.agent.planner import (
     _domain_spec_map,
     _build_place_search_params,
     _build_delivery_search_params,
+    _run_place_search_with_relaxation,
     _has_child_context,
     _format_tool_query,
 )
@@ -108,7 +109,9 @@ async def planner_node(state: AgentState) -> AgentState:
                 child_age=intent.child_age if _has_child_context(intent) else None,
                 indoor_pref=indoor_pref,
             )
-            result = await _run_tool("search_places", tool_logs, **params)
+            result = await _run_place_search_with_relaxation(
+                _run_tool, tool_logs, domain_name, params
+            )
 
         if result and result.status == "ok":
             data = result.data or []

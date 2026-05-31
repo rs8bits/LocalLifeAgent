@@ -70,7 +70,7 @@ async def plan_for_message(
                 child_age=intent.child_age if _has_child_context(intent) else None,
                 indoor_pref=indoor_pref,
             )
-            result = await _run_tool("search_places", tool_logs, **params)
+            result = await _run_place_search_with_relaxation(_run_tool, tool_logs, domain_name, params)
 
         if result and result.status == "ok":
             data = result.data or []
@@ -206,6 +206,62 @@ async def _run_tool(name: str, tool_logs: list[dict], **kwargs) -> Any:
         log["detail"] = result.error
     tool_logs.append(log)
     return result
+
+
+async def _run_place_search_with_relaxation(
+    runner,
+    tool_logs: list[dict],
+    domain_name: str,
+    params: dict[str, Any],
+) -> Any:
+    """搜索无结果时逐步放宽软过滤，避免组合行程被过窄标签打空。"""
+    result = await runner("search_places", tool_logs, **params)
+    if _has_tool_data(result):
+        return result
+
+    attempts = _relaxed_place_search_params(domain_name, params)
+    for relaxed_params, reason in attempts:
+        retry = await runner("search_places", tool_logs, **relaxed_params)
+        if _has_tool_data(retry):
+            retry.error = _join_warnings(retry.error, reason)
+            return retry
+    return result
+
+
+def _has_tool_data(result: Any) -> bool:
+    return bool(result and result.status == "ok" and result.data)
+
+
+def _relaxed_place_search_params(
+    domain_name: str,
+    params: dict[str, Any],
+) -> list[tuple[dict[str, Any], str]]:
+    attempts: list[tuple[dict[str, Any], str]] = []
+    soft_keys = {"tag", "tags_any", "tags_all", "category", "categories_any", "sub_category"}
+    without_tags = {k: v for k, v in params.items() if k not in soft_keys}
+    if without_tags != params:
+        attempts.append((without_tags, "首次搜索无结果，已放宽标签/类目条件"))
+
+    if domain_name == "play" and params.get("indoor") is not None:
+        without_indoor = dict(without_tags)
+        without_indoor.pop("indoor", None)
+        if without_indoor != without_tags:
+            attempts.append((without_indoor, "首次搜索无结果，已放宽室内外条件"))
+
+    # 部分泛化行程的 mock 数据没有细分 party_types，最后保留距离/人数等硬约束再放宽画像。
+    if params.get("party_type"):
+        without_party = dict(without_tags)
+        without_party.pop("party_type", None)
+        if without_party != without_tags:
+            attempts.append((without_party, "首次搜索无结果，已放宽同行人画像条件"))
+    return attempts
+
+
+def _join_warnings(*warnings: str | None) -> str | None:
+    values = [w for w in warnings if w]
+    if not values:
+        return None
+    return "; ".join(values)
 
 
 def _format_tool_query(params: dict[str, Any]) -> str:

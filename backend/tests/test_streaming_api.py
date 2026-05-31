@@ -239,6 +239,30 @@ class TestRealStreamingOrder:
         assert "search_delivery_items" not in body, f"不应搜索 delivery: {body[:500]}"
         assert "(eat)" in body, "应搜索 eat 领域"
 
+    def test_parent_city_visit_streaming_has_full_itinerary(self, monkeypatch):
+        """流式接口的长辈来访场景不能退化成空方案或纯吃饭。"""
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        resp = client.post("/api/agent/plan/stream", json={
+            "user_id": "user_001",
+            "message": "明天爸妈来我的城市，我想带他们逛逛，帮我安排一下",
+        })
+        assert resp.status_code == 200
+        plan_done = None
+        for chunk in resp.text.split("\n\n"):
+            if chunk.startswith("event: plan_done"):
+                data_line = next(line for line in chunk.splitlines() if line.startswith("data: "))
+                plan_done = json.loads(data_line[6:])
+                break
+        assert plan_done is not None
+        result = plan_done["data"]["result"]
+        assert result["errors"] == []
+        assert result["plans"], result["tool_logs"]
+        first = result["plans"][0]
+        assert first.get("activity"), "应包含活动"
+        assert first.get("restaurant"), "应包含餐厅"
+        assert first.get("drink"), "应包含茶饮/咖啡休息点"
+
     @pytest.mark.asyncio
     async def test_planner_internal_events_emit_before_slow_composer(self, monkeypatch):
         """planner_node 内部事件应在慢 LLM 组合完成前就被推送"""
