@@ -68,6 +68,8 @@ def _make_base_state(
         "weather": None,
         "plans": [],
         "selected_plan_id": None,
+        "base_plan": None,
+        "revision_patch": {},
         "tag_resolve_result": {},
         "tool_logs": [],
         "reflection_result": {},
@@ -154,19 +156,29 @@ execution_graph = build_execution_graph()
 
 
 async def run_planning_graph(
-    user_id: str, message: str, user_profile: dict | None = None
+    user_id: str,
+    message: str,
+    user_profile: dict | None = None,
+    extra_state: dict | None = None,
 ) -> dict:
     """运行规划 Graph，返回最终状态"""
     initial_state = _make_base_state(user_id=user_id, message=message, user_profile=user_profile)
+    if extra_state:
+        initial_state.update(extra_state)
     result = await planning_graph.ainvoke(initial_state)
     return result
 
 
 async def run_planning_graph_stream(
-    user_id: str, message: str, user_profile: dict | None = None
+    user_id: str,
+    message: str,
+    user_profile: dict | None = None,
+    extra_state: dict | None = None,
 ) -> AsyncIterator[str]:
     """运行规划 Graph 并以 SSE 格式实时流式输出每个节点的事件。"""
     initial_state = _make_base_state(user_id=user_id, message=message, user_profile=user_profile)
+    if extra_state:
+        initial_state.update(extra_state)
 
     event_queue: asyncio.Queue[dict] = asyncio.Queue()
     initial_state["event_queue"] = event_queue

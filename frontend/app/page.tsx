@@ -185,7 +185,8 @@ export default function Home() {
     addStreamLog("revision_start", "正在根据修改建议重新规划...");
 
     try {
-      const revised = await revisePlan(result.session_id, revisionMessage);
+      const basePlanId = result.plans[0]?.plan_id;
+      const revised = await revisePlan(result.session_id, revisionMessage, basePlanId);
       setResult(revised);
       setRevisionMessage("");
       addStreamLog("revision_done", `修改完成，生成 ${revised.plans.length} 个候选方案`);

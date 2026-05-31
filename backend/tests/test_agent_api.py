@@ -129,6 +129,66 @@ class TestAgentRevise:
         assert session["parent_session_id"] == first_data["session_id"]
         assert session["previous_intent"]
         assert session["tag_resolve_result"]
+        assert session["revision_patch"]
+
+    def test_revise_adds_meals_without_replacing_locked_activity(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        first = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "明天和朋友下午玩桌游",
+        })
+        assert first.status_code == 200
+        first_data = first.json()
+        base_plan = first_data["plans"][0]
+        assert base_plan["activity"]["id"] == "act_006"
+
+        revised = client.post("/api/agent/revise", json={
+            "session_id": first_data["session_id"],
+            "base_plan_id": base_plan["plan_id"],
+            "message": "中饭晚饭都要吃",
+        })
+        assert revised.status_code == 200
+        data = revised.json()
+
+        assert data["intent"]["meal_slots"] == ["lunch", "dinner"]
+        assert data["plans"]
+        assert data["plans"][0]["activity"]["id"] == "act_006"
+        meals = data["plans"][0].get("meal_restaurants") or []
+        assert [meal["meal"] for meal in meals] == ["lunch", "dinner"]
+
+        session = client.get(f"/api/agent/session/{data['session_id']}").json()
+        patch = session["revision_patch"]
+        assert "activity" in patch["keep_slots"]
+        assert patch["locked_slots"]["activity"]["item"]["id"] == "act_006"
+
+    def test_revise_only_replace_dinner_keeps_activity(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        first = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "明天和4个朋友中饭晚饭都要吃，中间玩桌游",
+        })
+        assert first.status_code == 200
+        first_data = first.json()
+        base_plan = first_data["plans"][0]
+        assert base_plan["activity"]["id"] == "act_006"
+
+        revised = client.post("/api/agent/revise", json={
+            "session_id": first_data["session_id"],
+            "base_plan_id": base_plan["plan_id"],
+            "message": "只替换晚餐，其他不变",
+        })
+        assert revised.status_code == 200
+        data = revised.json()
+
+        assert data["plans"][0]["activity"]["id"] == "act_006"
+        session = client.get(f"/api/agent/session/{data['session_id']}").json()
+        patch = session["revision_patch"]
+        assert "meal:dinner" in patch["replace_slots"]
+        assert "activity" in patch["keep_slots"]
 
     def test_revise_nonexistent_session_returns_404(self):
         resp = client.post("/api/agent/revise", json={

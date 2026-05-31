@@ -23,6 +23,8 @@ class AgentState(TypedDict, total=False):
 
     plans: list[dict[str, Any]]
     selected_plan_id: str | None
+    base_plan: dict[str, Any] | None
+    revision_patch: dict[str, Any]
 
     tag_resolve_result: dict[str, Any]
     tool_logs: list[dict[str, Any]]

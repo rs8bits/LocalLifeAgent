@@ -1255,6 +1255,207 @@ def _default_people_count(intent: Intent) -> int:
     }.get(intent.party_type, 2)
 
 
+def _inject_revision_locked_candidates(
+    activities: list[dict],
+    restaurants: list[dict],
+    drinks: list[dict],
+    delivery_items: list[dict],
+    revision_patch: dict[str, Any] | None,
+) -> None:
+    """把上一轮被锁定的 POI 放回候选集，避免本轮搜索条件把它过滤掉。"""
+    if not revision_patch:
+        return
+    target_lists = {
+        "activity": activities,
+        "restaurant": restaurants,
+        "drink": drinks,
+        "delivery": delivery_items,
+    }
+    for slot_info in (revision_patch.get("locked_slots") or {}).values():
+        if not isinstance(slot_info, dict):
+            continue
+        domain = slot_info.get("domain")
+        item = slot_info.get("item") or {}
+        target = target_lists.get(domain)
+        if target is None or not item.get("id"):
+            continue
+        locked_item = dict(item)
+        locked_item["_revision_locked"] = True
+        locked_item["_match_score"] = int(locked_item.get("_match_score") or 0) + 20
+        _prepend_unique_item(target, locked_item)
+
+
+def _prepend_unique_item(items: list[dict], item: dict) -> None:
+    item_id = item.get("id")
+    if not item_id:
+        return
+    items[:] = [candidate for candidate in items if candidate.get("id") != item_id]
+    items.insert(0, item)
+
+
+def _apply_revision_constraints_to_plans(
+    plans: list[dict],
+    intent: Intent,
+    revision_patch: dict[str, Any] | None,
+) -> None:
+    """把 revision patch 的锁定/删除槽位强制应用到候选方案。"""
+    if not revision_patch or not plans:
+        return
+    locked_slots = revision_patch.get("locked_slots") or {}
+    remove_slots = set(revision_patch.get("remove_slots") or [])
+    for plan in plans:
+        changed = False
+        if "activity" in remove_slots:
+            changed = _remove_plan_slot(plan, "activity") or changed
+        elif locked_slots.get("activity"):
+            changed = _apply_locked_single_slot(plan, "activity", locked_slots["activity"], intent) or changed
+
+        if "drink" in remove_slots:
+            changed = _remove_plan_slot(plan, "drink") or changed
+        elif locked_slots.get("drink"):
+            changed = _apply_locked_single_slot(plan, "drink", locked_slots["drink"], intent) or changed
+
+        meal_changed = _apply_locked_meal_slots(plan, intent, locked_slots, remove_slots)
+        changed = changed or meal_changed
+        if changed:
+            plan["actions"] = []
+            _recalculate_budget(plan, intent)
+
+
+def _apply_locked_single_slot(
+    plan: dict,
+    slot: str,
+    slot_info: dict[str, Any],
+    intent: Intent,
+) -> bool:
+    item = slot_info.get("item") or {}
+    if not item.get("id"):
+        return False
+    previous_id = (plan.get(slot) or {}).get("id")
+    had_timeline_item = _timeline_has_item(plan, slot, item.get("id"))
+    plan[slot] = item
+    _ensure_timeline_item(
+        plan,
+        slot,
+        item,
+        slot_info.get("time") or _timeline_time_for(plan, slot) or _default_locked_time(slot, intent),
+    )
+    reason = f"已保留上一轮{_slot_label(slot)}"
+    if reason not in plan.setdefault("recommend_reasons", []):
+        plan["recommend_reasons"].append(reason)
+    return previous_id != item.get("id") or not had_timeline_item
+
+
+def _apply_locked_meal_slots(
+    plan: dict,
+    intent: Intent,
+    locked_slots: dict[str, Any],
+    remove_slots: set[str],
+) -> bool:
+    meal_locks = {
+        slot.split(":", 1)[1]: info
+        for slot, info in locked_slots.items()
+        if slot.startswith("meal:") and slot not in remove_slots
+    }
+    if not meal_locks:
+        return False
+
+    assignments = _current_meal_assignments(plan)
+    original_ids = {
+        meal: (restaurant or {}).get("id")
+        for meal, restaurant in assignments.items()
+    }
+    for meal, info in meal_locks.items():
+        restaurant = info.get("item") or {}
+        if restaurant.get("id"):
+            assignments[meal] = restaurant
+
+    for slot in remove_slots:
+        if slot.startswith("meal:"):
+            assignments.pop(slot.split(":", 1)[1], None)
+
+    if not assignments:
+        return False
+
+    required_slots = _required_meal_slots(intent)
+    for meal in assignments:
+        if meal not in required_slots:
+            intent.meal_slots = _ordered_meal_slots([*(intent.meal_slots or []), meal])
+    _write_meal_assignments(plan, intent, assignments)
+    for meal in meal_locks:
+        reason = f"已保留上一轮{_MEAL_SLOT_LABELS.get(meal, meal)}"
+        if reason not in plan.setdefault("recommend_reasons", []):
+            plan["recommend_reasons"].append(reason)
+    return original_ids != {
+        meal: restaurant.get("id")
+        for meal, restaurant in assignments.items()
+    }
+
+
+def _current_meal_assignments(plan: dict) -> dict[str, dict]:
+    assignments: dict[str, dict] = {}
+    for entry in plan.get("meal_restaurants") or []:
+        if not isinstance(entry, dict):
+            continue
+        meal = entry.get("meal")
+        restaurant = entry.get("restaurant")
+        if meal in {"lunch", "dinner"} and restaurant:
+            assignments[meal] = restaurant
+    restaurant = plan.get("restaurant")
+    if restaurant and not assignments:
+        slot = _meal_slot_for_time(_timeline_time_for(plan, "restaurant")) or "dinner"
+        assignments[slot] = restaurant
+    return assignments
+
+
+def _remove_plan_slot(plan: dict, slot: str) -> bool:
+    changed = bool(plan.get(slot))
+    plan[slot] = None
+    plan["timeline"] = [
+        item for item in (plan.get("timeline") or [])
+        if item.get("type") != slot
+    ]
+    return changed
+
+
+def _ensure_timeline_item(plan: dict, slot: str, item: dict, time_value: str) -> None:
+    timeline = [
+        entry for entry in (plan.get("timeline") or [])
+        if not (entry.get("type") == slot and entry.get("poi_id") == item.get("id"))
+    ]
+    timeline.append({
+        "time": time_value,
+        "type": slot,
+        "title": item.get("name", ""),
+        "poi_id": item.get("id", ""),
+        "duration_min": item.get("recommended_duration_min", _default_duration(slot)),
+    })
+    plan["timeline"] = _sort_timeline(timeline)
+
+
+def _timeline_has_item(plan: dict, slot: str, poi_id: str | None) -> bool:
+    return any(
+        item.get("type") == slot and item.get("poi_id") == poi_id
+        for item in plan.get("timeline") or []
+    )
+
+
+def _default_locked_time(slot: str, intent: Intent) -> str:
+    if slot == "activity":
+        return "14:00" if intent.time_window not in {"morning"} else "10:00"
+    if slot == "drink":
+        return "20:00" if "bar" in intent.drink_preferences else "16:00"
+    return "14:00"
+
+
+def _slot_label(slot: str) -> str:
+    return {"activity": "活动", "drink": "饮品"}.get(slot, slot)
+
+
+def _ordered_meal_slots(values: list[str]) -> list[str]:
+    return [slot for slot in ["lunch", "dinner"] if slot in set(values)]
+
+
 def _apply_multi_meal_constraints_to_plans(
     plans: list[dict],
     intent: Intent,

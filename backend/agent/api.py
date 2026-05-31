@@ -13,7 +13,7 @@ from backend.schemas.agent_api import (
     AgentConfirmResponse,
 )
 from backend.agent.session_store import create_session, get_session, update_session
-from backend.agent.revision import build_revision_message
+from backend.agent.revision import build_revision_message, build_revision_patch, select_base_plan
 
 # Graph 导入
 from backend.agent.graph import (
@@ -124,10 +124,16 @@ async def agent_revise(req: AgentReviseRequest):
         raise HTTPException(status_code=404, detail=f"Session 不存在: {req.session_id}")
 
     user_id = previous_session.get("user_id", "user_001")
+    base_plan = select_base_plan(previous_session, req.base_plan_id)
+    revision_patch = build_revision_patch(previous_session, req.message, req.base_plan_id)
     revised_message = build_revision_message(previous_session, req.message)
     graph_result = await run_planning_graph(
         user_id=user_id,
         message=revised_message,
+        extra_state={
+            "base_plan": base_plan,
+            "revision_patch": revision_patch,
+        },
     )
     planner_output, errors, guardrail_failed, input_blocked = _graph_result_to_planner_output(graph_result)
 
@@ -142,6 +148,9 @@ async def agent_revise(req: AgentReviseRequest):
         _update_session_with_graph_context(session_id, graph_result, {
             "parent_session_id": req.session_id,
             "revision_message": req.message,
+            "base_plan_id": revision_patch.get("base_plan_id"),
+            "base_plan": base_plan,
+            "revision_patch": revision_patch,
             "previous_intent": previous_session.get("intent", {}),
             "previous_tag_resolve_result": previous_session.get("tag_resolve_result", {}),
         })

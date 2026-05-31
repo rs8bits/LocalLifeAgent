@@ -3,6 +3,7 @@
 from backend.agent.state import AgentState
 from backend.agent.event_bus import emit_event
 from backend.agent.intent_parser import parse_intent
+from backend.agent.revision import apply_revision_intent_patch
 
 
 async def intent_node(state: AgentState) -> AgentState:
@@ -22,6 +23,7 @@ async def intent_node(state: AgentState) -> AgentState:
             message=effective_message,
             user_memory=user_memory,
         )
+        apply_revision_intent_patch(intent, state.get("revision_patch"))
         state["intent"] = intent.model_dump()
         tag_text = f", tags={intent.tags}" if intent.tags else ""
         await emit_event(state, {

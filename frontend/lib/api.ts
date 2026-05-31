@@ -35,12 +35,13 @@ export async function confirmPlan(
 
 export async function revisePlan(
   sessionId: string,
-  message: string
+  message: string,
+  basePlanId?: string
 ): Promise<PlanResponse> {
   const resp = await fetch(`${API_BASE}/api/agent/revise`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ session_id: sessionId, message }),
+    body: JSON.stringify({ session_id: sessionId, message, base_plan_id: basePlanId }),
   });
   if (!resp.ok) {
     throw new Error(`请求失败 (${resp.status}): ${await resp.text()}`);

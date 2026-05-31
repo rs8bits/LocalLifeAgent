@@ -11,6 +11,7 @@ class AgentPlanRequest(BaseModel):
 class AgentReviseRequest(BaseModel):
     session_id: str
     message: str
+    base_plan_id: str | None = None
 
 
 class AgentPlanResponse(BaseModel):

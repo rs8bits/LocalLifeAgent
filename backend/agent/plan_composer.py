@@ -40,6 +40,7 @@ COMPOSER_SYSTEM_PROMPT = """你是本地生活短时活动规划 Agent 的方案
 - planning 阶段只能给 actions，不允许出现 booking_id/order_id。
 - 时间线要符合用户时间段：lunch 从11:30左右开始，afternoon 可从13:30或用户 start_time 开始，dinner/evening 从17:30以后开始，night 从20:30以后开始。
 - 如果 intent.meal_slots 同时包含 lunch 和 dinner，必须分别选择午餐/晚餐餐厅；有 2 个以上可用餐厅时，午餐和晚餐不要使用同一个 restaurant_id，且优先不同菜系。
+- 如果输入包含 revision_patch.locked_slots，锁定槽位必须保留：activity/drink/meal:lunch/meal:dinner 对应 ID 不能被替换或遗漏。
 - 根据 party_type 做组合：family_with_child 优先儿童年龄、亲子友好、低卡/健康和少排队；family_elder 优先少走路、少排队、安静和清淡；friends 优先社交、拍照、唱歌/喝酒；couple 优先氛围、拍照和品质；business 优先安静、稳定可订和品质；solo 优先近、轻量和性价比。
 - 外卖/闪送 action 要包含 order_delivery，target_ref_id 优先选择餐厅，其次活动地点；scheduled_time 是希望送达或下单时间。
 - 如果某个候选不可预约，也可以放进方案，但 actions 中不要为它生成预约动作，并在 risk_tips 说明。
@@ -55,6 +56,7 @@ async def compose_plan_specs_with_llm(
     tag_result: dict,
     weather: dict | None,
     candidates: dict[str, list[dict[str, Any]]],
+    revision_patch: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """调用 LLM 组合方案，返回经过本地 ID 校验的 plan specs。"""
     if not deepseek_client.available:
@@ -65,6 +67,7 @@ async def compose_plan_specs_with_llm(
         "intent": _compact_intent(intent),
         "user_memory": _compact_memory(user_memory),
         "tag_result": _compact_tag_result(tag_result),
+        "revision_patch": _compact_revision_patch(revision_patch),
         "weather": _compact_weather(weather),
         "candidates": {
             "activities": _compact_items(candidates.get("activities", []), "activity"),
@@ -87,7 +90,7 @@ async def compose_plan_specs_with_llm(
     if not isinstance(specs, list):
         return [], "LLM 组合结果缺少 plans 数组，已使用本地规则"
 
-    valid_specs, issues = validate_plan_specs(specs, candidates)
+    valid_specs, issues = validate_plan_specs(specs, candidates, revision_patch=revision_patch)
     if not valid_specs:
         suffix = f": {'; '.join(issues[:3])}" if issues else ""
         return [], f"LLM 组合结果未通过本地校验，已使用本地规则{suffix}"
@@ -101,6 +104,7 @@ async def compose_plan_specs_with_llm(
 def validate_plan_specs(
     specs: list[dict[str, Any]],
     candidates: dict[str, list[dict[str, Any]]],
+    revision_patch: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """校验 LLM 输出中所有引用都来自候选集合。"""
     id_domain = _build_id_domain(candidates)
@@ -185,6 +189,10 @@ def validate_plan_specs(
         if not has_any_ref:
             issues.append(f"plan[{idx}] 没有任何合法候选引用")
             continue
+        locked_issue = _locked_ref_issue(spec, revision_patch)
+        if locked_issue:
+            issues.append(f"plan[{idx}] {locked_issue}")
+            continue
         valid.append(spec)
 
     return valid, issues
@@ -252,6 +260,27 @@ def _compact_tag_result(tag_result: dict) -> dict[str, Any]:
     }
 
 
+def _compact_revision_patch(revision_patch: dict[str, Any] | None) -> dict[str, Any]:
+    if not revision_patch:
+        return {}
+    locked_slots = {}
+    for slot, info in (revision_patch.get("locked_slots") or {}).items():
+        item = (info or {}).get("item") or {}
+        locked_slots[slot] = {
+            "id": item.get("id"),
+            "name": item.get("name"),
+            "domain": info.get("domain"),
+            "time": info.get("time"),
+        }
+    return {
+        "keep_slots": revision_patch.get("keep_slots", []),
+        "replace_slots": revision_patch.get("replace_slots", []),
+        "add_slots": revision_patch.get("add_slots", []),
+        "remove_slots": revision_patch.get("remove_slots", []),
+        "locked_slots": locked_slots,
+    }
+
+
 def _compact_weather(weather: dict | None) -> dict[str, Any]:
     if not weather:
         return {}
@@ -272,6 +301,32 @@ def _build_id_domain(candidates: dict[str, list[dict[str, Any]]]) -> dict[str, s
             if item_id:
                 mapping[item_id] = domain
     return mapping
+
+
+def _locked_ref_issue(spec: dict[str, Any], revision_patch: dict[str, Any] | None) -> str | None:
+    if not revision_patch:
+        return None
+    locked_slots = revision_patch.get("locked_slots") or {}
+    refs = spec.get("selected_refs") or {}
+    timeline_ref_ids = {
+        item.get("ref_id")
+        for item in spec.get("timeline") or []
+        if item.get("ref_id")
+    }
+    for slot, info in locked_slots.items():
+        item_id = ((info or {}).get("item") or {}).get("id")
+        if not item_id:
+            continue
+        if slot == "activity" and refs.get("activity_id") != item_id and item_id not in timeline_ref_ids:
+            return f"缺少锁定活动 {item_id}"
+        if slot == "drink" and refs.get("drink_id") != item_id and item_id not in timeline_ref_ids:
+            return f"缺少锁定饮品 {item_id}"
+        if slot.startswith("meal:"):
+            meal = slot.split(":", 1)[1]
+            meal_refs = refs.get("meal_restaurant_ids") or {}
+            if refs.get("restaurant_id") != item_id and meal_refs.get(meal) != item_id and item_id not in timeline_ref_ids:
+                return f"缺少锁定餐厅 {item_id}"
+    return None
 
 
 def _valid_ref(
