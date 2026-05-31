@@ -367,6 +367,30 @@ class TestPlannerFriendsWithDrink:
                 assert "0 个活动" not in log["message"], \
                     f"朋友场景不应因 child_age 过滤掉所有活动: {log['message']}"
 
+    @pytest.mark.asyncio
+    async def test_lunch_and_dinner_use_distinct_restaurants(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_002",
+            message="明天和4个朋友中饭晚饭都要吃，中间想唱歌，晚上想喝酒",
+        )
+        assert result["intent"]["meal_slots"] == ["lunch", "dinner"]
+        assert result["plans"]
+        first = result["plans"][0]
+        meals = first.get("meal_restaurants") or []
+        assert [m["meal"] for m in meals] == ["lunch", "dinner"]
+        restaurant_ids = [m["restaurant"]["id"] for m in meals]
+        assert len(set(restaurant_ids)) == 2, first
+        categories = [m["restaurant"].get("category") for m in meals]
+        assert len(set(categories)) == 2, first
+        timeline_restaurant_ids = [
+            item["poi_id"] for item in first["timeline"]
+            if item["type"] == "restaurant"
+        ]
+        assert timeline_restaurant_ids == restaurant_ids
+        assert any(a["type"] == "book_restaurant" for a in first["actions"])
+
 
 class TestTagResolverFlow:
     """标签对齐 + 搜索流程测试"""

@@ -10,6 +10,7 @@ from backend.agent.planner import (
     _build_diverse_plans,
     _build_delivery_only_plans,
     _attach_delivery_to_plans,
+    _apply_multi_meal_constraints_to_plans,
     _make_plan_from_composer_spec,
     _ensure_plan_actions,
     _enrich_plan,
@@ -149,6 +150,7 @@ async def planner_node(state: AgentState) -> AgentState:
     fallback_plans = _build_diverse_plans(intent, activities, restaurants, drinks, tool_logs)
     if not fallback_plans and delivery_items:
         fallback_plans = _build_delivery_only_plans(intent, delivery_items)
+    _apply_multi_meal_constraints_to_plans(fallback_plans, intent, restaurants)
     _attach_delivery_to_plans(fallback_plans, delivery_items, intent)
     llm_specs, composer_warning = await compose_plan_specs_with_llm(
         message=state.get("user_message", ""),
@@ -173,6 +175,7 @@ async def planner_node(state: AgentState) -> AgentState:
         _make_plan_from_composer_spec(i, spec, intent, activities, restaurants, drinks, delivery_items)
         for i, spec in enumerate(llm_specs)
     ] if llm_specs else fallback_plans
+    _apply_multi_meal_constraints_to_plans(plans, intent, restaurants)
     await emit_event(state, {
         "event": "composer_done",
         "message": "方案组合完成" if llm_specs else "已使用本地规则组合方案",

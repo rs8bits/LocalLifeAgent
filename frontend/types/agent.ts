@@ -21,6 +21,12 @@ export interface Plan {
   timeline: TimelineItem[];
   activity: Record<string, unknown> | null;
   restaurant: Record<string, unknown> | null;
+  meal_restaurants?: {
+    meal: string;
+    label?: string;
+    time?: string;
+    restaurant: Record<string, unknown>;
+  }[];
   drink?: Record<string, unknown> | null;
   delivery_items?: Record<string, unknown>[];
   actions?: Record<string, unknown>[];

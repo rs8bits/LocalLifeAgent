@@ -80,6 +80,7 @@ def _check_plan_guardrails(state: AgentState) -> dict:
     for plan in plans:
         activity = plan.get("activity") or {}
         restaurant = plan.get("restaurant") or {}
+        restaurants = _plan_restaurants(plan)
         drink = plan.get("drink") or {}
         delivery_items = plan.get("delivery_items") or []
         actions = plan.get("actions") or []
@@ -92,11 +93,12 @@ def _check_plan_guardrails(state: AgentState) -> dict:
             issues.append(msg)
             fatal_issues.append(msg)
 
-        rest_id = restaurant.get("id", "")
-        if rest_id and rest_id not in valid_restaurant_ids:
-            msg = f"餐厅 ID {rest_id} 不在合法数据中"
-            issues.append(msg)
-            fatal_issues.append(msg)
+        for rest in restaurants or ([restaurant] if restaurant else []):
+            rest_id = rest.get("id", "")
+            if rest_id and rest_id not in valid_restaurant_ids:
+                msg = f"餐厅 ID {rest_id} 不在合法数据中"
+                issues.append(msg)
+                fatal_issues.append(msg)
 
         drink_id = drink.get("id", "")
         if drink_id and drink_id not in valid_drink_ids:
@@ -188,6 +190,18 @@ def _check_plan_guardrails(state: AgentState) -> dict:
 
     state["guardrail_feedback"] = result if retryable else {}
     return result
+
+
+def _plan_restaurants(plan: dict) -> list[dict]:
+    entries = plan.get("meal_restaurants") or []
+    restaurants = [
+        entry.get("restaurant") for entry in entries
+        if isinstance(entry, dict) and entry.get("restaurant")
+    ]
+    if restaurants:
+        return restaurants
+    restaurant = plan.get("restaurant")
+    return [restaurant] if restaurant else []
 
 
 def _check_message_guardrails(state: AgentState) -> dict:

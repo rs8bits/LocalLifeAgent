@@ -107,6 +107,25 @@ def _append_unique(values: list[str], value: str) -> None:
         values.append(value)
 
 
+def _extract_meal_slots(message: str) -> list[str]:
+    """识别用户是否明确要求午餐/晚餐两个独立用餐槽位。"""
+    slots: list[str] = []
+    lunch_patterns = [
+        r"中饭", r"午饭", r"午餐", r"中午.*吃", r"中午.*用餐",
+    ]
+    dinner_patterns = [
+        r"晚饭", r"晚餐", r"晚上.*吃", r"晚上.*用餐", r"傍晚.*吃",
+    ]
+    if any(re.search(pattern, message) for pattern in lunch_patterns):
+        slots.append("lunch")
+    if any(re.search(pattern, message) for pattern in dinner_patterns):
+        slots.append("dinner")
+    if "两顿" in message and "吃" in message:
+        for slot in ["lunch", "dinner"]:
+            _append_unique(slots, slot)
+    return slots
+
+
 def _chinese_digit_to_int(value: str | None) -> int | None:
     mapping = {
         "一": 1,
@@ -169,6 +188,9 @@ def _rule_parse(message: str) -> Intent:
     start_time, inferred_window = extract_start_time(message)
     if start_time and inferred_window:
         time_window = inferred_window
+    meal_slots = _extract_meal_slots(message)
+    if {"lunch", "dinner"}.issubset(set(meal_slots)) and not start_time:
+        time_window = "lunch"
 
     # 日期
     date = "today"
@@ -337,6 +359,7 @@ def _rule_parse(message: str) -> Intent:
         time_window=time_window,
         start_time=start_time,
         duration_hours=duration_hours,
+        meal_slots=meal_slots,
         people_count=people_count,
         companions=_build_companions(message, party_type, child_age),
         radius_km=radius_km,
@@ -391,6 +414,7 @@ INTENT_SYSTEM_PROMPT = """你是一个意图解析器。根据用户输入，提
   "time_window": "morning" | "lunch" | "afternoon" | "dinner" | "evening" | "night" | "unknown",
   "start_time": "HH:MM" | null,
   "duration_hours": int | null,
+  "meal_slots": ["lunch" | "dinner"],
   "people_count": int | null,
   "companions": [{"role": "...", "age": null | int, "diet_preference": null | string}],
   "radius_km": float,
@@ -416,6 +440,7 @@ INTENT_SYSTEM_PROMPT = """你是一个意图解析器。根据用户输入，提
 - needs_quiet: 提到安静/包间/私密/正式 → true
 - needs_less_walking: 提到爸妈/老人/少走路/别太累/腿脚不便 → true
 - time_window: 中午/午饭/午餐 → lunch；晚饭/晚餐/晚上吃饭 → dinner；晚上活动 → evening；宵夜/深夜 → night
+- meal_slots: 用户明确说中饭/午饭/午餐则包含 lunch；明确说晚饭/晚餐则包含 dinner；“中饭晚饭都要吃/两顿饭”应输出 ["lunch","dinner"]
 - start_time: 提取精确开始时间，如"下午三点"→"15:00"，"15:30"→"15:30"，"两点半"默认按下午理解为"14:30"
 - drink_preferences: 提到咖啡/奶茶 → ["coffee_tea"]，精酿/啤酒/酒吧 → ["bar"]
 - delivery_preferences: 提到外卖/闪送/蛋糕/鲜花/礼物/送到餐厅 → 提取对应商品或配送偏好
@@ -480,6 +505,10 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
                 intent.drink_preferences = intent_dict["drink_preferences"]
             if "delivery_preferences" in intent_dict and intent_dict["delivery_preferences"]:
                 intent.delivery_preferences = intent_dict["delivery_preferences"]
+            if "meal_slots" in intent_dict and isinstance(intent_dict["meal_slots"], list):
+                for slot in intent_dict["meal_slots"]:
+                    if slot in {"lunch", "dinner"}:
+                        _append_unique(intent.meal_slots, slot)
             if "tags" in intent_dict and isinstance(intent_dict["tags"], list):
                 for tag in intent_dict["tags"]:
                     if isinstance(tag, str):
@@ -520,7 +549,13 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
 
 def _normalize_time_fields(intent: Intent) -> None:
     """统一 LLM/规则输出的时间段和精确时间。"""
+    intent.meal_slots = [
+        slot for slot in ["lunch", "dinner"]
+        if slot in set(intent.meal_slots)
+    ]
     intent.time_window = normalize_time_window(intent.time_window, default="afternoon")
+    if {"lunch", "dinner"}.issubset(set(intent.meal_slots)) and not intent.start_time:
+        intent.time_window = "lunch"
     if intent.start_time:
         if not re.fullmatch(r"[0-2]?\d:[0-5]\d", intent.start_time):
             intent.start_time = None

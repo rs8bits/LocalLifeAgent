@@ -130,6 +130,13 @@ class TestRuleParseGeneral:
         msg = "中午一个人想吃点清淡的"
         intent = _rule_parse(msg)
         assert intent.time_window == "lunch"
+        assert intent.meal_slots == ["lunch"]
+
+    def test_lunch_and_dinner_meal_slots(self):
+        msg = "明天和朋友中饭晚饭都要吃，中间想唱歌喝酒"
+        intent = _rule_parse(msg)
+        assert intent.time_window == "lunch"
+        assert intent.meal_slots == ["lunch", "dinner"]
 
     def test_precise_afternoon_start_time(self):
         msg = "明天下午三点带爸妈逛逛"

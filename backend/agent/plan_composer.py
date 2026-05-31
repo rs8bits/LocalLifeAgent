@@ -19,6 +19,7 @@ COMPOSER_SYSTEM_PROMPT = """你是本地生活短时活动规划 Agent 的方案
       "selected_refs": {
         "activity_id": "act_001 或 null",
         "restaurant_id": "rest_001 或 null",
+        "meal_restaurant_ids": {"lunch": "rest_001 或 null", "dinner": "rest_002 或 null"},
         "drink_id": "drink_001 或 null",
         "delivery_item_ids": ["delivery_001"]
       },
@@ -38,6 +39,7 @@ COMPOSER_SYSTEM_PROMPT = """你是本地生活短时活动规划 Agent 的方案
 - 只使用 candidates 中出现的 ID，不允许编造 POI、商品、团购券或订单号。
 - planning 阶段只能给 actions，不允许出现 booking_id/order_id。
 - 时间线要符合用户时间段：lunch 从11:30左右开始，afternoon 可从13:30或用户 start_time 开始，dinner/evening 从17:30以后开始，night 从20:30以后开始。
+- 如果 intent.meal_slots 同时包含 lunch 和 dinner，必须分别选择午餐/晚餐餐厅；有 2 个以上可用餐厅时，午餐和晚餐不要使用同一个 restaurant_id，且优先不同菜系。
 - 根据 party_type 做组合：family_with_child 优先儿童年龄、亲子友好、低卡/健康和少排队；family_elder 优先少走路、少排队、安静和清淡；friends 优先社交、拍照、唱歌/喝酒；couple 优先氛围、拍照和品质；business 优先安静、稳定可订和品质；solo 优先近、轻量和性价比。
 - 外卖/闪送 action 要包含 order_delivery，target_ref_id 优先选择餐厅，其次活动地点；scheduled_time 是希望送达或下单时间。
 - 如果某个候选不可预约，也可以放进方案，但 actions 中不要为它生成预约动作，并在 risk_tips 说明。
@@ -114,9 +116,15 @@ def validate_plan_specs(
         cleaned_refs = {
             "activity_id": _valid_ref(refs.get("activity_id"), id_domain, "activity", issues),
             "restaurant_id": _valid_ref(refs.get("restaurant_id"), id_domain, "restaurant", issues),
+            "meal_restaurant_ids": {},
             "drink_id": _valid_ref(refs.get("drink_id"), id_domain, "drink", issues),
             "delivery_item_ids": [],
         }
+        raw_meal_refs = refs.get("meal_restaurant_ids") if isinstance(refs.get("meal_restaurant_ids"), dict) else {}
+        for meal in ("lunch", "dinner"):
+            meal_ref = _valid_ref(raw_meal_refs.get(meal), id_domain, "restaurant", issues)
+            if meal_ref:
+                cleaned_refs["meal_restaurant_ids"][meal] = meal_ref
         for item_id in refs.get("delivery_item_ids") or []:
             valid_id = _valid_ref(item_id, id_domain, "delivery", issues)
             if valid_id:
@@ -170,6 +178,7 @@ def validate_plan_specs(
         has_any_ref = any([
             cleaned_refs["activity_id"],
             cleaned_refs["restaurant_id"],
+            cleaned_refs["meal_restaurant_ids"],
             cleaned_refs["drink_id"],
             cleaned_refs["delivery_item_ids"],
         ])
@@ -210,6 +219,7 @@ def _compact_intent(intent: Intent) -> dict[str, Any]:
     data = intent.model_dump()
     keep = [
         "scene", "party_type", "tags", "date", "time_window", "start_time", "duration_hours", "people_count",
+        "meal_slots",
         "radius_km", "budget_per_person", "food_preferences",
         "activity_preferences", "drink_preferences", "delivery_preferences",
         "child_age", "needs_low_calorie", "needs_photo_spot", "needs_quiet",

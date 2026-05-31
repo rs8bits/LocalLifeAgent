@@ -27,11 +27,55 @@ def _intent_has_child(intent: Intent) -> bool:
     return intent.child_age is not None or any(c.get("role") == "child" for c in intent.companions)
 
 
+def _plan_restaurants(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    entries = plan.get("meal_restaurants") or []
+    restaurants = [
+        entry.get("restaurant") for entry in entries
+        if isinstance(entry, dict) and entry.get("restaurant")
+    ]
+    if restaurants:
+        return restaurants
+    restaurant = plan.get("restaurant")
+    return [restaurant] if restaurant else []
+
+
+def _score_restaurant_view(plan: dict[str, Any]) -> dict[str, Any]:
+    restaurants = _plan_restaurants(plan)
+    if not restaurants:
+        return {}
+    if len(restaurants) == 1:
+        return restaurants[0]
+    tags: list[str] = []
+    party_types: list[str] = []
+    for restaurant in restaurants:
+        for tag in restaurant.get("tags", []) or []:
+            if tag not in tags:
+                tags.append(tag)
+        for party_type in restaurant.get("party_types", []) or []:
+            if party_type not in party_types:
+                party_types.append(party_type)
+    return {
+        **restaurants[0],
+        "tags": tags,
+        "party_types": party_types,
+        "avg_price": sum(r.get("avg_price", 0) for r in restaurants),
+        "queue_minutes": sum(r.get("queue_minutes", 0) for r in restaurants),
+        "distance_km": max(r.get("distance_km", 0) for r in restaurants),
+        "rating": sum(r.get("rating", 0) for r in restaurants) / len(restaurants),
+        "recommended_duration_min": sum(r.get("recommended_duration_min", 75) for r in restaurants),
+        "_match_score": sum(r.get("_match_score", 0) for r in restaurants),
+        "available": all(r.get("available", True) for r in restaurants),
+        "bookable": all(r.get("bookable", True) for r in restaurants),
+    }
+
+
 def _apply_tag_match_bonus(plan: dict[str, Any]) -> dict[str, Any]:
     match_count = 0
-    for key in ["activity", "restaurant", "drink"]:
+    for key in ["activity", "drink"]:
         poi = plan.get(key) or {}
         match_count += int(poi.get("_match_score") or 0)
+    for restaurant in _plan_restaurants(plan):
+        match_count += int((restaurant or {}).get("_match_score") or 0)
     for item in plan.get("delivery_items") or []:
         match_count += int((item or {}).get("_match_score") or 0)
     if not match_count:
@@ -45,7 +89,7 @@ def _apply_tag_match_bonus(plan: dict[str, Any]) -> dict[str, Any]:
 def _score_family(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
     """家庭场景评分"""
     activity = plan.get("activity") or {}
-    restaurant = plan.get("restaurant") or {}
+    restaurant = _score_restaurant_view(plan)
     drink = plan.get("drink") or {}
 
     reasons: list[str] = []
@@ -90,7 +134,7 @@ def _score_family(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
 def _score_friends(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
     """朋友场景评分"""
     activity = plan.get("activity") or {}
-    restaurant = plan.get("restaurant") or {}
+    restaurant = _score_restaurant_view(plan)
     drink = plan.get("drink") or {}
 
     reasons: list[str] = []
@@ -135,7 +179,7 @@ def _score_friends(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
 def _score_family_group(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
     """不带儿童的家庭/长辈场景评分：少折腾、少排队、健康和安静优先。"""
     activity = plan.get("activity") or {}
-    restaurant = plan.get("restaurant") or {}
+    restaurant = _score_restaurant_view(plan)
     drink = plan.get("drink") or {}
     reasons: list[str] = []
 
@@ -178,7 +222,7 @@ def _score_family_group(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
 def _score_couple(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
     """情侣/夫妻二人场景评分：氛围、拍照、品质和距离优先。"""
     activity = plan.get("activity") or {}
-    restaurant = plan.get("restaurant") or {}
+    restaurant = _score_restaurant_view(plan)
     drink = plan.get("drink") or {}
     reasons: list[str] = []
 
@@ -208,7 +252,7 @@ def _score_couple(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
 def _score_business(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
     """商务/客户场景评分：品质、安静、稳定可执行优先。"""
     activity = plan.get("activity") or {}
-    restaurant = plan.get("restaurant") or {}
+    restaurant = _score_restaurant_view(plan)
     drink = plan.get("drink") or {}
     reasons: list[str] = []
 
@@ -236,7 +280,7 @@ def _score_business(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
 def _score_solo(plan: dict[str, Any], intent: Intent) -> dict[str, Any]:
     """单人场景评分：近、轻量、性价比和偏好匹配优先。"""
     activity = plan.get("activity") or {}
-    restaurant = plan.get("restaurant") or {}
+    restaurant = _score_restaurant_view(plan)
     drink = plan.get("drink") or {}
     reasons: list[str] = []
 

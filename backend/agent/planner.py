@@ -90,6 +90,7 @@ async def plan_for_message(
     fallback_plans = _build_diverse_plans(intent, activities, restaurants, drinks, tool_logs)
     if not fallback_plans and delivery_items:
         fallback_plans = _build_delivery_only_plans(intent, delivery_items)
+    _apply_multi_meal_constraints_to_plans(fallback_plans, intent, restaurants)
     _attach_delivery_to_plans(fallback_plans, delivery_items, intent)
 
     weather_data = weather_result.data[0] if weather_result and weather_result.status == "ok" and weather_result.data else None
@@ -116,6 +117,7 @@ async def plan_for_message(
         _make_plan_from_composer_spec(i, spec, intent, activities, restaurants, drinks, delivery_items)
         for i, spec in enumerate(llm_specs)
     ] if llm_specs else fallback_plans
+    _apply_multi_meal_constraints_to_plans(plans, intent, restaurants)
 
     # 7. 错误/警告语义：有可用方案时，领域缺失进入风险提示；无方案才进入 errors。
     for domain_name in domains:
@@ -753,6 +755,13 @@ def _resolve_time_constraints(intent: Intent) -> tuple[str, int, str]:
         "night": "20:30",
         "unknown": "14:00",
     }
+    multi_meal_slots = set(_required_meal_slots(intent))
+    if {"lunch", "dinner"}.issubset(multi_meal_slots):
+        start = intent.start_time or "11:30"
+        start = _adjust_today_start_time(intent, start)
+        hours = intent.duration_hours or 9
+        return start, hours * 60, infer_time_window_from_clock(start)
+
     start = intent.start_time or window_starts.get(intent.time_window, "14:00")
     start = _adjust_today_start_time(intent, start)
     effective_window = infer_time_window_from_clock(start)
@@ -840,6 +849,25 @@ def _align_to_slot(preferred_min: int, available_slots: list[str]) -> int | None
 
 
 _MIN_DURATION = {"activity": 45, "restaurant": 45, "drink": 10, "delivery": 5}
+_MEAL_SLOT_LABELS = {"lunch": "午餐", "dinner": "晚餐"}
+_MEAL_SLOT_DEFAULT_TIMES = {"lunch": "11:30", "dinner": "17:30"}
+_MEAL_SLOT_WINDOWS = {
+    "lunch": (10 * 60 + 30, 15 * 60),
+    "dinner": (17 * 60, 21 * 60),
+}
+_MEAL_SLOT_IDEAL_WINDOWS = {
+    "lunch": (11 * 60, 13 * 60 + 30),
+    "dinner": (17 * 60, 20 * 60),
+}
+
+
+def _required_meal_slots(intent: Intent) -> list[str]:
+    slots = [slot for slot in ["lunch", "dinner"] if slot in set(intent.meal_slots or [])]
+    if slots:
+        return slots
+    if intent.time_window in {"lunch", "dinner"}:
+        return [intent.time_window]
+    return []
 
 
 def _resolve_poi_start_time(timeline: list[dict], slot_type: str) -> str | None:
@@ -1071,6 +1099,7 @@ def _make_plan_with_timeline(
         "timeline": timeline,
         "activity": activity,
         "restaurant": restaurant,
+        "meal_restaurants": [],
         "drink": drink,
         "delivery_items": [],
         "actions": [],
@@ -1129,7 +1158,7 @@ def _attach_delivery_to_plans(
 
 def _select_delivery_for_plan(delivery_items: list[dict], plan: dict) -> tuple[dict | None, dict]:
     targets = [
-        plan.get("restaurant") or {},
+        *_plan_restaurants(plan),
         plan.get("activity") or {},
         plan.get("drink") or {},
     ]
@@ -1167,6 +1196,7 @@ def _build_delivery_only_plans(intent: Intent, delivery_items: list[dict]) -> li
             }],
             "activity": None,
             "restaurant": None,
+            "meal_restaurants": [],
             "drink": None,
             "delivery_items": [item],
             "actions": [],
@@ -1225,6 +1255,500 @@ def _default_people_count(intent: Intent) -> int:
     }.get(intent.party_type, 2)
 
 
+def _apply_multi_meal_constraints_to_plans(
+    plans: list[dict],
+    intent: Intent,
+    restaurants: list[dict],
+) -> None:
+    """用户明确要午餐+晚餐时，把两顿饭拆成独立槽位并尽量使用不同餐厅/菜系。"""
+    meal_slots = _required_meal_slots(intent)
+    if len(meal_slots) < 2 or not plans:
+        return
+    candidates = [r for r in restaurants if r and r.get("meal_suitable") is not False]
+    if not candidates:
+        return
+
+    for index, plan in enumerate(plans):
+        assignments = _select_meal_assignments(plan, intent, candidates, meal_slots, index)
+        if not assignments:
+            continue
+        _write_meal_assignments(plan, intent, assignments)
+
+
+def _select_meal_assignments(
+    plan: dict,
+    intent: Intent,
+    candidates: list[dict],
+    meal_slots: list[str],
+    plan_index: int,
+) -> dict[str, dict]:
+    id_map = {r.get("id"): r for r in candidates if r.get("id")}
+    existing_by_slot = _existing_meal_restaurants_by_slot(plan, id_map, meal_slots)
+    assignments: dict[str, dict] = {}
+    used_ids: set[str] = set()
+    used_categories: set[str] = set()
+
+    for slot in meal_slots:
+        restaurant = existing_by_slot.get(slot)
+        if not restaurant or restaurant.get("id") in used_ids:
+            restaurant = _pick_restaurant_for_meal(
+                candidates=candidates,
+                intent=intent,
+                slot=slot,
+                used_ids=used_ids,
+                used_categories=used_categories,
+                offset=plan_index,
+            )
+        if restaurant:
+            assignments[slot] = restaurant
+            if restaurant.get("id"):
+                used_ids.add(restaurant["id"])
+            if restaurant.get("category"):
+                used_categories.add(restaurant["category"])
+
+    return assignments
+
+
+def _existing_meal_restaurants_by_slot(
+    plan: dict,
+    id_map: dict[str, dict],
+    meal_slots: list[str],
+) -> dict[str, dict]:
+    existing: dict[str, dict] = {}
+    restaurant_items = [
+        item for item in _sort_timeline(plan.get("timeline") or [])
+        if item.get("type") == "restaurant"
+    ]
+    for order, item in enumerate(restaurant_items):
+        ref_id = item.get("poi_id") or item.get("ref_id")
+        restaurant = id_map.get(ref_id)
+        if not restaurant:
+            continue
+        slot = _meal_slot_for_time(item.get("time")) or (
+            meal_slots[order] if order < len(meal_slots) else None
+        )
+        if slot in meal_slots and slot not in existing:
+            existing[slot] = restaurant
+
+    legacy_restaurant = plan.get("restaurant") or {}
+    legacy_id = legacy_restaurant.get("id")
+    if meal_slots and meal_slots[0] not in existing and legacy_id in id_map:
+        existing[meal_slots[0]] = id_map[legacy_id]
+    return existing
+
+
+def _pick_restaurant_for_meal(
+    *,
+    candidates: list[dict],
+    intent: Intent,
+    slot: str,
+    used_ids: set[str],
+    used_categories: set[str],
+    offset: int,
+) -> dict | None:
+    available = [r for r in candidates if r.get("id") not in used_ids]
+    if not available:
+        available = candidates
+    ranked = sorted(
+        available,
+        key=lambda r: _meal_restaurant_key(r, intent, slot, used_categories),
+        reverse=True,
+    )
+    if not ranked:
+        return None
+    return ranked[offset % len(ranked)]
+
+
+def _meal_restaurant_key(
+    restaurant: dict,
+    intent: Intent,
+    slot: str,
+    used_categories: set[str],
+) -> float:
+    score = float(restaurant.get("_match_score") or 0) * 3.0
+    if restaurant.get("available"):
+        score += 2.0
+    if restaurant.get("bookable"):
+        score += 1.0
+    score += float(restaurant.get("rating") or 0) * 0.25
+    score += _meal_slot_fit_score(restaurant, slot)
+    category = restaurant.get("category")
+    if category and category not in used_categories:
+        score += 3.0
+    elif category:
+        score -= 4.0
+    if intent.budget_per_person and restaurant.get("avg_price", 0) <= intent.budget_per_person:
+        score += 0.8
+    score -= float(restaurant.get("distance_km") or 0) * 0.08
+    score -= float(restaurant.get("queue_minutes") or 0) * 0.015
+    return score
+
+
+def _meal_slot_fit_score(restaurant: dict, slot: str) -> float:
+    slots = restaurant.get("available_slots") or []
+    window = _MEAL_SLOT_WINDOWS.get(slot)
+    if window and slots:
+        for value in slots:
+            try:
+                minute = _time_to_minutes(value)
+            except ValueError:
+                continue
+            if window[0] <= minute <= window[1]:
+                return 2.0
+    preferred = _MEAL_SLOT_DEFAULT_TIMES.get(slot)
+    if preferred:
+        bh = _parse_business_hours(restaurant.get("business_hours"))
+        if bh and _is_within_business_hours(_time_to_minutes(preferred), bh):
+            return 1.0
+    return 0.0
+
+
+def _write_meal_assignments(
+    plan: dict,
+    intent: Intent,
+    assignments: dict[str, dict],
+) -> None:
+    existing_times = _existing_meal_times(plan)
+    meal_entries: list[dict] = []
+    for slot in _required_meal_slots(intent):
+        restaurant = assignments.get(slot)
+        if not restaurant:
+            continue
+        time = _meal_time_for_restaurant(slot, restaurant, existing_times.get(slot))
+        meal_entries.append({
+            "meal": slot,
+            "label": _MEAL_SLOT_LABELS.get(slot, slot),
+            "time": time,
+            "restaurant": restaurant,
+        })
+    if not meal_entries:
+        return
+
+    plan["meal_restaurants"] = meal_entries
+    plan["restaurant"] = meal_entries[0]["restaurant"]
+    plan["timeline"] = _timeline_with_meal_entries(plan, meal_entries)
+    plan["actions"] = [
+        action for action in (plan.get("actions") or [])
+        if action.get("type") != "book_restaurant"
+    ]
+    _refresh_multi_meal_title(plan, intent, meal_entries)
+    _refresh_multi_meal_reasons_and_risks(plan, meal_entries)
+    _refresh_plan_queue_and_status(plan)
+    _recalculate_budget(plan, intent)
+
+
+def _existing_meal_times(plan: dict) -> dict[str, str]:
+    times: dict[str, str] = {}
+    restaurant_items = [
+        item for item in _sort_timeline(plan.get("timeline") or [])
+        if item.get("type") == "restaurant"
+    ]
+    fallback_slots = ["lunch", "dinner"]
+    for order, item in enumerate(restaurant_items):
+        slot = _meal_slot_for_time(item.get("time"))
+        if not slot and order < len(fallback_slots):
+            slot = fallback_slots[order]
+        if slot and slot not in times:
+            times[slot] = item.get("time") or _MEAL_SLOT_DEFAULT_TIMES.get(slot, "")
+    return times
+
+
+def _meal_slot_for_time(time_value: str | None) -> str | None:
+    if not time_value:
+        return None
+    try:
+        minute = _time_to_minutes(time_value)
+    except ValueError:
+        return None
+    if _MEAL_SLOT_WINDOWS["lunch"][0] <= minute <= _MEAL_SLOT_WINDOWS["lunch"][1]:
+        return "lunch"
+    if _MEAL_SLOT_WINDOWS["dinner"][0] <= minute <= _MEAL_SLOT_WINDOWS["dinner"][1]:
+        return "dinner"
+    return None
+
+
+def _meal_time_for_restaurant(
+    slot: str,
+    restaurant: dict,
+    existing_time: str | None,
+) -> str:
+    ideal_window = _MEAL_SLOT_IDEAL_WINDOWS.get(slot)
+    if existing_time and ideal_window and _time_between(existing_time, ideal_window[0], ideal_window[1]):
+        return existing_time
+    preferred = _MEAL_SLOT_DEFAULT_TIMES.get(slot, "12:00")
+    window = ideal_window or _MEAL_SLOT_WINDOWS.get(slot)
+    valid_slots = []
+    for value in restaurant.get("available_slots") or []:
+        try:
+            minute = _time_to_minutes(value)
+        except ValueError:
+            continue
+        if not window or window[0] <= minute <= window[1]:
+            valid_slots.append(value)
+    if valid_slots:
+        after_preferred = [value for value in valid_slots if value >= preferred]
+        return min(after_preferred) if after_preferred else min(valid_slots)
+    return preferred
+
+
+def _timeline_with_meal_entries(plan: dict, meal_entries: list[dict]) -> list[dict]:
+    original_timeline = plan.get("timeline") or []
+    timeline = [
+        item for item in original_timeline
+        if item.get("type") == "delivery"
+    ]
+    for entry in meal_entries:
+        restaurant = entry["restaurant"]
+        timeline.append({
+            "time": entry["time"],
+            "type": "restaurant",
+            "title": f"{entry['label']}：{restaurant.get('name', '')}",
+            "poi_id": restaurant.get("id", ""),
+            "duration_min": restaurant.get("recommended_duration_min", 90),
+        })
+    activity = plan.get("activity")
+    if activity:
+        original_activity = _first_timeline_item(original_timeline, "activity")
+        activity_time, activity_duration = _activity_slot_between_meals(activity, meal_entries, original_activity)
+        timeline.append({
+            "time": activity_time,
+            "type": "activity",
+            "title": activity.get("name", ""),
+            "poi_id": activity.get("id", ""),
+            "duration_min": activity_duration,
+        })
+    drink = plan.get("drink")
+    if drink:
+        original_drink = _first_timeline_item(original_timeline, "drink")
+        drink_time, drink_duration = _drink_slot_after_dinner(drink, meal_entries, original_drink)
+        timeline.append({
+            "time": drink_time,
+            "type": "drink",
+            "title": drink.get("name", ""),
+            "poi_id": drink.get("id", ""),
+            "duration_min": drink_duration,
+        })
+    return _insert_transits(_sort_timeline(timeline), _timeline_poi_map(plan, meal_entries))
+
+
+def _first_timeline_item(timeline: list[dict], slot_type: str) -> dict | None:
+    return next((item for item in timeline if item.get("type") == slot_type), None)
+
+
+def _activity_slot_between_meals(
+    activity: dict,
+    meal_entries: list[dict],
+    original_item: dict | None,
+) -> tuple[str, int]:
+    lunch = next((entry for entry in meal_entries if entry.get("meal") == "lunch"), None)
+    dinner = next((entry for entry in meal_entries if entry.get("meal") == "dinner"), None)
+    rec_duration = int(activity.get("recommended_duration_min") or _default_duration("activity"))
+    if not lunch or not dinner:
+        return (original_item or {}).get("time") or "14:00", rec_duration
+
+    lunch_restaurant = lunch["restaurant"]
+    dinner_restaurant = dinner["restaurant"]
+    lunch_end = _time_to_minutes(lunch["time"]) + int(lunch_restaurant.get("recommended_duration_min", 75))
+    dinner_start = _time_to_minutes(dinner["time"])
+    earliest = _round_up_to_half_hour(lunch_end + _estimate_transit(lunch_restaurant, activity))
+    latest_start = max(earliest, dinner_start - _estimate_transit(activity, dinner_restaurant) - rec_duration)
+    original_time = (original_item or {}).get("time")
+    if original_time and _time_between(original_time, earliest, dinner_start):
+        start_min = _time_to_minutes(original_time)
+    else:
+        start_min = _choose_slot_between(activity.get("available_slots") or [], earliest, latest_start) or earliest
+    latest_end = max(start_min + 60, dinner_start - _estimate_transit(activity, dinner_restaurant))
+    duration = min(rec_duration, max(60, latest_end - start_min))
+    return _minutes_to_time(start_min), duration
+
+
+def _drink_slot_after_dinner(
+    drink: dict,
+    meal_entries: list[dict],
+    original_item: dict | None,
+) -> tuple[str, int]:
+    dinner = next((entry for entry in meal_entries if entry.get("meal") == "dinner"), None)
+    rec_duration = int(drink.get("recommended_duration_min") or _default_duration("drink"))
+    if not dinner:
+        return (original_item or {}).get("time") or "20:00", rec_duration
+
+    dinner_restaurant = dinner["restaurant"]
+    dinner_end = _time_to_minutes(dinner["time"]) + int(dinner_restaurant.get("recommended_duration_min", 75))
+    earliest = _round_up_to_half_hour(dinner_end + _estimate_transit(dinner_restaurant, drink))
+    original_time = (original_item or {}).get("time")
+    if original_time:
+        try:
+            original_min = _time_to_minutes(original_time)
+        except ValueError:
+            original_min = 0
+        if original_min >= earliest:
+            return original_time, rec_duration
+    start_min = _choose_slot_between(drink.get("available_slots") or [], earliest, 23 * 60) or earliest
+    return _minutes_to_time(start_min), rec_duration
+
+
+def _choose_slot_between(available_slots: list[str], earliest: int, latest: int) -> int | None:
+    candidates = []
+    day_start = (earliest // (24 * 60)) * 24 * 60
+    for slot in available_slots:
+        try:
+            minute = day_start + _time_to_minutes(slot)
+        except ValueError:
+            continue
+        if earliest <= minute <= latest:
+            candidates.append(minute)
+    return min(candidates) if candidates else None
+
+
+def _time_between(time_value: str, start_min: int, end_min: int) -> bool:
+    try:
+        minute = _time_to_minutes(time_value)
+    except ValueError:
+        return False
+    return start_min <= minute <= end_min
+
+
+def _round_up_to_half_hour(minute: int) -> int:
+    return ((minute + 29) // 30) * 30
+
+
+def _timeline_poi_map(plan: dict, meal_entries: list[dict]) -> dict[str, dict]:
+    mapping: dict[str, dict] = {}
+    for key in ["activity", "drink"]:
+        item = plan.get(key)
+        if item and item.get("id"):
+            mapping[item["id"]] = item
+    for entry in meal_entries:
+        restaurant = entry.get("restaurant") or {}
+        if restaurant.get("id"):
+            mapping[restaurant["id"]] = restaurant
+    for item in plan.get("delivery_items") or []:
+        if item.get("id"):
+            mapping[item["id"]] = item
+    return mapping
+
+
+def _insert_transits(timeline: list[dict], poi_map: dict[str, dict]) -> list[dict]:
+    if not timeline:
+        return []
+    result: list[dict] = []
+    travel_items = [item for item in timeline if item.get("type") != "delivery"]
+    travel_ids = {id(item) for item in travel_items}
+    for index, item in enumerate(timeline):
+        result.append(item)
+        if id(item) not in travel_ids:
+            continue
+        next_item = next(
+            (candidate for candidate in timeline[index + 1:] if candidate.get("type") != "delivery"),
+            None,
+        )
+        if not next_item:
+            continue
+        current_poi = poi_map.get(item.get("poi_id"))
+        next_poi = poi_map.get(next_item.get("poi_id"))
+        if not current_poi or not next_poi:
+            continue
+        try:
+            end_time = _minutes_to_time(_time_to_minutes(item.get("time")) + int(item.get("duration_min") or 0))
+        except (TypeError, ValueError):
+            continue
+        result.append({
+            "time": end_time,
+            "type": "transit",
+            "title": f"前往 {next_item.get('title', '')}",
+            "poi_id": "",
+            "duration_min": _estimate_transit(current_poi, next_poi),
+        })
+    return result
+
+
+def _refresh_multi_meal_title(plan: dict, intent: Intent, meal_entries: list[dict]) -> None:
+    parts: list[str] = []
+    activity = plan.get("activity")
+    drink = plan.get("drink")
+    if activity:
+        parts.append(str(activity.get("name", "")))
+    for entry in meal_entries:
+        restaurant = entry["restaurant"]
+        meal_label = entry.get("label", "")
+        category = restaurant.get("category") or restaurant.get("name", "")
+        parts.append(f"{meal_label}{category}")
+    if drink:
+        parts.append(str(drink.get("name", "")))
+    prefix = _party_title_prefix(intent).replace("方案", "")
+    plan["title"] = f"{prefix}方案：{' + '.join([p for p in parts if p])}"
+
+
+def _refresh_multi_meal_reasons_and_risks(plan: dict, meal_entries: list[dict]) -> None:
+    ids = [entry["restaurant"].get("id") for entry in meal_entries if entry.get("restaurant")]
+    categories = [entry["restaurant"].get("category") for entry in meal_entries if entry.get("restaurant")]
+    reasons = plan.setdefault("recommend_reasons", [])
+    risks = plan.setdefault("risk_tips", [])
+    if len(set(ids)) == len(ids) and len(ids) >= 2:
+        reason = "午餐和晚餐已安排不同餐厅"
+        if reason not in reasons:
+            reasons.append(reason)
+    else:
+        risk = "可用餐厅不足，午餐和晚餐可能重复同一家"
+        if risk not in risks:
+            risks.append(risk)
+    if len(set(categories)) >= 2:
+        reason = "两顿饭菜系不同，避免体验重复"
+        if reason not in reasons:
+            reasons.append(reason)
+    for entry in meal_entries:
+        restaurant = entry["restaurant"]
+        label = entry.get("label", "餐厅")
+        if restaurant.get("risk") and restaurant["risk"] not in risks:
+            risks.append(restaurant["risk"])
+        if restaurant.get("queue_minutes", 0) > 30:
+            tip = f"{label}「{restaurant.get('name', '')}」排队约{restaurant['queue_minutes']}分钟"
+            if tip not in risks:
+                risks.append(tip)
+        slots = restaurant.get("available_slots") or []
+        if restaurant.get("bookable") and slots and entry.get("time") not in slots:
+            next_slot = _next_available_slot_text(entry.get("time"), slots)
+            tip = f"{label}「{restaurant.get('name', '')}」{entry.get('time')}暂无预约位"
+            if next_slot:
+                tip += f"，最近可约 {next_slot}"
+            if tip not in risks:
+                risks.append(tip)
+
+
+def _next_available_slot_text(preferred_time: str | None, slots: list[str]) -> str | None:
+    if not preferred_time or not slots:
+        return None
+    after = [slot for slot in slots if slot >= preferred_time]
+    return min(after) if after else slots[0]
+
+
+def _refresh_plan_queue_and_status(plan: dict) -> None:
+    queue = 0
+    for key in ["activity", "drink"]:
+        if plan.get(key):
+            queue += int(plan[key].get("queue_minutes") or 0)
+    restaurants = _plan_restaurants(plan)
+    queue += sum(int(r.get("queue_minutes") or 0) for r in restaurants)
+    plan["queue_minutes"] = queue
+
+    if any(not r.get("available", True) for r in restaurants):
+        plan["booking_status"] = "unavailable"
+    elif any(not r.get("bookable", True) for r in restaurants):
+        plan["booking_status"] = "partial"
+
+
+def _plan_restaurants(plan: dict) -> list[dict]:
+    entries = plan.get("meal_restaurants") or []
+    restaurants = [
+        entry.get("restaurant") for entry in entries
+        if isinstance(entry, dict) and entry.get("restaurant")
+    ]
+    if restaurants:
+        return restaurants
+    restaurant = plan.get("restaurant")
+    return [restaurant] if restaurant else []
+
+
 def _delivery_time_for_plan(plan: dict, item: dict) -> str:
     restaurant_time = _timeline_time_for(plan, "restaurant")
     if restaurant_time:
@@ -1246,8 +1770,13 @@ def _make_plan_from_composer_spec(
 ) -> dict:
     """将 LLM 输出的引用 JSON 转换为前端/执行器使用的完整 Plan。"""
     refs = spec.get("selected_refs", {})
+    meal_ref_ids = refs.get("meal_restaurant_ids") or {}
+    meal_restaurants = [
+        item for meal in ["lunch", "dinner"]
+        if (item := _find_by_id(restaurants, meal_ref_ids.get(meal)))
+    ]
     activity = _find_by_id(activities, refs.get("activity_id"))
-    restaurant = _find_by_id(restaurants, refs.get("restaurant_id"))
+    restaurant = _find_by_id(restaurants, refs.get("restaurant_id")) or (meal_restaurants[0] if meal_restaurants else None)
     drink = _find_by_id(drinks, refs.get("drink_id"))
     deliveries = [
         item for item_id in refs.get("delivery_item_ids", [])
@@ -1257,9 +1786,20 @@ def _make_plan_from_composer_spec(
     base = _make_plan_with_timeline(index, intent, activity, restaurant, drink)
     if spec.get("title"):
         base["title"] = str(spec["title"])
-    timeline = _timeline_from_spec(spec.get("timeline", []), activity, restaurant, drink, deliveries)
+    timeline = _timeline_from_spec(spec.get("timeline", []), activity, restaurants, drink, deliveries)
     if timeline:
         base["timeline"] = timeline
+    if meal_restaurants:
+        base["meal_restaurants"] = [
+            {
+                "meal": meal,
+                "label": _MEAL_SLOT_LABELS.get(meal, meal),
+                "time": "",
+                "restaurant": restaurant_item,
+            }
+            for meal in ["lunch", "dinner"]
+            if (restaurant_item := _find_by_id(restaurants, meal_ref_ids.get(meal)))
+        ]
     base["delivery_items"] = deliveries
     base["actions"] = _normalize_actions_from_spec(spec.get("actions", []))
     for reason in spec.get("recommend_reasons") or []:
@@ -1275,12 +1815,12 @@ def _make_plan_from_composer_spec(
 def _timeline_from_spec(
     raw_timeline: list[dict],
     activity: dict | None,
-    restaurant: dict | None,
+    restaurants: list[dict],
     drink: dict | None,
     delivery_items: list[dict],
 ) -> list[dict]:
     item_map = {}
-    for item in [activity, restaurant, drink, *delivery_items]:
+    for item in [activity, drink, *restaurants, *delivery_items]:
         if item:
             item_map[item.get("id")] = item
 
@@ -1319,58 +1859,87 @@ def _normalize_actions_from_spec(raw_actions: list[dict]) -> list[dict]:
 def _ensure_plan_actions(plan: dict, intent: Intent) -> None:
     """为前端确认页和执行器补齐可执行动作 JSON。"""
     existing = plan.get("actions") or []
-    seen = {(a.get("type"), a.get("ref_id")) for a in existing}
+    seen = {(a.get("type"), a.get("ref_id"), a.get("scheduled_time")) for a in existing}
     actions = list(existing)
 
     activity = plan.get("activity")
-    if activity and activity.get("bookable") and ("book_activity", activity.get("id")) not in seen:
+    activity_time = _timeline_time_for(plan, "activity") or "14:00"
+    if activity and activity.get("bookable") and ("book_activity", activity.get("id"), activity_time) not in seen:
         actions.append({
             "action_id": f"book_{activity.get('id')}",
             "type": "book_activity",
             "ref_id": activity.get("id"),
-            "scheduled_time": _timeline_time_for(plan, "activity") or "14:00",
+            "scheduled_time": activity_time,
             "quantity": intent.people_count or 1,
             "target_ref_id": None,
         })
+        seen.add(("book_activity", activity.get("id"), activity_time))
 
-    restaurant = plan.get("restaurant")
-    if restaurant and restaurant.get("bookable") and restaurant.get("available") and ("book_restaurant", restaurant.get("id")) not in seen:
-        actions.append({
-            "action_id": f"book_{restaurant.get('id')}",
-            "type": "book_restaurant",
-            "ref_id": restaurant.get("id"),
-            "scheduled_time": _timeline_time_for(plan, "restaurant") or "17:30",
-            "quantity": intent.people_count or 1,
-            "target_ref_id": None,
-        })
+    meal_entries = plan.get("meal_restaurants") or []
+    if meal_entries:
+        for entry in meal_entries:
+            restaurant = entry.get("restaurant") or {}
+            scheduled_time = entry.get("time") or _timeline_time_for_restaurant_id(plan, restaurant.get("id")) or "17:30"
+            signature = ("book_restaurant", restaurant.get("id"), scheduled_time)
+            if (
+                restaurant
+                and restaurant.get("bookable")
+                and restaurant.get("available")
+                and signature not in seen
+            ):
+                actions.append({
+                    "action_id": f"book_{entry.get('meal', 'meal')}_{restaurant.get('id')}",
+                    "type": "book_restaurant",
+                    "ref_id": restaurant.get("id"),
+                    "scheduled_time": scheduled_time,
+                    "quantity": intent.people_count or 1,
+                    "target_ref_id": None,
+                })
+                seen.add(signature)
+    else:
+        restaurant = plan.get("restaurant")
+        scheduled_time = _timeline_time_for(plan, "restaurant") or "17:30"
+        if restaurant and restaurant.get("bookable") and restaurant.get("available") and ("book_restaurant", restaurant.get("id"), scheduled_time) not in seen:
+            actions.append({
+                "action_id": f"book_{restaurant.get('id')}",
+                "type": "book_restaurant",
+                "ref_id": restaurant.get("id"),
+                "scheduled_time": scheduled_time,
+                "quantity": intent.people_count or 1,
+                "target_ref_id": None,
+            })
 
     drink = plan.get("drink")
-    if drink and drink.get("bookable") and ("book_drink", drink.get("id")) not in seen:
+    drink_time = _timeline_time_for(plan, "drink") or "16:00"
+    if drink and drink.get("bookable") and ("book_drink", drink.get("id"), drink_time) not in seen:
         actions.append({
             "action_id": f"book_{drink.get('id')}",
             "type": "book_drink",
             "ref_id": drink.get("id"),
-            "scheduled_time": _timeline_time_for(plan, "drink") or "16:00",
+            "scheduled_time": drink_time,
             "quantity": intent.people_count or 1,
             "target_ref_id": None,
         })
+        seen.add(("book_drink", drink.get("id"), drink_time))
 
     for item in plan.get("delivery_items") or []:
-        if ("order_delivery", item.get("id")) in seen:
+        delivery_time = _timeline_time_for(plan, "delivery") or _delivery_time_for_plan(plan, item)
+        if ("order_delivery", item.get("id"), delivery_time) in seen:
             continue
-        target = plan.get("restaurant") or plan.get("activity") or plan.get("drink") or {}
+        target = (_plan_restaurants(plan) or [None])[0] or plan.get("activity") or plan.get("drink") or {}
         target_ref_id = item.get("_delivery_target_ref_id") or target.get("id")
         actions.append({
             "action_id": f"order_{item.get('id')}",
             "type": "order_delivery",
             "ref_id": item.get("id"),
-            "scheduled_time": _timeline_time_for(plan, "delivery") or _delivery_time_for_plan(plan, item),
+            "scheduled_time": delivery_time,
             "quantity": 1,
             "target_ref_id": target_ref_id,
         })
+        seen.add(("order_delivery", item.get("id"), delivery_time))
 
     for deal in plan.get("deals") or []:
-        if ("order_deal", deal.get("id")) in seen:
+        if ("order_deal", deal.get("id"), "") in seen:
             continue
         actions.append({
             "action_id": f"deal_{deal.get('id')}",
@@ -1380,6 +1949,7 @@ def _ensure_plan_actions(plan: dict, intent: Intent) -> None:
             "quantity": 1,
             "target_ref_id": deal.get("poi_id"),
         })
+        seen.add(("order_deal", deal.get("id"), ""))
 
     plan["actions"] = actions
 
@@ -1423,6 +1993,15 @@ def _timeline_time_for(plan: dict, slot_type: str) -> str | None:
     return None
 
 
+def _timeline_time_for_restaurant_id(plan: dict, restaurant_id: str | None) -> str | None:
+    if not restaurant_id:
+        return None
+    for item in plan.get("timeline") or []:
+        if item.get("type") == "restaurant" and item.get("poi_id") == restaurant_id:
+            return item.get("time")
+    return None
+
+
 def _sort_timeline(timeline: list[dict]) -> list[dict]:
     return sorted(timeline, key=lambda item: item.get("time") or "99:99")
 
@@ -1430,9 +2009,14 @@ def _sort_timeline(timeline: list[dict]) -> list[dict]:
 def _recalculate_budget(plan: dict, intent: Intent) -> None:
     people = intent.people_count or _default_people_count(intent)
     per_person = 0
-    for key in ["activity", "restaurant", "drink"]:
+    for key in ["activity", "drink"]:
         if plan.get(key):
             per_person += plan[key].get("avg_price", 0)
+    meal_restaurants = _plan_restaurants(plan)
+    if meal_restaurants:
+        per_person += sum(restaurant.get("avg_price", 0) for restaurant in meal_restaurants)
+    elif plan.get("restaurant"):
+        per_person += plan["restaurant"].get("avg_price", 0)
     delivery_total = 0
     for item in plan.get("delivery_items") or []:
         delivery_total += item.get("avg_price", 0) + item.get("delivery_fee", 0)
@@ -1449,7 +2033,8 @@ def _recalculate_budget(plan: dict, intent: Intent) -> None:
 
 async def _enrich_plan(plan: dict, tool_logs: list[dict]) -> None:
     activity = plan.get("activity")
-    restaurant = plan.get("restaurant")
+    restaurants = _plan_restaurants(plan)
+    restaurant = restaurants[0] if restaurants else None
     drink = plan.get("drink")
 
     # 路线
@@ -1463,8 +2048,12 @@ async def _enrich_plan(plan: dict, tool_logs: list[dict]) -> None:
 
     # 团购券
     deals = []
-    for poi in [activity, restaurant, drink]:
+    seen_poi_ids: set[str] = set()
+    for poi in [activity, *restaurants, drink]:
         if poi:
+            if poi.get("id") in seen_poi_ids:
+                continue
+            seen_poi_ids.add(poi.get("id"))
             deal_result = await _run_tool("get_deals", tool_logs, poi_id=poi.get("id", ""))
             if deal_result and deal_result.status == "ok" and deal_result.data:
                 deals.extend(deal_result.data)

@@ -13,6 +13,7 @@ export default function PlanCard({
 }) {
   const activity = plan.activity;
   const restaurant = plan.restaurant;
+  const mealRestaurants = plan.meal_restaurants ?? [];
   const drink = plan.drink;
   const deliveryItems = plan.delivery_items ?? [];
   const route = plan.route;
@@ -110,7 +111,32 @@ export default function PlanCard({
       )}
 
       {/* 餐厅 */}
-      {restaurant && (
+      {mealRestaurants.length > 0 ? (
+        <div className="text-sm space-y-1">
+          {mealRestaurants.map((entry, index) => {
+            const item = entry.restaurant;
+            return (
+              <div key={`${entry.meal}-${(item.id as string) ?? index}`}>
+                <span className="text-gray-500">{entry.label ?? entry.meal}: </span>
+                <span className="font-medium">{item.name as string}</span>
+                <span className="text-gray-400 ml-2">
+                  {(item.avg_price as number) ?? 0}元/人
+                </span>
+                {(item.category as string) && (
+                  <span className="text-gray-500 text-xs ml-1">
+                    {(item.category as string)}
+                  </span>
+                )}
+                {(item.queue_minutes as number) > 0 && (
+                  <span className="text-orange-500 text-xs ml-1">
+                    排队约{(item.queue_minutes as number)}分钟
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : restaurant && (
         <div className="text-sm">
           <span className="text-gray-500">餐厅: </span>
           <span className="font-medium">{restaurant.name as string}</span>

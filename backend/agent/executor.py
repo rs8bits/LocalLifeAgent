@@ -298,6 +298,10 @@ def _build_plan_item_map(plan: dict) -> dict[str, dict]:
         item = plan.get(key)
         if item and item.get("id"):
             mapping[item["id"]] = item
+    for entry in plan.get("meal_restaurants") or []:
+        restaurant = entry.get("restaurant") if isinstance(entry, dict) else None
+        if restaurant and restaurant.get("id"):
+            mapping[restaurant["id"]] = restaurant
     for item in plan.get("delivery_items") or []:
         if item.get("id"):
             mapping[item["id"]] = item

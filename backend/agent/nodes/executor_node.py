@@ -45,13 +45,13 @@ async def executor_node(state: AgentState) -> AgentState:
         })
 
     # 餐厅订位
-    restaurant = selected.get("restaurant")
-    if restaurant and restaurant.get("bookable") and restaurant.get("available"):
-        await emit_event(state, {
-            "event": "booking_start",
-            "message": f"正在订位餐厅: {restaurant.get('name', '')}",
-            "data": {"type": "restaurant"},
-        })
+    for restaurant in _plan_restaurants(selected):
+        if restaurant and restaurant.get("bookable") and restaurant.get("available"):
+            await emit_event(state, {
+                "event": "booking_start",
+                "message": f"正在订位餐厅: {restaurant.get('name', '')}",
+                "data": {"type": "restaurant"},
+            })
 
     # 团购券订单
     deals = selected.get("deals", [])
@@ -86,3 +86,15 @@ async def executor_node(state: AgentState) -> AgentState:
             state.setdefault("errors", []).append(err)
 
     return state
+
+
+def _plan_restaurants(plan: dict) -> list[dict]:
+    entries = plan.get("meal_restaurants") or []
+    restaurants = [
+        entry.get("restaurant") for entry in entries
+        if isinstance(entry, dict) and entry.get("restaurant")
+    ]
+    if restaurants:
+        return restaurants
+    restaurant = plan.get("restaurant")
+    return [restaurant] if restaurant else []

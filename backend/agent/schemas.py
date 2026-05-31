@@ -24,6 +24,7 @@ class Intent(BaseModel):
     time_window: str = "afternoon"  # morning | lunch | afternoon | dinner | evening | night | unknown
     start_time: Optional[str] = None  # 精确开始时间，HH:MM
     duration_hours: Optional[int] = None
+    meal_slots: list[str] = Field(default_factory=list)  # lunch | dinner
     people_count: Optional[int] = None
     companions: list[dict[str, Any]] = Field(default_factory=list)
     radius_km: float = 5.0
@@ -63,6 +64,7 @@ class Plan(BaseModel):
     timeline: list[dict[str, Any]] = Field(default_factory=list)
     activity: Optional[dict[str, Any]] = None
     restaurant: Optional[dict[str, Any]] = None
+    meal_restaurants: list[dict[str, Any]] = Field(default_factory=list)
     drink: Optional[dict[str, Any]] = None
     delivery_items: list[dict[str, Any]] = Field(default_factory=list)
     actions: list[dict[str, Any]] = Field(default_factory=list)
