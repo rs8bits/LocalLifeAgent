@@ -350,5 +350,94 @@
     "description": "茶点伴手礼，可用于商务会面或长辈拜访",
     "source": "mock_meituan_delivery",
     "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力"
+  },
+  {
+    "id": "delivery_009",
+    "name": "亲子低糖水果杯套餐",
+    "merchant_name": "亲子友好鲜果茶铺",
+    "poi_type": "delivery_item",
+    "domain": "delivery",
+    "category": "外卖",
+    "sub_category": "fruit",
+    "area": "朝阳大悦城商圈",
+    "available_areas": [
+      "朝阳大悦城商圈",
+      "三里屯商圈",
+      "合生汇商圈"
+    ],
+    "avg_price": 88,
+    "delivery_fee": 8,
+    "estimated_delivery_min": 30,
+    "prep_time_min": 12,
+    "tags": [
+      "外卖",
+      "水果",
+      "儿童",
+      "亲子",
+      "健康",
+      "低糖"
+    ],
+    "suitable_scenes": [
+      "family",
+      "general"
+    ],
+    "scene": "family",
+    "stock_remaining": 26,
+    "available": true,
+    "business_hours": "10:00-21:30",
+    "risk": null,
+    "description": "儿童水果杯和低糖果茶，可送到餐厅或亲子乐园前台。",
+    "source": "mock_meituan_delivery",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力",
+    "party_types": [
+      "family_with_child",
+      "family"
+    ]
+  },
+  {
+    "id": "delivery_010",
+    "name": "朋友局蛋糕鲜花组合闪送",
+    "merchant_name": "甜屿蛋糕 x 花点时间",
+    "poi_type": "delivery_item",
+    "domain": "delivery",
+    "category": "闪送",
+    "sub_category": "gift",
+    "area": "三里屯商圈",
+    "available_areas": [
+      "三里屯商圈",
+      "798艺术区",
+      "鼓楼商圈",
+      "朝阳大悦城商圈"
+    ],
+    "avg_price": 298,
+    "delivery_fee": 22,
+    "estimated_delivery_min": 80,
+    "prep_time_min": 45,
+    "tags": [
+      "闪送",
+      "蛋糕",
+      "鲜花",
+      "朋友聚会",
+      "惊喜",
+      "庆祝",
+      "拍照"
+    ],
+    "suitable_scenes": [
+      "friends",
+      "general"
+    ],
+    "scene": "friends",
+    "stock_remaining": 6,
+    "available": true,
+    "business_hours": "09:00-20:30",
+    "risk": "蛋糕和鲜花组合需至少45分钟准备",
+    "description": "适合朋友局临时庆祝，可送到餐厅前台或活动地点。",
+    "source": "mock_meituan_delivery",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实外卖库存、价格或履约能力",
+    "party_types": [
+      "friends",
+      "couple",
+      "business"
+    ]
   }
 ]

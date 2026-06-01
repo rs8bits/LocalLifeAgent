@@ -428,5 +428,129 @@
       "seating": true
     },
     "domain": "drink"
+  },
+  {
+    "id": "drink_008",
+    "name": "三里屯低度微醺酒馆",
+    "category": "酒吧",
+    "sub_category": "bar",
+    "area": "三里屯商圈",
+    "address": "朝阳区三里屯酒吧街12号",
+    "lat": 39.9345,
+    "lng": 116.4562,
+    "distance_km": 3.8,
+    "avg_price": 78,
+    "tags": [
+      "酒吧",
+      "精酿",
+      "低度酒",
+      "聚会",
+      "社交",
+      "朋友聚会",
+      "拍照"
+    ],
+    "scene": "friends",
+    "indoor": true,
+    "queue_minutes": 8,
+    "available_slots": [
+      "18:00",
+      "19:00",
+      "20:00",
+      "21:00"
+    ],
+    "bookable": true,
+    "risk": "仅适合成年人，18:00后体验更完整",
+    "description": "低度酒和无酒精特调都有，适合2男2女朋友局饭后小坐。",
+    "poi_type": "drink",
+    "meituan_poi_id": "mt_drink_008",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "friends",
+      "couple",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "18:00-01:00",
+    "rating": 4.6,
+    "review_count": 1480,
+    "monthly_sales": 820,
+    "popularity_score": 82,
+    "recommended_duration_min": 75,
+    "stock_remaining": 18,
+    "booking_required": true,
+    "reservation_notice": "建议提前预约卡座",
+    "refund_policy": "预约开始前4小时可退",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": false,
+      "seating": true
+    },
+    "domain": "drink",
+    "party_types": [
+      "friends",
+      "couple",
+      "business"
+    ]
+  },
+  {
+    "id": "drink_009",
+    "name": "亲子友好鲜果茶铺",
+    "category": "茶饮",
+    "sub_category": "tea",
+    "area": "朝阳大悦城商圈",
+    "address": "朝阳区朝阳北路101号4层",
+    "lat": 39.9217,
+    "lng": 116.509,
+    "distance_km": 2.2,
+    "avg_price": 28,
+    "tags": [
+      "茶饮",
+      "果茶",
+      "亲子",
+      "健康",
+      "低糖",
+      "休息",
+      "外卖"
+    ],
+    "scene": "family",
+    "indoor": true,
+    "queue_minutes": 5,
+    "available_slots": [],
+    "bookable": false,
+    "risk": null,
+    "description": "低糖果茶和儿童鲜榨果汁，适合亲子活动后休息。",
+    "poi_type": "drink",
+    "meituan_poi_id": "mt_drink_009",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "family",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "10:00-22:00",
+    "rating": 4.5,
+    "review_count": 980,
+    "monthly_sales": 1600,
+    "popularity_score": 76,
+    "recommended_duration_min": 20,
+    "stock_remaining": null,
+    "booking_required": false,
+    "reservation_notice": "到店点单，支持提前自取",
+    "refund_policy": "到店消费",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": true,
+      "seating": true
+    },
+    "domain": "drink",
+    "party_types": [
+      "family_with_child",
+      "family",
+      "solo"
+    ]
   }
 ]

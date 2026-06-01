@@ -126,5 +126,75 @@
         "rating": 5
       }
     ]
+  },
+  {
+    "user_id": "user_004",
+    "name": "小明（家庭场景）",
+    "preferences": {
+      "home_location": "朝阳大悦城附近",
+      "home_lat": 39.9219,
+      "home_lng": 116.5096,
+      "child_age": 5,
+      "child_name": "小宝",
+      "spouse_diet": "减脂",
+      "max_distance_km": 8,
+      "max_queue_minutes": 20,
+      "preferred_tags": [
+        "亲子",
+        "室内",
+        "健康",
+        "少排队"
+      ],
+      "cuisine_likes": [
+        "健康轻食",
+        "亲子餐厅",
+        "清淡中餐"
+      ],
+      "cuisine_dislikes": [
+        "重油",
+        "重辣"
+      ],
+      "default_transport": "打车",
+      "budget_per_person": 180,
+      "avoid_waiting_without_ticket": true,
+      "privacy_level": "mock_only"
+    },
+    "history": []
+  },
+  {
+    "user_id": "user_005",
+    "name": "小明（朋友场景）",
+    "preferences": {
+      "home_location": "三里屯附近",
+      "home_lat": 39.9337,
+      "home_lng": 116.4551,
+      "friend_group_size": 4,
+      "friend_group_composition": {
+        "male": 2,
+        "female": 2
+      },
+      "max_distance_km": 8,
+      "max_queue_minutes": 35,
+      "preferred_tags": [
+        "桌游",
+        "展览",
+        "citywalk",
+        "小吃",
+        "拍照",
+        "精酿"
+      ],
+      "cuisine_likes": [
+        "小吃",
+        "烤肉",
+        "云南菜",
+        "日料"
+      ],
+      "cuisine_dislikes": [],
+      "default_transport": "打车",
+      "budget_per_person": 220,
+      "avoid_waiting_without_ticket": true,
+      "privacy_level": "mock_only"
+    },
+    "history": []
   }
 ]

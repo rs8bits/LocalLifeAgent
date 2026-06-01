@@ -550,8 +550,8 @@ def _build_diverse_plans(
         activities.sort(key=_general_act_key(intent), reverse=True)
         restaurants.sort(key=_general_rest_key(intent), reverse=True)
     else:
-        activities.sort(key=_friends_act_key(), reverse=True)
-        restaurants.sort(key=_friends_rest_key(), reverse=True)
+        activities.sort(key=_friends_act_key(intent), reverse=True)
+        restaurants.sort(key=_friends_rest_key(intent), reverse=True)
 
     # 饮品排序：匹配用户偏好
     drinks_sorted = sorted(drinks, key=_drink_key(intent), reverse=True)
@@ -607,6 +607,7 @@ def _has_child_context(intent: Intent) -> bool:
 def _family_act_key(intent: Intent):
     def key(a: dict) -> float:
         s = a.get("_match_score", 0) * 2.0
+        s += _memory_match_score(a, intent) * 0.6
         if a.get("child_friendly"): s += 3.0
         if intent.child_age and a.get("suitable_age_min", 0) <= intent.child_age <= a.get("suitable_age_max", 99):
             s += 2.0
@@ -619,6 +620,7 @@ def _family_act_key(intent: Intent):
 def _family_rest_key(intent: Intent):
     def key(r: dict) -> float:
         s = r.get("_match_score", 0) * 2.0
+        s += _memory_match_score(r, intent) * 0.8
         if r.get("child_friendly"): s += 3.0
         if intent.needs_low_calorie:
             if r.get("low_calorie_options"): s += 3.0
@@ -633,6 +635,7 @@ def _family_rest_key(intent: Intent):
 def _family_group_act_key(intent: Intent):
     def key(a: dict) -> float:
         s = a.get("_match_score", 0) * 2.0
+        s += _memory_match_score(a, intent) * 0.6
         tags = a.get("tags", [])
         if any(t in tags for t in ["户外", "公园", "展览", "艺术", "轻松"]):
             s += 1.5
@@ -650,6 +653,7 @@ def _family_group_act_key(intent: Intent):
 def _family_group_rest_key(intent: Intent):
     def key(r: dict) -> float:
         s = r.get("_match_score", 0) * 2.0
+        s += _memory_match_score(r, intent) * 0.8
         tags = r.get("tags", [])
         if any(t in tags for t in ["健康", "轻食", "低卡", "高品质", "聚会"]):
             s += 2.0
@@ -668,6 +672,7 @@ def _family_group_rest_key(intent: Intent):
 def _general_act_key(intent: Intent):
     def key(a: dict) -> float:
         s = a.get("_match_score", 0) * 2.0
+        s += _memory_match_score(a, intent) * 0.5
         tags = a.get("tags", [])
         if intent.party_type == "couple" and any(t in tags for t in ["拍照", "艺术", "音乐", "约会"]):
             s += 3.0
@@ -685,6 +690,7 @@ def _general_act_key(intent: Intent):
 def _general_rest_key(intent: Intent):
     def key(r: dict) -> float:
         s = r.get("_match_score", 0) * 2.0
+        s += _memory_match_score(r, intent) * 0.7
         tags = r.get("tags", [])
         if intent.party_type == "couple" and any(t in tags for t in ["约会", "拍照", "高品质", "出片"]):
             s += 3.0
@@ -701,9 +707,10 @@ def _general_rest_key(intent: Intent):
     return key
 
 
-def _friends_act_key():
+def _friends_act_key(intent: Intent):
     def key(a: dict) -> float:
         s = a.get("_match_score", 0) * 2.0
+        s += _memory_match_score(a, intent) * 0.6
         tags = a.get("tags", [])
         if any(t in tags for t in ["社交", "聚会", "桌游", "拍照", "唱歌", "密室", "电竞", "音乐"]):
             s += 3.0
@@ -713,9 +720,10 @@ def _friends_act_key():
     return key
 
 
-def _friends_rest_key():
+def _friends_rest_key(intent: Intent):
     def key(r: dict) -> float:
         s = r.get("_match_score", 0) * 2.0
+        s += _memory_match_score(r, intent) * 0.7
         tags = r.get("tags", [])
         if any(t in tags for t in ["约会", "拍照", "聚会", "社交", "高品质", "网红"]):
             s += 3.0
@@ -729,6 +737,7 @@ def _friends_rest_key():
 def _drink_key(intent: Intent):
     def key(d: dict) -> float:
         s = d.get("_match_score", 0) * 2.0
+        s += _memory_match_score(d, intent) * 0.4
         prefs = intent.drink_preferences or []
         if "bar" in prefs and d.get("sub_category") == "bar":
             s += 5.0
@@ -738,6 +747,34 @@ def _drink_key(intent: Intent):
         s += d.get("rating", 0) * 0.1
         return s
     return key
+
+
+def _memory_match_score(item: dict, intent: Intent) -> int:
+    """长期偏好只影响排序，不参与硬过滤。"""
+    if not item or not intent.memory_tags:
+        return 0
+    searchable = {
+        str(value)
+        for value in [
+            item.get("name"),
+            item.get("category"),
+            item.get("sub_category"),
+            item.get("cuisine"),
+            *(item.get("tags") or []),
+        ]
+        if value
+    }
+    aliases = {
+        "减脂": {"健康", "轻食", "低卡", "减脂", "健康轻食", "沙拉"},
+        "健康": {"健康", "轻食", "低卡", "健康轻食", "沙拉"},
+        "美食": {"聚会", "特色", "高品质"},
+    }
+    score = 0
+    for tag in intent.memory_tags:
+        candidates = {tag, *aliases.get(tag, set())}
+        if searchable.intersection(candidates):
+            score += 1
+    return score
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -897,6 +934,8 @@ def _schedule_slots(
     """动态调度 POI 到时间线，尊重营业时间和可预约时段"""
     timeline = []
     current_min = _time_to_minutes(start_time)
+    start_min = _time_to_minutes(start_time)
+    last_poi: dict | None = None
 
     if time_window in {"lunch", "dinner", "evening"}:
         slots = [
@@ -925,36 +964,59 @@ def _schedule_slots(
         rec_dur = poi.get("recommended_duration_min", _default_duration(slot_type))
         min_dur = _MIN_DURATION.get(slot_type, 10)
         dur = rec_dur
+        transit = _estimate_transit(last_poi, poi) if last_poi else 0
+        candidate_min = current_min + transit
 
         # 检查营业时间
-        if bh and not _is_within_business_hours(current_min, bh):
+        if bh and not _is_within_business_hours(candidate_min, bh):
             open_min = bh[0]
-            day_start = (current_min // (24 * 60)) * 24 * 60
+            day_start = (candidate_min // (24 * 60)) * 24 * 60
             next_open = day_start + open_min
-            if next_open < current_min:
+            if next_open < candidate_min:
                 next_open += 24 * 60
-            if next_open - (current_min // (24 * 60) * 24 * 60 + _time_to_minutes(start_time)) <= budget_min:
-                current_min = next_open
+            if next_open - start_min <= budget_min:
+                candidate_min = next_open
 
         # 可预约 POI：对齐 available_slots
         slots_avail = poi.get("available_slots", [])
         if poi.get("bookable") and slots_avail:
-            aligned = _align_to_slot(current_min, slots_avail)
-            if aligned is not None and aligned >= current_min:
-                current_min = aligned
+            aligned = _align_to_slot(candidate_min, slots_avail)
+            if aligned is not None and aligned >= candidate_min:
+                candidate_min = aligned
 
         # 再次检查营业时间（对齐后）
-        if bh and not _is_within_business_hours(current_min, bh):
+        if bh and not _is_within_business_hours(candidate_min, bh):
             continue  # skip if still outside
 
         # 预算检查：确保剩余时间够最低时长
-        elapsed = current_min - _time_to_minutes(start_time)
+        elapsed = candidate_min - start_min
         remaining = budget_min - elapsed
         if remaining < min_dur:
             continue
 
+        if (
+            slot_type == "restaurant"
+            and time_window == "afternoon"
+            and budget_min >= 4 * 60
+            and candidate_min < _time_to_minutes("17:30")
+        ):
+            dinner_min = _time_to_minutes("17:30")
+            if budget_min - (dinner_min - start_min) >= min_dur:
+                candidate_min = dinner_min
+                remaining = budget_min - (candidate_min - start_min)
+
         dur = min(dur, max(remaining, min_dur))
 
+        if transit:
+            timeline.append({
+                "time": _minutes_to_time(current_min),
+                "type": "transit",
+                "title": f"前往 {poi.get('name', '')}",
+                "poi_id": "",
+                "duration_min": transit,
+            })
+
+        current_min = candidate_min
         timeline.append({
             "time": _minutes_to_time(current_min),
             "type": slot_type,
@@ -963,24 +1025,7 @@ def _schedule_slots(
             "duration_min": dur,
         })
         current_min += dur
-
-        # 中转
-        next_poi = None
-        for j in range(i + 1, len(slots)):
-            if slots[j][1] is not None:
-                next_poi = slots[j][1]
-                break
-
-        if next_poi:
-            transit = _estimate_transit(poi, next_poi)
-            timeline.append({
-                "time": _minutes_to_time(current_min),
-                "type": "transit",
-                "title": f"前往 {next_poi.get('name', '')}",
-                "poi_id": "",
-                "duration_min": transit,
-            })
-            current_min += transit
+        last_poi = poi
 
     return timeline
 
@@ -1000,6 +1045,18 @@ def _make_plan_with_timeline(
     plan_id = f"plan_{index + 1:03d}"
     scene = intent.scene
 
+    # 时间线
+    start_time, budget_min, effective_window = _resolve_time_constraints(intent)
+    timeline = _schedule_slots(start_time, budget_min, activity, drink, restaurant, effective_window)
+    if (
+        restaurant
+        and drink
+        and not intent.drink_preferences
+        and not any(item.get("type") == "restaurant" for item in timeline)
+    ):
+        drink = None
+        timeline = _schedule_slots(start_time, budget_min, activity, drink, restaurant, effective_window)
+
     # 标题
     parts = []
     if activity:
@@ -1010,10 +1067,6 @@ def _make_plan_with_timeline(
         parts.append(restaurant["name"])
     prefix = _party_title_prefix(intent)
     title = f"{prefix}{index + 1}：{' + '.join(parts)}" if parts else f"{prefix}{index + 1}"
-
-    # 时间线
-    start_time, budget_min, effective_window = _resolve_time_constraints(intent)
-    timeline = _schedule_slots(start_time, budget_min, activity, drink, restaurant, effective_window)
 
     # 预算
     act_price = activity.get("avg_price", 0) if activity else 0
@@ -1567,6 +1620,7 @@ def _meal_restaurant_key(
     used_categories: set[str],
 ) -> float:
     score = float(restaurant.get("_match_score") or 0) * 3.0
+    score += _memory_match_score(restaurant, intent) * 0.9
     if restaurant.get("available"):
         score += 2.0
     if restaurant.get("bookable"):

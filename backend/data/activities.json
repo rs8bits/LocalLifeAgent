@@ -1296,5 +1296,223 @@
       "restroom": true
     },
     "domain": "play"
+  },
+  {
+    "id": "act_019",
+    "name": "小小科学家探索馆",
+    "category": "亲子乐园",
+    "area": "朝阳大悦城商圈",
+    "address": "朝阳区朝阳北路101号亲子成长中心3层",
+    "lat": 39.9221,
+    "lng": 116.5089,
+    "distance_km": 2.1,
+    "avg_price": 168,
+    "tags": [
+      "亲子",
+      "室内",
+      "科学",
+      "手作",
+      "安全",
+      "低龄友好"
+    ],
+    "scene": "family",
+    "indoor": true,
+    "suitable_age_min": 3,
+    "suitable_age_max": 8,
+    "child_friendly": true,
+    "has_nursing_room": true,
+    "has_kids_meal": false,
+    "queue_minutes": 3,
+    "available_slots": [
+      "13:30",
+      "14:00",
+      "14:30",
+      "15:30",
+      "16:30"
+    ],
+    "bookable": true,
+    "risk": null,
+    "description": "适合3-8岁孩子的科学互动体验，含小实验、搭建和亲子协作任务，下午场排队少。",
+    "poi_type": "activity",
+    "meituan_poi_id": "mt_act_019",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "family",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "10:00-20:30",
+    "rating": 4.8,
+    "review_count": 1540,
+    "monthly_sales": 620,
+    "popularity_score": 87,
+    "recommended_duration_min": 120,
+    "stock_remaining": 28,
+    "booking_required": true,
+    "reservation_notice": "支持在线预约，建议提前锁定下午场",
+    "peak_hours": [
+      "15:00-17:00"
+    ],
+    "refund_policy": "开场前2小时可退",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": true,
+      "nursing_room": true,
+      "stroller_friendly": true,
+      "kids_meal": false,
+      "restroom": true
+    },
+    "domain": "play",
+    "party_types": [
+      "family_with_child",
+      "family"
+    ]
+  },
+  {
+    "id": "act_020",
+    "name": "三里屯潮流 Citywalk 小吃线",
+    "category": "citywalk",
+    "area": "三里屯商圈",
+    "address": "朝阳区三里屯太古里及周边街区",
+    "lat": 39.934,
+    "lng": 116.4554,
+    "distance_km": 3.6,
+    "avg_price": 20,
+    "tags": [
+      "citywalk",
+      "散步",
+      "拍照",
+      "小吃",
+      "市集",
+      "社交",
+      "朋友聚会"
+    ],
+    "scene": "friends",
+    "indoor": false,
+    "suitable_age_min": 12,
+    "suitable_age_max": 99,
+    "child_friendly": false,
+    "has_nursing_room": false,
+    "has_kids_meal": false,
+    "queue_minutes": 5,
+    "available_slots": [],
+    "bookable": false,
+    "risk": "户外路线受天气影响，热门摊位可能需要排队",
+    "description": "适合朋友边逛边拍照的小吃街路线，可串联奶茶、潮牌店和轻食小店。",
+    "poi_type": "activity",
+    "meituan_poi_id": "mt_act_020",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "friends",
+      "couple",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "11:00-22:00",
+    "rating": 4.5,
+    "review_count": 980,
+    "monthly_sales": 0,
+    "popularity_score": 80,
+    "recommended_duration_min": 90,
+    "stock_remaining": null,
+    "booking_required": false,
+    "reservation_notice": "开放街区，无需预约",
+    "peak_hours": [
+      "16:00-20:00"
+    ],
+    "refund_policy": "免费开放",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": true,
+      "nursing_room": false,
+      "stroller_friendly": false,
+      "kids_meal": false,
+      "restroom": true
+    },
+    "domain": "play",
+    "party_types": [
+      "friends",
+      "couple",
+      "solo"
+    ]
+  },
+  {
+    "id": "act_021",
+    "name": "798周末轻展览市集",
+    "category": "市集",
+    "area": "798艺术区",
+    "address": "朝阳区酒仙桥路4号798艺术区",
+    "lat": 39.984,
+    "lng": 116.4955,
+    "distance_km": 6.6,
+    "avg_price": 68,
+    "tags": [
+      "展览",
+      "艺术",
+      "市集",
+      "拍照",
+      "室内",
+      "社交",
+      "小吃"
+    ],
+    "scene": "friends",
+    "indoor": true,
+    "suitable_age_min": 8,
+    "suitable_age_max": 99,
+    "child_friendly": false,
+    "has_nursing_room": false,
+    "has_kids_meal": false,
+    "queue_minutes": 10,
+    "available_slots": [
+      "13:00",
+      "14:00",
+      "15:00",
+      "16:00"
+    ],
+    "bookable": true,
+    "risk": null,
+    "description": "轻量艺术展加创意市集，适合朋友拍照、逛摊和顺路吃小食。",
+    "poi_type": "activity",
+    "meituan_poi_id": "mt_act_021",
+    "city": "北京",
+    "district": "朝阳区",
+    "suitable_scenes": [
+      "friends",
+      "couple",
+      "general"
+    ],
+    "source": "mock_meituan_local_life",
+    "poi_status": "open",
+    "business_hours": "10:00-19:30",
+    "rating": 4.6,
+    "review_count": 1120,
+    "monthly_sales": 530,
+    "popularity_score": 83,
+    "recommended_duration_min": 100,
+    "stock_remaining": 34,
+    "booking_required": true,
+    "reservation_notice": "支持在线预约，部分市集摊位现场消费",
+    "peak_hours": [
+      "14:00-17:00"
+    ],
+    "refund_policy": "开场前2小时可退",
+    "platform_notice": "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+    "facilities": {
+      "parking": true,
+      "nursing_room": false,
+      "stroller_friendly": false,
+      "kids_meal": false,
+      "restroom": true
+    },
+    "domain": "play",
+    "party_types": [
+      "friends",
+      "couple",
+      "solo"
+    ]
   }
 ]

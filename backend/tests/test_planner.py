@@ -97,6 +97,24 @@ class TestPlannerFamily:
             assert log["tool"] not in ["book_activity", "reserve_restaurant", "create_mock_order"], \
                 f"不应该调用 {log['tool']}"
 
+    @pytest.mark.asyncio
+    async def test_competition_family_afternoon_uses_profile_and_dinner(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_004",
+            message="今天下午是空的，想和老婆孩子出去玩几个小时，别离家太远，帮我安排一下",
+        )
+        assert result["errors"] == []
+        assert result["intent"]["child_age"] == 5
+        assert result["intent"]["duration_hours"] == 5
+        assert "减脂" in result["intent"]["memory_tags"]
+        first = result["plans"][0]
+        assert first["activity"]["child_friendly"] is True
+        assert first["restaurant"]["low_calorie_options"] is True
+        restaurant_item = next(item for item in first["timeline"] if item["type"] == "restaurant")
+        assert restaurant_item["time"] >= "17:00"
+
 
 class TestPlannerFriends:
     """朋友场景规划"""
@@ -129,6 +147,28 @@ class TestPlannerFriends:
             if "拍照" in act.get("tags", []) or "拍照" in rest.get("tags", []):
                 has_photo = True
         assert has_photo, "朋友拍照场景应该有拍照相关结果"
+
+    @pytest.mark.asyncio
+    async def test_competition_friends_afternoon_keeps_restaurant_executable(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+        result = await plan_for_message(
+            user_id="user_005",
+            message="今天下午是空的，想和朋友出去玩几个小时，2个男生2个女生，别离家太远，帮我安排一下",
+        )
+        assert result["errors"] == []
+        assert result["intent"]["people_count"] == 4
+        genders = [c.get("gender") for c in result["intent"]["companions"]]
+        assert genders.count("male") == 2
+        assert genders.count("female") == 2
+        first = result["plans"][0]
+        assert first["activity"]
+        assert first["restaurant"]
+        assert not first["activity"].get("child_friendly")
+        timeline_types = [item["type"] for item in first["timeline"]]
+        assert "activity" in timeline_types
+        assert "restaurant" in timeline_types
+        assert first["restaurant"]["id"] in [item["poi_id"] for item in first["timeline"]]
 
 
 class TestPlannerPartyTypes:

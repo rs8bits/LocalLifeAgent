@@ -9,6 +9,9 @@ from typing import Any
 ACTIVITY_CHANGE_KW = [
     "换活动", "改活动", "换个活动", "改成唱歌", "改成KTV", "改成ktv",
     "不玩桌游", "不要桌游", "别玩桌游", "不想玩桌游",
+    "换成展览", "改成展览", "换成桌游", "改成桌游", "换成密室", "改成密室",
+    "换成citywalk", "改成citywalk", "换成Citywalk", "改成Citywalk",
+    "想玩桌游", "想去展览", "想看展", "想唱歌", "想去KTV", "想去ktv",
 ]
 ACTIVITY_KEEP_KW = [
     "不要动活动", "活动不要动", "保留活动", "继续这个活动", "活动不变",
@@ -256,6 +259,9 @@ def _should_lock_activity(
         return False
     if "activity" in keep_slots:
         return True
+    base_activity = base_slots["activity"].get("item") or {}
+    if _negates_child(message) and _is_child_oriented_activity(base_activity):
+        return False
     # 默认保留上一轮活动，除非用户明确说要换活动。
     return not any(kw in message for kw in ACTIVITY_CHANGE_KW)
 
@@ -284,10 +290,15 @@ def _build_intent_patch(
     if any(kw in message for kw in ["喝酒", "精酿", "酒吧", "小酌", "啤酒"]):
         patch["drink_preferences"] = ["bar"]
         patch.setdefault("tags", []).append("聚会")
+    activity_pref = _activity_preference_from_message(message)
+    if activity_pref:
+        patch.setdefault("activity_preferences", []).append(activity_pref)
     if base_slots.get("activity") and "activity" not in replace_slots:
         item = base_slots["activity"]["item"]
         tags = item.get("tags") or []
-        patch["activity_preferences"] = [tag for tag in tags if tag in {"桌游", "唱歌", "KTV", "密室", "观影", "散步"}]
+        for tag in tags:
+            if tag in {"桌游", "唱歌", "KTV", "密室", "观影", "散步"}:
+                patch.setdefault("activity_preferences", []).append(tag)
     if _negates_child(message):
         patch["clear_child_context"] = True
     return patch
@@ -299,6 +310,26 @@ def _mentions_lunch(message: str) -> bool:
 
 def _mentions_dinner(message: str) -> bool:
     return bool(re.search(r"晚饭|晚餐|晚上.*吃|晚上.*用餐|傍晚.*吃", message))
+
+
+def _activity_preference_from_message(message: str) -> str | None:
+    rules = [
+        (["桌游", "剧本杀"], "桌游"),
+        (["KTV", "ktv", "唱歌", "K歌"], "唱歌"),
+        (["展览", "看展", "美术馆", "博物馆"], "艺术"),
+        (["citywalk", "Citywalk", "小吃街", "逛街", "逛逛"], "散步"),
+        (["密室"], "密室"),
+        (["电影", "影院"], "观影"),
+    ]
+    for keywords, preference in rules:
+        if any(keyword in message for keyword in keywords):
+            return preference
+    return None
+
+
+def _is_child_oriented_activity(activity: dict[str, Any]) -> bool:
+    tags = set(activity.get("tags") or [])
+    return bool(activity.get("child_friendly") or "亲子" in tags or activity.get("category") == "亲子乐园")
 
 
 def _meal_from_time(time_value: str | None) -> str | None:

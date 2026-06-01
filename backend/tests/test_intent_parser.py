@@ -70,6 +70,24 @@ class TestRuleParseFriends:
         assert intent.party_type == "friends"
         assert intent.people_count == 3
 
+    def test_friends_gender_composition(self):
+        msg = "今天下午和朋友出去玩，2个男生2个女生，帮我安排一下"
+        intent = _rule_parse(msg)
+        assert intent.scene == "friends"
+        assert intent.party_type == "friends"
+        assert intent.people_count == 4
+        genders = [c.get("gender") for c in intent.companions if c.get("role") == "friend"]
+        assert genders.count("male") == 2
+        assert genders.count("female") == 2
+
+    def test_friends_chinese_gender_composition(self):
+        msg = "今天下午和朋友出去玩，两个男生两个女生，帮我安排一下"
+        intent = _rule_parse(msg)
+        assert intent.people_count == 4
+        genders = [c.get("gender") for c in intent.companions if c.get("role") == "friend"]
+        assert genders.count("male") == 2
+        assert genders.count("female") == 2
+
     def test_friends_no_count(self):
         msg = "下午和朋友喝咖啡"
         intent = _rule_parse(msg)
@@ -153,6 +171,17 @@ class TestRuleParseGeneral:
         msg = "想玩3个小时"
         intent = _rule_parse(msg)
         assert intent.duration_hours == 3
+
+    def test_open_afternoon_duration_defaults_to_five_hours(self):
+        msg = "今天下午是空的，想和老婆孩子出去玩几个小时，别离家太远"
+        intent = _rule_parse(msg)
+        assert intent.time_window == "afternoon"
+        assert intent.duration_hours == 5
+
+    def test_duration_range_uses_midpoint(self):
+        msg = "今天下午和朋友玩4-6小时"
+        intent = _rule_parse(msg)
+        assert intent.duration_hours == 5
 
     def test_budget(self):
         msg = "人均100以内"

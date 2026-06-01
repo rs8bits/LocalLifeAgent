@@ -190,6 +190,39 @@ class TestAgentRevise:
         assert "meal:dinner" in patch["replace_slots"]
         assert "activity" in patch["keep_slots"]
 
+    def test_revise_not_bringing_child_can_replace_child_activity(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        first = client.post("/api/agent/plan", json={
+            "user_id": "user_001",
+            "message": "明天带老婆孩子去亲子乐园，孩子5岁，帮我安排一下",
+        })
+        assert first.status_code == 200
+        first_data = first.json()
+        base_plan = first_data["plans"][0]
+        assert base_plan["activity"]["child_friendly"] is True
+
+        revised = client.post("/api/agent/revise", json={
+            "session_id": first_data["session_id"],
+            "base_plan_id": base_plan["plan_id"],
+            "message": "这次不带小孩，换成展览，晚上想喝酒",
+        })
+        assert revised.status_code == 200
+        data = revised.json()
+
+        assert data["intent"]["child_age"] is None
+        assert data["intent"]["party_type"] == "general"
+        assert "亲子" not in data["intent"].get("tags", [])
+        assert data["plans"][0]["activity"]["child_friendly"] is False
+        assert data["plans"][0]["activity"]["id"] != base_plan["activity"]["id"]
+        assert data["plans"][0]["drink"]["sub_category"] == "bar"
+
+        session = client.get(f"/api/agent/session/{data['session_id']}").json()
+        patch = session["revision_patch"]
+        assert "activity" in patch["replace_slots"]
+        assert not patch["locked_slots"]
+
     def test_revise_nonexistent_session_returns_404(self):
         resp = client.post("/api/agent/revise", json={
             "session_id": "session_missing",

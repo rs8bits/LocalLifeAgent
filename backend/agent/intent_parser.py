@@ -143,6 +143,49 @@ def _chinese_digit_to_int(value: str | None) -> int | None:
     return mapping.get(value or "")
 
 
+def _extract_duration_hours(message: str) -> int | None:
+    range_match = re.search(r"(\d+)\s*[-~到至]\s*(\d+)\s*个?小?时", message)
+    if range_match:
+        low = int(range_match.group(1))
+        high = int(range_match.group(2))
+        if high >= low:
+            return round((low + high) / 2)
+
+    dur_match = re.search(r"(\d+)\s*个小?时|(\d+)\s*小时", message)
+    if dur_match:
+        return int(dur_match.group(1) or dur_match.group(2))
+
+    cn_dur_match = re.search(r"([一二两三四五六七八九十])\s*个小?时|([一二两三四五六七八九十])\s*小时", message)
+    if cn_dur_match:
+        return _chinese_digit_to_int(cn_dur_match.group(1) or cn_dur_match.group(2))
+
+    if any(kw in message for kw in ["几个小时", "一下午", "下午是空的", "下午空", "半天"]):
+        return 5
+    return None
+
+
+def _extract_gender_composition(message: str) -> tuple[int, int] | None:
+    match = re.search(r"(\d+)\s*个?(?:男生|男|男孩|男同学).*?(\d+)\s*个?(?:女生|女|女孩|女同学)", message)
+    if match:
+        return int(match.group(1)), int(match.group(2))
+    cn_match = re.search(
+        r"([一二两三四五六七八九十])\s*个?(?:男生|男|男孩|男同学).*?([一二两三四五六七八九十])\s*个?(?:女生|女|女孩|女同学)",
+        message,
+    )
+    if cn_match:
+        left = _chinese_digit_to_int(cn_match.group(1)) or 0
+        right = _chinese_digit_to_int(cn_match.group(2)) or 0
+        return (left, right) if left + right else None
+    return None
+
+
+def _extract_gender_composition_count(message: str) -> int | None:
+    composition = _extract_gender_composition(message)
+    if composition:
+        return composition[0] + composition[1]
+    return None
+
+
 def _extract_intent_tags(message: str, party_type: str) -> list[str]:
     tags: list[str] = []
     for keywords, tag in TAG_RULES:
@@ -198,14 +241,7 @@ def _rule_parse(message: str) -> Intent:
         date = "tomorrow"
 
     # 时长
-    duration_hours = None
-    dur_match = re.search(r"(\d+)\s*个小?时|(\d+)\s*小时", message)
-    if dur_match:
-        duration_hours = int(dur_match.group(1) or dur_match.group(2))
-    else:
-        cn_dur_match = re.search(r"([一二两三四五六七八九十])\s*个小?时|([一二两三四五六七八九十])\s*小时", message)
-        if cn_dur_match:
-            duration_hours = _chinese_digit_to_int(cn_dur_match.group(1) or cn_dur_match.group(2))
+    duration_hours = _extract_duration_hours(message)
 
     # 人数
     people_count = None
@@ -222,6 +258,8 @@ def _rule_parse(message: str) -> Intent:
         if m:
             people_count = int(m.group(1))
             break
+    if people_count is None:
+        people_count = _extract_gender_composition_count(message)
     # 同行人默认人数
     if people_count is None and party_type == "family_with_child":
         count = 1  # self
@@ -286,6 +324,8 @@ def _rule_parse(message: str) -> Intent:
     if party_type == "family_elder" and any(kw in message for kw in ["逛逛", "走走", "城市", "参观", "游览", "爸妈", "父母"]):
         activity_preferences.append("安静")
     if any(kw in message for kw in ["KTV", "唱歌", "密室", "撸猫", "电竞", "蹦床", "LiveHouse", "livehouse", "演出"]):
+        activity_preferences.append("社交")
+    if any(kw in message for kw in ["桌游", "剧本杀", "小吃街", "citywalk", "Citywalk"]):
         activity_preferences.append("社交")
     if any(kw in message for kw in ["电影", "看电影", "影院", "电影院"]):
         activity_preferences.append("观影")
@@ -395,11 +435,17 @@ def _build_companions(message: str, party_type: str, child_age: Optional[int]) -
     if party_type == "business":
         companions.append({"role": "client" if "客户" in message else "colleague"})
     if party_type == "friends":
-        # 提取朋友人数
-        m = re.search(r"(\d+)\s*(个|位)", message)
-        count = int(m.group(1)) if m else 2
-        for _ in range(count):
-            companions.append({"role": "friend"})
+        composition = _extract_gender_composition(message)
+        if composition:
+            male_count, female_count = composition
+            companions.extend({"role": "friend", "gender": "male"} for _ in range(male_count))
+            companions.extend({"role": "friend", "gender": "female"} for _ in range(female_count))
+        else:
+            # 提取朋友人数
+            m = re.search(r"(\d+)\s*(个|位)", message)
+            count = int(m.group(1)) if m else 2
+            for _ in range(count):
+                companions.append({"role": "friend"})
     return companions
 
 
