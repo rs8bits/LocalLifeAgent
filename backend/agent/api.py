@@ -68,6 +68,65 @@ def _update_session_with_graph_context(session_id: str, graph_result: dict, extr
     update_session(session_id, patch)
 
 
+def _build_revise_context(req: AgentReviseRequest) -> tuple[dict, str, dict | None, dict, str]:
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="message 不能为空")
+
+    previous_session = get_session(req.session_id)
+    if previous_session is None:
+        raise HTTPException(status_code=404, detail=f"Session 不存在: {req.session_id}")
+
+    user_id = previous_session.get("user_id", "user_001")
+    base_plan = select_base_plan(previous_session, req.base_plan_id)
+    revision_patch = build_revision_patch(previous_session, req.message, req.base_plan_id)
+    revised_message = build_revision_message(previous_session, req.message)
+    return previous_session, user_id, base_plan, revision_patch, revised_message
+
+
+def _revision_session_extra(
+    req: AgentReviseRequest,
+    previous_session: dict,
+    base_plan: dict | None,
+    revision_patch: dict,
+) -> dict:
+    return {
+        "parent_session_id": req.session_id,
+        "revision_message": req.message,
+        "base_plan_id": revision_patch.get("base_plan_id"),
+        "base_plan": base_plan,
+        "revision_patch": revision_patch,
+        "previous_intent": previous_session.get("intent", {}),
+        "previous_tag_resolve_result": previous_session.get("tag_resolve_result", {}),
+    }
+
+
+def _append_revision_history(previous_session: dict, parent_session_id: str, child_session_id: str, message: str) -> None:
+    if not child_session_id:
+        return
+    history = list(previous_session.get("revision_history", []))
+    history.append({
+        "from_session_id": parent_session_id,
+        "to_session_id": child_session_id,
+        "message": message,
+    })
+    update_session(parent_session_id, {"revision_history": history})
+
+
+def _extract_done_result_session_id(sse_chunk: str) -> str:
+    if not sse_chunk.startswith("event: plan_done"):
+        return ""
+    for line in sse_chunk.splitlines():
+        if not line.startswith("data: "):
+            continue
+        try:
+            payload = json.loads(line[6:])
+        except json.JSONDecodeError:
+            return ""
+        result = ((payload.get("data") or {}).get("result") or {})
+        return str(result.get("session_id") or "")
+    return ""
+
+
 # ═══════════════════════════════════════════════════════════════
 # 非流式 API（保持兼容）
 # ═══════════════════════════════════════════════════════════════
@@ -116,17 +175,7 @@ async def agent_plan(req: AgentPlanRequest):
 @router.post("/revise", response_model=AgentPlanResponse)
 async def agent_revise(req: AgentReviseRequest):
     """基于上一轮 session 的多轮修改规划接口。"""
-    if not req.message.strip():
-        raise HTTPException(status_code=400, detail="message 不能为空")
-
-    previous_session = get_session(req.session_id)
-    if previous_session is None:
-        raise HTTPException(status_code=404, detail=f"Session 不存在: {req.session_id}")
-
-    user_id = previous_session.get("user_id", "user_001")
-    base_plan = select_base_plan(previous_session, req.base_plan_id)
-    revision_patch = build_revision_patch(previous_session, req.message, req.base_plan_id)
-    revised_message = build_revision_message(previous_session, req.message)
+    previous_session, user_id, base_plan, revision_patch, revised_message = _build_revise_context(req)
     graph_result = await run_planning_graph(
         user_id=user_id,
         message=revised_message,
@@ -145,22 +194,12 @@ async def agent_revise(req: AgentReviseRequest):
             planner_output=planner_output,
         )
         session_id = session["session_id"]
-        _update_session_with_graph_context(session_id, graph_result, {
-            "parent_session_id": req.session_id,
-            "revision_message": req.message,
-            "base_plan_id": revision_patch.get("base_plan_id"),
-            "base_plan": base_plan,
-            "revision_patch": revision_patch,
-            "previous_intent": previous_session.get("intent", {}),
-            "previous_tag_resolve_result": previous_session.get("tag_resolve_result", {}),
-        })
-        history = list(previous_session.get("revision_history", []))
-        history.append({
-            "from_session_id": req.session_id,
-            "to_session_id": session_id,
-            "message": req.message,
-        })
-        update_session(req.session_id, {"revision_history": history})
+        _update_session_with_graph_context(
+            session_id,
+            graph_result,
+            _revision_session_extra(req, previous_session, base_plan, revision_patch),
+        )
+        _append_revision_history(previous_session, req.session_id, session_id, req.message)
 
     return AgentPlanResponse(
         session_id=session_id,
@@ -294,6 +333,45 @@ async def agent_plan_stream(req: AgentPlanRequest):
                 user_id=req.user_id,
                 message=req.message,
             ):
+                yield sse_chunk
+
+        except Exception as e:
+            err = {"event": "error", "message": str(e), "data": {}}
+            yield f"event: error\ndata: {json.dumps(err, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/revise/stream")
+async def agent_revise_stream(req: AgentReviseRequest):
+    """流式修改规划接口 (SSE)。"""
+    previous_session, user_id, base_plan, revision_patch, revised_message = _build_revise_context(req)
+    session_extra = _revision_session_extra(req, previous_session, base_plan, revision_patch)
+
+    async def event_stream():
+        try:
+            history_updated = False
+            async for sse_chunk in run_planning_graph_stream(
+                user_id=user_id,
+                message=revised_message,
+                extra_state={
+                    "base_plan": base_plan,
+                    "revision_patch": revision_patch,
+                },
+                session_extra=session_extra,
+            ):
+                child_session_id = _extract_done_result_session_id(sse_chunk)
+                if child_session_id and not history_updated:
+                    _append_revision_history(previous_session, req.session_id, child_session_id, req.message)
+                    history_updated = True
                 yield sse_chunk
 
         except Exception as e:

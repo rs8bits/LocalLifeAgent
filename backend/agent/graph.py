@@ -174,6 +174,7 @@ async def run_planning_graph_stream(
     message: str,
     user_profile: dict | None = None,
     extra_state: dict | None = None,
+    session_extra: dict | None = None,
 ) -> AsyncIterator[str]:
     """运行规划 Graph 并以 SSE 格式实时流式输出每个节点的事件。"""
     initial_state = _make_base_state(user_id=user_id, message=message, user_profile=user_profile)
@@ -240,13 +241,16 @@ async def run_planning_graph_stream(
             planner_output=planner_output,
         )
         session_id = session["session_id"]
-        update_session(session_id, {
+        session_patch = {
             "tag_resolve_result": accumulated.get("tag_resolve_result", {}),
             "reflection_result": accumulated.get("reflection_result", {}),
             "guardrail_result": accumulated.get("guardrail_result", {}),
             "input_safety_result": accumulated.get("input_safety_result", {}),
             "rewrite_result": accumulated.get("rewrite_result", {}),
-        })
+        }
+        if session_extra:
+            session_patch.update(session_extra)
+        update_session(session_id, session_patch)
 
     plan_done = {
         "event": "plan_done",

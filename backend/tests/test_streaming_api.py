@@ -13,6 +13,14 @@ from backend.mock_api.storage import write_json
 client = TestClient(app)
 
 
+def _plan_done_payload(body: str) -> dict:
+    for chunk in body.split("\n\n"):
+        if chunk.startswith("event: plan_done"):
+            data_line = next(line for line in chunk.splitlines() if line.startswith("data: "))
+            return json.loads(data_line[6:])
+    raise AssertionError("缺少 plan_done 事件")
+
+
 @pytest.fixture(autouse=True)
 def reset_all():
     reset_sessions()
@@ -116,6 +124,55 @@ class TestConfirmStreaming:
         resp = client.post("/api/agent/confirm/stream", json={
             "session_id": "session_nonexistent",
             "plan_id": "plan_001",
+        })
+        assert resp.status_code == 404
+
+
+class TestReviseStreaming:
+    """流式修改规划 API"""
+
+    def test_revise_stream_works_and_stores_revision_context(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        plan_resp = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "明天和朋友下午玩桌游",
+        })
+        assert plan_resp.status_code == 200
+        first_data = plan_resp.json()
+        base_plan = first_data["plans"][0]
+
+        resp = client.post("/api/agent/revise/stream", json={
+            "session_id": first_data["session_id"],
+            "base_plan_id": base_plan["plan_id"],
+            "message": "中饭晚饭都要吃",
+        })
+        assert resp.status_code == 200
+        assert "text/event-stream" in resp.headers.get("content-type", "")
+        body = resp.text
+        assert "intent_start" in body
+        assert "plan_delta" in body
+        assert "plan_done" in body
+
+        plan_done = _plan_done_payload(body)
+        result = plan_done["data"]["result"]
+        assert result["session_id"]
+        assert result["plans"][0]["activity"]["id"] == "act_006"
+        assert result["intent"]["meal_slots"] == ["lunch", "dinner"]
+
+        revised_session = client.get(f"/api/agent/session/{result['session_id']}").json()
+        assert revised_session["parent_session_id"] == first_data["session_id"]
+        assert revised_session["revision_message"] == "中饭晚饭都要吃"
+        assert revised_session["revision_patch"]["locked_slots"]["activity"]["item"]["id"] == "act_006"
+
+        parent_session = client.get(f"/api/agent/session/{first_data['session_id']}").json()
+        assert parent_session["revision_history"][-1]["to_session_id"] == result["session_id"]
+
+    def test_revise_stream_nonexistent_session(self):
+        resp = client.post("/api/agent/revise/stream", json={
+            "session_id": "session_nonexistent",
+            "message": "晚上想喝酒",
         })
         assert resp.status_code == 404
 

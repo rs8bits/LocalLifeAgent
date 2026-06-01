@@ -61,17 +61,10 @@ export async function getSession(sessionId: string): Promise<Record<string, unkn
 
 export type StreamEventCallback = (event: Record<string, unknown>) => void;
 
-export async function planTripStream(
-  userId: string,
-  message: string,
+async function readSseResponse(
+  resp: Response,
   onEvent: StreamEventCallback
 ): Promise<void> {
-  const resp = await fetch(`${API_BASE}/api/agent/plan/stream`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user_id: userId, message }),
-  });
-
   if (!resp.ok) {
     throw new Error(`请求失败 (${resp.status}): ${await resp.text()}`);
   }
@@ -103,6 +96,35 @@ export async function planTripStream(
   }
 }
 
+export async function planTripStream(
+  userId: string,
+  message: string,
+  onEvent: StreamEventCallback
+): Promise<void> {
+  const resp = await fetch(`${API_BASE}/api/agent/plan/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId, message }),
+  });
+
+  await readSseResponse(resp, onEvent);
+}
+
+export async function revisePlanStream(
+  sessionId: string,
+  message: string,
+  basePlanId: string | undefined,
+  onEvent: StreamEventCallback
+): Promise<void> {
+  const resp = await fetch(`${API_BASE}/api/agent/revise/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, message, base_plan_id: basePlanId }),
+  });
+
+  await readSseResponse(resp, onEvent);
+}
+
 export async function confirmPlanStream(
   sessionId: string,
   planId: string,
@@ -114,33 +136,5 @@ export async function confirmPlanStream(
     body: JSON.stringify({ session_id: sessionId, plan_id: planId }),
   });
 
-  if (!resp.ok) {
-    throw new Error(`请求失败 (${resp.status}): ${await resp.text()}`);
-  }
-
-  const reader = resp.body?.getReader();
-  if (!reader) throw new Error("不支持流式读取");
-
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        try {
-          const data = JSON.parse(line.slice(6));
-          onEvent(data);
-        } catch {
-          // skip
-        }
-      }
-    }
-  }
+  await readSseResponse(resp, onEvent);
 }

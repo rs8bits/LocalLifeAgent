@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import type { PlanResponse, ConfirmResponse, Plan, BookingResult, OrderResult } from "@/types/agent";
-import { planTrip, confirmPlan, revisePlan, planTripStream, confirmPlanStream } from "@/lib/api";
+import {
+  planTrip,
+  confirmPlan,
+  revisePlan,
+  planTripStream,
+  revisePlanStream,
+  confirmPlanStream,
+} from "@/lib/api";
 import ToolLogList from "@/components/ToolLogList";
 import PlanCard from "@/components/PlanCard";
 import ExecutionResult from "@/components/ExecutionResult";
@@ -179,23 +186,104 @@ export default function Home() {
 
   const handleRevise = async () => {
     if (!result?.session_id || !revisionMessage.trim()) return;
+    const sourceSessionId = result.session_id;
+    const basePlanId = result.plans[0]?.plan_id;
+    const currentRevisionMessage = revisionMessage;
     setRevising(true);
     setError(null);
     setConfirmResult(null);
+    setStreamLogs([]);
+    setResult((prev) => prev ? { ...prev, plans: [], tool_logs: [], errors: [] } : prev);
     addStreamLog("revision_start", "正在根据修改建议重新规划...");
 
     try {
-      const basePlanId = result.plans[0]?.plan_id;
-      const revised = await revisePlan(result.session_id, revisionMessage, basePlanId);
-      setResult(revised);
-      setRevisionMessage("");
-      addStreamLog("revision_done", `修改完成，生成 ${revised.plans.length} 个候选方案`);
-      if (revised.errors && revised.errors.length > 0) {
-        setError(revised.errors.join("; "));
+      let streamFinalResult: PlanResponse | null = null;
+      await revisePlanStream(sourceSessionId, currentRevisionMessage, basePlanId, (event) => {
+        const evtType = event.event as string || "unknown";
+        const msg = event.message as string || "";
+        addStreamLog(evtType, msg);
+
+        if (evtType === "plan_delta" && event.data) {
+          const data = event.data as Record<string, unknown>;
+          const plan = data.plan as Plan | undefined;
+          if (plan) {
+            setResult((prev) => {
+              if (!prev) {
+                return {
+                  session_id: "",
+                  user_id: userId,
+                  message: currentRevisionMessage,
+                  intent: {},
+                  plans: [plan],
+                  tool_logs: [],
+                  errors: [],
+                };
+              }
+              const existingIds = new Set(prev.plans.map((p) => p.plan_id));
+              if (!existingIds.has(plan.plan_id)) {
+                return { ...prev, plans: [...prev.plans, plan] };
+              }
+              return prev;
+            });
+          }
+        }
+
+        if (evtType === "tool_done" && event.data) {
+          const data = event.data as Record<string, unknown>;
+          setResult((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              tool_logs: [
+                ...prev.tool_logs,
+                {
+                  tool: (data.tool as string) || "",
+                  status: (data.status as string) || "ok",
+                  message: msg,
+                },
+              ],
+            };
+          });
+        }
+
+        if (evtType === "plan_done" && event.data) {
+          const data = event.data as Record<string, unknown>;
+          const finalResult = data.result as PlanResponse | undefined;
+          if (finalResult?.session_id) {
+            streamFinalResult = finalResult;
+            setResult(finalResult);
+            setRevisionMessage("");
+            addStreamLog("revision_done", `修改完成，生成 ${finalResult.plans.length} 个候选方案`);
+            if (finalResult.errors && finalResult.errors.length > 0) {
+              setError(finalResult.errors.join("; "));
+            }
+          }
+        }
+      });
+
+      if (!streamFinalResult) {
+        const revised = await revisePlan(sourceSessionId, currentRevisionMessage, basePlanId);
+        setResult(revised);
+        setRevisionMessage("");
+        addStreamLog("revision_done", `修改完成，生成 ${revised.plans.length} 个候选方案`);
+        if (revised.errors && revised.errors.length > 0) {
+          setError(revised.errors.join("; "));
+        }
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "修改规划失败");
-      addStreamLog("revision_error", "修改规划失败");
+      addStreamLog("revision_error", "流式修改失败，切换到普通模式");
+      try {
+        const revised = await revisePlan(sourceSessionId, currentRevisionMessage, basePlanId);
+        setResult(revised);
+        setRevisionMessage("");
+        addStreamLog("revision_done", `修改完成，生成 ${revised.plans.length} 个候选方案`);
+        if (revised.errors && revised.errors.length > 0) {
+          setError(revised.errors.join("; "));
+        }
+      } catch (e2) {
+        setError(e2 instanceof Error ? e2.message : "修改规划失败");
+        addStreamLog("revision_error", "修改规划失败");
+      }
     } finally {
       setRevising(false);
     }
