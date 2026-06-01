@@ -57,7 +57,7 @@ def build_revision_patch(
     add_slots = _detect_add_slots(revision)
     remove_slots = _detect_remove_slots(revision)
     keep_slots = _detect_keep_slots(revision)
-    intent_patch = _build_intent_patch(session, revision, base_slots, add_slots, replace_slots)
+    intent_patch = _build_intent_patch(session, revision, base_slots, add_slots, replace_slots, remove_slots)
 
     if _should_lock_activity(revision, base_slots, replace_slots, keep_slots):
         keep_slots.add("activity")
@@ -67,6 +67,13 @@ def build_revision_patch(
         for slot in base_slots:
             if slot not in only_replace_slots:
                 keep_slots.add(slot)
+    elif _should_preserve_unchanged_slots(revision, add_slots, replace_slots, remove_slots, keep_slots):
+        for slot, slot_info in base_slots.items():
+            if slot in replace_slots or slot in remove_slots:
+                continue
+            if _negates_child(revision) and _is_child_oriented_item(slot_info.get("item") or {}):
+                continue
+            keep_slots.add(slot)
 
     locked_slots = {
         slot: value
@@ -105,6 +112,22 @@ def select_base_plan(session: dict[str, Any], base_plan_id: str | None = None) -
         if found:
             return found
     return plans[0] if plans else None
+
+
+def infer_base_plan_id(session: dict[str, Any], revision_message: str) -> str | None:
+    """从“第一个/第二个方案”这类文本中推断要修改的方案。"""
+    plans = session.get("plans") or []
+    if not plans:
+        return None
+    ordinal_patterns = [
+        (0, [r"第\s*1\s*个方案", r"第\s*一\s*个方案", r"方案\s*1", r"方案\s*一"]),
+        (1, [r"第\s*2\s*个方案", r"第\s*二\s*个方案", r"方案\s*2", r"方案\s*二"]),
+        (2, [r"第\s*3\s*个方案", r"第\s*三\s*个方案", r"方案\s*3", r"方案\s*三"]),
+    ]
+    for index, patterns in ordinal_patterns:
+        if index < len(plans) and any(re.search(pattern, revision_message) for pattern in patterns):
+            return plans[index].get("plan_id")
+    return None
 
 
 def apply_revision_intent_patch(intent: Any, revision_patch: dict[str, Any] | None) -> Any:
@@ -255,6 +278,8 @@ def _should_lock_activity(
     replace_slots: set[str],
     keep_slots: set[str],
 ) -> bool:
+    if _requests_full_replan(message):
+        return False
     if "activity" not in base_slots or "activity" in replace_slots:
         return False
     if "activity" in keep_slots:
@@ -272,6 +297,7 @@ def _build_intent_patch(
     base_slots: dict[str, dict[str, Any]],
     add_slots: set[str],
     replace_slots: set[str],
+    remove_slots: set[str],
 ) -> dict[str, Any]:
     patch: dict[str, Any] = {}
     meal_slots = [
@@ -279,11 +305,11 @@ def _build_intent_patch(
         for slot in sorted(add_slots | replace_slots)
         if slot.startswith("meal:")
     ]
-    if replace_slots and any(slot.startswith("meal:") for slot in replace_slots):
+    if meal_slots:
         meal_slots.extend(
             slot.split(":", 1)[1]
             for slot in base_slots
-            if slot.startswith("meal:")
+            if slot.startswith("meal:") and slot not in remove_slots
         )
     if meal_slots:
         patch["meal_slots"] = _ordered_unique(meal_slots, ["lunch", "dinner"])
@@ -328,8 +354,41 @@ def _activity_preference_from_message(message: str) -> str | None:
 
 
 def _is_child_oriented_activity(activity: dict[str, Any]) -> bool:
-    tags = set(activity.get("tags") or [])
-    return bool(activity.get("child_friendly") or "亲子" in tags or activity.get("category") == "亲子乐园")
+    return _is_child_oriented_item(activity)
+
+
+def _is_child_oriented_item(item: dict[str, Any]) -> bool:
+    tags = set(item.get("tags") or [])
+    category = item.get("category")
+    return bool(
+        item.get("child_friendly")
+        or tags.intersection({"亲子", "儿童", "低龄友好"})
+        or category in {"亲子乐园", "亲子餐厅"}
+    )
+
+
+def _should_preserve_unchanged_slots(
+    message: str,
+    add_slots: set[str],
+    replace_slots: set[str],
+    remove_slots: set[str],
+    keep_slots: set[str],
+) -> bool:
+    if _requests_full_replan(message):
+        return False
+    if add_slots or replace_slots or remove_slots or keep_slots:
+        return True
+    return any(
+        kw in message
+        for kw in ["这个方案", "这个安排", "第一个方案", "第二个方案", "第三个方案", "在此基础", "基础上", "保持", "保留"]
+    )
+
+
+def _requests_full_replan(message: str) -> bool:
+    return any(
+        kw in message
+        for kw in ["重新规划", "重新安排", "全部重来", "换个方案", "不要这个方案", "别按这个方案"]
+    )
 
 
 def _meal_from_time(time_value: str | None) -> str | None:

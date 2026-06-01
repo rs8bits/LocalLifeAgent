@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { PlanResponse, ConfirmResponse, Plan, BookingResult, OrderResult } from "@/types/agent";
 import {
   planTrip,
@@ -34,6 +34,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [revisionMessage, setRevisionMessage] = useState("");
+  const [selectedRevisionPlanId, setSelectedRevisionPlanId] = useState<string | null>(null);
 
   // 流式过程日志
   const [streamLogs, setStreamLogs] = useState<StreamLogItem[]>([]);
@@ -45,12 +46,26 @@ export default function Home() {
     ]);
   };
 
+  useEffect(() => {
+    if (!result?.plans.length) {
+      setSelectedRevisionPlanId(null);
+      return;
+    }
+    setSelectedRevisionPlanId((current) => {
+      if (current && result.plans.some((plan) => plan.plan_id === current)) {
+        return current;
+      }
+      return result.plans[0].plan_id;
+    });
+  }, [result?.session_id, result?.plans]);
+
   const handlePlan = async () => {
     if (!message.trim()) return;
     setLoading(true);
     setError(null);
     setResult(null);
     setConfirmResult(null);
+    setSelectedRevisionPlanId(null);
     setStreamLogs([]);
 
     try {
@@ -187,7 +202,7 @@ export default function Home() {
   const handleRevise = async () => {
     if (!result?.session_id || !revisionMessage.trim()) return;
     const sourceSessionId = result.session_id;
-    const basePlanId = result.plans[0]?.plan_id;
+    const basePlanId = selectedRevisionPlanId ?? result.plans[0]?.plan_id;
     const currentRevisionMessage = revisionMessage;
     setRevising(true);
     setError(null);
@@ -304,6 +319,7 @@ export default function Home() {
   const intentDomains = Array.isArray(result?.intent?.domains)
     ? (result?.intent?.domains as unknown[]).filter((domain): domain is string => typeof domain === "string")
     : [];
+  const selectedRevisionPlan = result?.plans.find((plan) => plan.plan_id === selectedRevisionPlanId);
 
   return (
     <main className="max-w-3xl mx-auto p-4 space-y-6">
@@ -419,10 +435,15 @@ export default function Home() {
       {result?.session_id && (
         <section className="bg-white rounded-lg p-4 shadow-sm space-y-3">
           <h3 className="font-semibold text-sm">继续修改方案</h3>
+          {selectedRevisionPlan && (
+            <div className="text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded px-3 py-2">
+              正在修改：{selectedRevisionPlan.title}
+            </div>
+          )}
           <textarea
             value={revisionMessage}
             onChange={(e) => setRevisionMessage(e.target.value)}
-            placeholder="例如：我明天不带小孩，晚上想喝酒"
+            placeholder="例如：给这个方案加中饭；只替换晚餐；不要动活动，晚上想喝酒"
             rows={2}
             className="w-full border rounded px-3 py-2 text-sm resize-none"
           />
@@ -454,6 +475,8 @@ export default function Home() {
               key={plan.plan_id}
               plan={plan}
               onConfirm={handleConfirm}
+              onSelectForRevision={setSelectedRevisionPlanId}
+              isRevisionBase={selectedRevisionPlanId === plan.plan_id}
               disabled={confirming || !!confirmResult}
             />
           ))}

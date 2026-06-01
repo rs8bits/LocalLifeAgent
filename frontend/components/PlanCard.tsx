@@ -5,11 +5,15 @@ import type { Plan } from "@/types/agent";
 export default function PlanCard({
   plan,
   onConfirm,
+  onSelectForRevision,
   disabled,
+  isRevisionBase = false,
 }: {
   plan: Plan;
   onConfirm: (planId: string) => void;
+  onSelectForRevision?: (planId: string) => void;
   disabled: boolean;
+  isRevisionBase?: boolean;
 }) {
   const activity = plan.activity;
   const restaurant = plan.restaurant;
@@ -19,7 +23,11 @@ export default function PlanCard({
   const route = plan.route;
 
   return (
-    <div className="border rounded-lg p-4 bg-white shadow-sm flex flex-col gap-3">
+    <div
+      className={`border rounded-lg p-4 bg-white shadow-sm flex flex-col gap-3 ${
+        isRevisionBase ? "border-indigo-500 ring-2 ring-indigo-100" : "border-gray-200"
+      }`}
+    >
       {/* 标题 */}
       <div className="flex justify-between items-start">
         <div>
@@ -205,14 +213,31 @@ export default function PlanCard({
         </div>
       )}
 
-      {/* 确认按钮 */}
-      <button
-        onClick={() => onConfirm(plan.plan_id)}
-        disabled={disabled}
-        className="mt-1 w-full py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
-      >
-        确认并安排
-      </button>
+      {/* 操作按钮 */}
+      <div className="mt-1 grid gap-2 sm:grid-cols-2">
+        {onSelectForRevision && (
+          <button
+            type="button"
+            onClick={() => onSelectForRevision(plan.plan_id)}
+            disabled={disabled}
+            className={`w-full py-2 rounded font-medium text-sm border ${
+              isRevisionBase
+                ? "bg-indigo-50 border-indigo-300 text-indigo-700"
+                : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+            } disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed`}
+          >
+            {isRevisionBase ? "当前修改基准" : "以此方案修改"}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onConfirm(plan.plan_id)}
+          disabled={disabled}
+          className="w-full py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+        >
+          确认并安排
+        </button>
+      </div>
     </div>
   );
 }

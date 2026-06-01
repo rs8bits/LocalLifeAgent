@@ -13,7 +13,12 @@ from backend.schemas.agent_api import (
     AgentConfirmResponse,
 )
 from backend.agent.session_store import create_session, get_session, update_session
-from backend.agent.revision import build_revision_message, build_revision_patch, select_base_plan
+from backend.agent.revision import (
+    build_revision_message,
+    build_revision_patch,
+    infer_base_plan_id,
+    select_base_plan,
+)
 
 # Graph 导入
 from backend.agent.graph import (
@@ -77,8 +82,9 @@ def _build_revise_context(req: AgentReviseRequest) -> tuple[dict, str, dict | No
         raise HTTPException(status_code=404, detail=f"Session 不存在: {req.session_id}")
 
     user_id = previous_session.get("user_id", "user_001")
-    base_plan = select_base_plan(previous_session, req.base_plan_id)
-    revision_patch = build_revision_patch(previous_session, req.message, req.base_plan_id)
+    base_plan_id = req.base_plan_id or infer_base_plan_id(previous_session, req.message)
+    base_plan = select_base_plan(previous_session, base_plan_id)
+    revision_patch = build_revision_patch(previous_session, req.message, base_plan_id)
     revised_message = build_revision_message(previous_session, req.message)
     return previous_session, user_id, base_plan, revision_patch, revised_message
 

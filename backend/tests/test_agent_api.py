@@ -163,6 +163,41 @@ class TestAgentRevise:
         assert "activity" in patch["keep_slots"]
         assert patch["locked_slots"]["activity"]["item"]["id"] == "act_006"
 
+    def test_revise_adds_lunch_and_preserves_existing_dinner(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        first = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "明天爸妈来我的城市，我想带他们逛逛，帮我安排一下",
+        })
+        assert first.status_code == 200
+        first_data = first.json()
+        base_plan = first_data["plans"][0]
+        base_activity_id = base_plan["activity"]["id"]
+        base_dinner_id = base_plan["restaurant"]["id"]
+
+        revised = client.post("/api/agent/revise", json={
+            "session_id": first_data["session_id"],
+            "message": "第一个方案安排一下中饭",
+        })
+        assert revised.status_code == 200
+        data = revised.json()
+
+        assert data["intent"]["meal_slots"] == ["lunch", "dinner"]
+        first_revised = data["plans"][0]
+        assert first_revised["activity"]["id"] == base_activity_id
+        meals = first_revised.get("meal_restaurants") or []
+        assert [meal["meal"] for meal in meals] == ["lunch", "dinner"]
+        assert meals[1]["restaurant"]["id"] == base_dinner_id
+
+        session = client.get(f"/api/agent/session/{data['session_id']}").json()
+        patch = session["revision_patch"]
+        assert patch["base_plan_id"] == base_plan["plan_id"]
+        assert "meal:lunch" in patch["add_slots"]
+        assert patch["locked_slots"]["meal:dinner"]["item"]["id"] == base_dinner_id
+        assert patch["locked_slots"]["activity"]["item"]["id"] == base_activity_id
+
     def test_revise_only_replace_dinner_keeps_activity(self, monkeypatch):
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
