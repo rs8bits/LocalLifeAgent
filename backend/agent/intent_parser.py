@@ -11,6 +11,14 @@ from backend.agent.time_utils import (
     infer_time_window_from_clock,
     normalize_time_window,
 )
+from backend.agent.semantic_rules import (
+    activity_preference_from_message,
+    delivery_tags_for_preferences,
+    extract_delivery_preferences,
+    has_delivery_verb,
+    negated_delivery_preferences,
+    negates_delivery,
+)
 from backend.llm.deepseek_client import deepseek_client, LLMResult
 
 
@@ -47,7 +55,7 @@ TAG_RULES = [
     (["亲子", "孩子", "宝宝", "儿童", "小朋友"], "亲子"),
     (["生日"], "生日"),
     (["惊喜", "礼物", "礼盒"], "惊喜"),
-    (["鲜花", "花束"], "鲜花"),
+    (["鲜花", "花束", "玫瑰"], "鲜花"),
 ]
 
 
@@ -216,15 +224,11 @@ def _extract_people_count(message: str) -> int | None:
 
 
 def _has_delivery_verb(message: str) -> bool:
-    return any(kw in message for kw in ["送", "送到", "送来", "送过去", "配送", "外卖", "闪送", "跑腿", "急送", "同城送"])
+    return has_delivery_verb(message)
 
 
 def _has_negated_delivery_context(message: str) -> bool:
-    patterns = [
-        r"(不需要|不要|不用|别|取消|去掉|删掉|移除).{0,8}(送花|鲜花|花束|配送|外卖|闪送)",
-        r"(送花|鲜花|花束|配送|外卖|闪送).{0,8}(不需要|不要|不用|取消)",
-    ]
-    return any(re.search(pattern, message) for pattern in patterns)
+    return negates_delivery(message)
 
 
 def _has_romantic_context(message: str) -> bool:
@@ -359,14 +363,13 @@ def _rule_parse(message: str) -> Intent:
         activity_preferences.append("散步")
     if party_type == "family_elder" and any(kw in message for kw in ["逛逛", "走走", "城市", "参观", "游览", "爸妈", "父母"]):
         activity_preferences.append("安静")
-    if any(kw in message for kw in ["KTV", "唱歌", "密室", "撸猫", "电竞", "蹦床", "LiveHouse", "livehouse", "演出"]):
+    explicit_activity = activity_preference_from_message(message)
+    if explicit_activity:
+        activity_preferences.append(explicit_activity)
+        if explicit_activity in {"桌游", "唱歌", "密室", "电竞", "音乐", "运动"}:
+            activity_preferences.append("社交")
+    if any(kw in message for kw in ["小吃街", "citywalk", "Citywalk"]):
         activity_preferences.append("社交")
-    if any(kw in message for kw in ["桌游", "剧本杀", "小吃街", "citywalk", "Citywalk"]):
-        activity_preferences.append("社交")
-    if party_type == "friends" and any(kw in message for kw in ["叙旧", "聊天", "聊聊天"]):
-        activity_preferences.append("桌游")
-    if any(kw in message for kw in ["电影", "看电影", "影院", "电影院"]):
-        activity_preferences.append("观影")
 
     # 饮品偏好
     drink_preferences = []
@@ -376,23 +379,7 @@ def _rule_parse(message: str) -> Intent:
         drink_preferences.append("bar")
 
     # 外卖/闪送偏好
-    delivery_preferences = []
-    delivery_verb = _has_delivery_verb(message)
-    if not _has_negated_delivery_context(message):
-        if any(kw in message for kw in ["外卖", "点个", "送餐", "送到餐厅", "送到", "送来", "送过去", "配送"]):
-            delivery_preferences.append("外卖")
-        if any(kw in message for kw in ["闪送", "跑腿", "急送", "同城送"]):
-            delivery_preferences.append("闪送")
-        if delivery_verb and any(kw in message for kw in ["奶茶", "果茶", "奶盖", "奈雪", "喜茶"]):
-            delivery_preferences.append("奶茶")
-        if any(kw in message for kw in ["蛋糕", "生日蛋糕"]):
-            delivery_preferences.append("蛋糕")
-        if any(kw in message for kw in ["花", "鲜花", "花束"]):
-            delivery_preferences.append("鲜花")
-        if any(kw in message for kw in ["礼物", "礼盒", "气球", "惊喜"]):
-            delivery_preferences.append("儿童礼物" if party_type == "family_with_child" else "惊喜")
-        if any(kw in message for kw in ["水果", "水果拼盘"]):
-            delivery_preferences.append("水果")
+    delivery_preferences = extract_delivery_preferences(message, party_type=party_type)
 
     tags = _extract_intent_tags(message, party_type)
 
@@ -522,7 +509,7 @@ INTENT_SYSTEM_PROMPT = """你是一个意图解析器。根据用户输入，提
 
 规则：
 - party_type 是真实同行人画像：带孩子 → family_with_child；爸妈/老人 → family_elder；亲戚/全家 → family；情侣/夫妻二人 → couple；朋友/同学/同事 → friends；客户/商务/领导 → business；一个人 → solo
-- tags 统一表达时机、体验、偏好和约束，如：纪念日、约会、仪式感、拍照、高端、安静、包间、清淡、少走路、好停车、长辈友好、商务、亲子、生日、惊喜、鲜花
+- tags 统一表达时机、体验、偏好和约束，如：纪念日、约会、仪式感、拍照、高端、安静、包间、清淡、少走路、好停车、长辈友好、商务、亲子、生日、惊喜；配送商品类标签仅在用户明确提到时加入
 - child_age: 从"孩子X岁"中提取
 - needs_low_calorie: 提到减肥/减脂/清淡/低卡 → true
 - needs_quiet: 提到安静/包间/私密/正式 → true
@@ -531,7 +518,7 @@ INTENT_SYSTEM_PROMPT = """你是一个意图解析器。根据用户输入，提
 - meal_slots: 用户明确说中饭/午饭/午餐则包含 lunch；明确说晚饭/晚餐则包含 dinner；“中饭晚饭都要吃/两顿饭”应输出 ["lunch","dinner"]
 - start_time: 提取精确开始时间，如"下午三点"→"15:00"，"15:30"→"15:30"，"两点半"默认按下午理解为"14:30"
 - drink_preferences: 提到咖啡/奶茶 → ["coffee_tea"]，精酿/啤酒/酒吧 → ["bar"]
-- delivery_preferences: 提到外卖/闪送/蛋糕/鲜花/礼物/送到餐厅 → 提取对应商品或配送偏好
+- delivery_preferences: 提到外卖/闪送/跑腿/送到餐厅，或明确要配送的商品（如奶茶、蛋糕、鲜花、水果、礼物、轻食等）→ 提取对应配送方式或商品偏好；不要从“约会/纪念日”自动推断具体商品
 - avoid_queue_minutes: 默认为30，提到不想排队→10，网红/排队久→60
 """
 
@@ -737,18 +724,25 @@ def _apply_negative_child_override(intent: Intent, message: str) -> None:
 
 
 def _apply_negative_delivery_override(intent: Intent, message: str) -> None:
-    """处理“不需要送花/取消闪送”这类显式配送否定。"""
-    if not _has_negated_delivery_context(message):
+    """处理“不需要配送/取消某个配送商品”这类显式否定。"""
+    negated = set(negated_delivery_preferences(message))
+    if not negated:
         return
-    intent.delivery_preferences = []
+    if "*" in negated:
+        intent.delivery_preferences = []
+    else:
+        intent.delivery_preferences = [
+            pref for pref in intent.delivery_preferences
+            if pref not in negated
+        ]
     intent.tags = [
         tag for tag in intent.tags
-        if tag not in {"鲜花", "flower", "闪送", "外卖"}
+        if tag not in delivery_tags_for_preferences(negated)
     ]
 
 
 def _apply_friend_spouse_override(intent: Intent, message: str) -> None:
-    """朋友局里临时带上配偶，不应被改写成约会/送花场景。"""
+    """朋友局里临时带上配偶，不应被改写成约会或配送场景。"""
     if not _has_friend_spouse_context(message):
         return
     if intent.party_type in {"couple", "general"}:
@@ -756,10 +750,11 @@ def _apply_friend_spouse_override(intent: Intent, message: str) -> None:
         intent.scene = "friends"
     if not _has_romantic_context(message):
         intent.tags = [tag for tag in intent.tags if tag != "约会"]
-        if not any(kw in message for kw in ["送花", "鲜花", "花束"]):
-            intent.delivery_preferences = [
-                pref for pref in intent.delivery_preferences
-                if pref not in {"鲜花", "flower"}
+        if not _has_delivery_verb(message):
+            intent.delivery_preferences = []
+            intent.tags = [
+                tag for tag in intent.tags
+                if tag not in delivery_tags_for_preferences()
             ]
 
 
@@ -840,8 +835,10 @@ def _normalize_preferences(intent: Intent) -> None:
         "birthday cake": "蛋糕",
         "flower": "鲜花",
         "flowers": "鲜花",
-        "gift": "儿童礼物",
-        "present": "儿童礼物",
+        "milk tea": "奶茶",
+        "bubble tea": "奶茶",
+        "gift": "礼物",
+        "present": "礼物",
         "balloon": "儿童礼物",
         "fruit": "水果",
         "salad": "轻食",

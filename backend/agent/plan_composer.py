@@ -40,8 +40,10 @@ COMPOSER_SYSTEM_PROMPT = """你是本地生活短时活动规划 Agent 的方案
 - planning 阶段只能给 actions，不允许出现 booking_id/order_id。
 - 时间线要符合用户时间段：lunch 从11:30左右开始，afternoon 可从13:30或用户 start_time 开始，dinner/evening 从17:30以后开始，night 从20:30以后开始。
 - 如果 intent.meal_slots 同时包含 lunch 和 dinner，必须分别选择午餐/晚餐餐厅；有 2 个以上可用餐厅时，午餐和晚餐不要使用同一个 restaurant_id，且优先不同菜系。
-- 如果输入包含 revision_patch.locked_slots，锁定槽位必须保留：activity/drink/meal:lunch/meal:dinner 对应 ID 不能被替换或遗漏。
+- 如果输入包含 revision_patch.locked_slots，锁定槽位必须保留：activity/drink/meal:lunch/meal:dinner 对应 ID 不能被替换或遗漏；如果 revision_patch.remove_slots 包含某槽位，该槽位不能再出现在方案里。
+- 多轮修改只改用户明确修改的槽位；不要把“带上某人/人数变化/关系变化”自动理解成新增配送商品、换活动或换餐厅。
 - 根据 party_type 做组合：family_with_child 优先儿童年龄、亲子友好、低卡/健康和少排队；family_elder 优先少走路、少排队、安静和清淡；friends 优先社交、拍照、唱歌/喝酒；couple 优先氛围、拍照和品质；business 优先安静、稳定可订和品质；solo 优先近、轻量和性价比。
+- 只有用户明确要求外卖/闪送/跑腿或可配送商品时，才选择 delivery_item_ids 并生成 order_delivery；不要从约会、纪念日、带配偶等语境自动推断具体商品。
 - 外卖/闪送 action 要包含 order_delivery，target_ref_id 优先选择餐厅，其次活动地点；scheduled_time 是希望送达或下单时间。
 - 如果某个候选不可预约，也可以放进方案，但 actions 中不要为它生成预约动作，并在 risk_tips 说明。
 - 最多输出4个方案。
@@ -278,6 +280,7 @@ def _compact_revision_patch(revision_patch: dict[str, Any] | None) -> dict[str, 
         "add_slots": revision_patch.get("add_slots", []),
         "remove_slots": revision_patch.get("remove_slots", []),
         "locked_slots": locked_slots,
+        "intent_patch": revision_patch.get("intent_patch", {}),
     }
 
 

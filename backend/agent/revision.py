@@ -6,21 +6,34 @@ import re
 from typing import Any
 
 from backend.agent.intent_parser import _extract_people_count
+from backend.agent.semantic_rules import (
+    activity_aliases_for_preference,
+    activity_preference_from_message,
+    activity_preferences_from_item,
+    delivery_aliases_for_preference,
+    delivery_tags_for_preferences,
+    extract_delivery_preferences,
+    item_matches_activity_preference,
+    negated_activity_preferences,
+    negated_delivery_preferences,
+    negates_delivery,
+    ordered_unique,
+    requests_activity_change,
+    requests_activity_keep,
+    strip_aliases,
+)
 
 
-ACTIVITY_CHANGE_KW = [
-    "换活动", "改活动", "换个活动", "改成唱歌", "改成KTV", "改成ktv",
-    "不玩桌游", "不要桌游", "别玩桌游", "不想玩桌游",
-    "换成展览", "改成展览", "换成桌游", "改成桌游", "换成密室", "改成密室",
-    "换成citywalk", "改成citywalk", "换成Citywalk", "改成Citywalk",
-    "想玩桌游", "想去展览", "想看展", "想唱歌", "想去KTV", "想去ktv",
-]
-ACTIVITY_KEEP_KW = [
-    "不要动活动", "活动不要动", "保留活动", "继续这个活动", "活动不变",
-    "桌游不要动", "保留桌游", "继续桌游", "还是桌游", "桌游挺好", "桌游方案挺好",
-]
 DINNER_REPLACE_RE = re.compile(r"(只)?(替换|更换|换|改)(一下)?(晚饭|晚餐|晚上吃饭)|((晚饭|晚餐).*(换|改))")
 LUNCH_REPLACE_RE = re.compile(r"(只)?(替换|更换|换|改)(一下)?(中饭|午饭|午餐)|((中饭|午饭|午餐).*(换|改))")
+MEAL_REPLACE_RE = re.compile(
+    r"(只)?(替换|更换|换|改)(一下|个|一家)?(餐厅|饭店|餐馆|馆子|吃饭|吃的|这家店)"
+    r"|((餐厅|饭店|餐馆|馆子|吃饭|吃的|这家店).{0,8}(替换|更换|换|改))"
+)
+MEAL_KEEP_RE = re.compile(
+    r"(不要动|别动|保留|继续|保持).{0,8}(餐厅|饭店|餐馆|馆子|吃饭|午餐|晚餐)"
+    r"|((餐厅|饭店|餐馆|馆子|午餐|晚餐).{0,8}(不变|别动|不要动|挺好))"
+)
 
 
 def build_revision_message(session: dict[str, Any], revision_message: str) -> str:
@@ -37,6 +50,8 @@ def build_revision_message(session: dict[str, Any], revision_message: str) -> st
     cleaned_previous = previous_message
     if _negates_child(revision):
         cleaned_previous = _remove_child_mentions(cleaned_previous)
+    cleaned_previous = _remove_negated_delivery_mentions(cleaned_previous, revision)
+    cleaned_previous = _remove_negated_activity_mentions(cleaned_previous, revision)
 
     parts = [
         f"上一轮需求：{cleaned_previous}",
@@ -55,10 +70,10 @@ def build_revision_patch(
     revision = revision_message.strip()
     base_plan = select_base_plan(session, base_plan_id)
     base_slots = _extract_plan_slots(base_plan)
-    replace_slots = _detect_replace_slots(revision)
+    replace_slots = _detect_replace_slots(revision, base_slots)
     add_slots = _detect_add_slots(revision)
-    remove_slots = _detect_remove_slots(revision)
-    keep_slots = _detect_keep_slots(revision)
+    remove_slots = _detect_remove_slots(revision, add_slots)
+    keep_slots = _detect_keep_slots(revision, base_slots)
     intent_patch = _build_intent_patch(session, revision, base_slots, add_slots, replace_slots, remove_slots)
     activity_pref = _activity_preference_from_message(revision)
     if activity_pref and base_slots.get("activity"):
@@ -158,9 +173,34 @@ def apply_revision_intent_patch(intent: Any, revision_patch: dict[str, Any] | No
     for pref in patch.get("drink_preferences") or []:
         if pref not in intent.drink_preferences:
             intent.drink_preferences.append(pref)
+    remove_delivery = set(patch.get("remove_delivery_preferences") or [])
+    if "delivery" in set(revision_patch.get("remove_slots") or []):
+        remove_delivery.add("*")
+    if "*" in remove_delivery:
+        intent.delivery_preferences = []
+    elif remove_delivery:
+        intent.delivery_preferences = [
+            pref for pref in intent.delivery_preferences
+            if pref not in remove_delivery
+        ]
+    if remove_delivery:
+        intent.tags = [
+            tag for tag in intent.tags
+            if tag not in delivery_tags_for_preferences(remove_delivery)
+        ]
     for pref in patch.get("delivery_preferences") or []:
         if pref not in intent.delivery_preferences:
             intent.delivery_preferences.append(pref)
+    remove_activity = set(patch.get("remove_activity_preferences") or [])
+    if "activity" in set(revision_patch.get("remove_slots") or []):
+        remove_activity.add("*")
+    if "*" in remove_activity:
+        intent.activity_preferences = []
+    elif remove_activity:
+        intent.activity_preferences = [
+            pref for pref in intent.activity_preferences
+            if pref not in remove_activity
+        ]
     for pref in patch.get("activity_preferences") or []:
         if pref not in intent.activity_preferences:
             intent.activity_preferences.append(pref)
@@ -237,13 +277,15 @@ def _timeline_time_for(plan: dict[str, Any], slot_type: str, poi_id: str | None 
     return None
 
 
-def _detect_replace_slots(message: str) -> set[str]:
+def _detect_replace_slots(message: str, base_slots: dict[str, dict[str, Any]] | None = None) -> set[str]:
     slots: set[str] = set()
     if DINNER_REPLACE_RE.search(message):
         slots.add("meal:dinner")
     if LUNCH_REPLACE_RE.search(message):
         slots.add("meal:lunch")
-    if any(kw in message for kw in ACTIVITY_CHANGE_KW):
+    if MEAL_REPLACE_RE.search(message) and not slots:
+        slots.update(_base_meal_slots(base_slots) or {"meal:dinner"})
+    if requests_activity_change(message):
         slots.add("activity")
     if any(kw in message for kw in ["换酒吧", "换喝的", "换饮品", "改酒吧", "改喝酒"]):
         slots.add("drink")
@@ -265,25 +307,27 @@ def _detect_add_slots(message: str) -> set[str]:
     return slots
 
 
-def _detect_remove_slots(message: str) -> set[str]:
+def _detect_remove_slots(message: str, add_slots: set[str] | None = None) -> set[str]:
     slots: set[str] = set()
     if any(kw in message for kw in ["不要喝酒", "不喝酒", "别喝酒"]):
         slots.add("drink")
     if any(kw in message for kw in ["不要活动", "不安排活动"]):
         slots.add("activity")
-    if _negates_delivery(message):
+    if _negates_delivery(message) and "delivery" not in (add_slots or set()):
         slots.add("delivery")
     return slots
 
 
-def _detect_keep_slots(message: str) -> set[str]:
+def _detect_keep_slots(message: str, base_slots: dict[str, dict[str, Any]] | None = None) -> set[str]:
     slots: set[str] = set()
-    if any(kw in message for kw in ACTIVITY_KEEP_KW):
+    if requests_activity_keep(message):
         slots.add("activity")
     if any(kw in message for kw in ["不要动午餐", "午餐不变", "保留午餐", "中饭不变"]):
         slots.add("meal:lunch")
     if any(kw in message for kw in ["不要动晚餐", "晚餐不变", "保留晚餐", "晚饭不变"]):
         slots.add("meal:dinner")
+    if MEAL_KEEP_RE.search(message) and not any(slot.startswith("meal:") for slot in slots):
+        slots.update(_base_meal_slots(base_slots))
     if any(kw in message for kw in ["不要动饮品", "饮品不变", "酒吧不变"]):
         slots.add("drink")
     return slots
@@ -313,7 +357,7 @@ def _should_lock_activity(
     if _negates_child(message) and _is_child_oriented_activity(base_activity):
         return False
     # 默认保留上一轮活动，除非用户明确说要换活动。
-    return not any(kw in message for kw in ACTIVITY_CHANGE_KW)
+    return not requests_activity_change(message)
 
 
 def _build_intent_patch(
@@ -345,24 +389,44 @@ def _build_intent_patch(
     if any(kw in message for kw in ["喝酒", "精酿", "酒吧", "小酌", "啤酒"]):
         patch["drink_preferences"] = ["bar"]
         patch.setdefault("tags", []).append("聚会")
+    negated_delivery = _negated_delivery_preferences(message)
+    if negated_delivery:
+        patch["remove_delivery_preferences"] = negated_delivery
     delivery_preferences = _delivery_preferences_from_message(message)
     if delivery_preferences:
         patch["delivery_preferences"] = delivery_preferences
         for pref in delivery_preferences:
             if pref not in {"外卖", "闪送"}:
                 patch.setdefault("tags", []).append(pref)
+    negated_activity = _negated_activity_preferences(message)
+    if negated_activity:
+        patch["remove_activity_preferences"] = negated_activity
     activity_pref = _activity_preference_from_message(message)
     if activity_pref:
         patch.setdefault("activity_preferences", []).append(activity_pref)
     if base_slots.get("activity") and "activity" not in replace_slots:
         item = base_slots["activity"]["item"]
-        tags = item.get("tags") or []
-        for tag in tags:
-            if tag in {"桌游", "唱歌", "KTV", "密室", "观影", "散步"}:
-                patch.setdefault("activity_preferences", []).append(tag)
+        for preference in activity_preferences_from_item(item):
+            if preference not in set(negated_activity):
+                patch.setdefault("activity_preferences", []).append(preference)
     if _negates_child(message):
         patch["clear_child_context"] = True
     return patch
+
+
+def _base_meal_slots(base_slots: dict[str, dict[str, Any]] | None) -> set[str]:
+    return {
+        slot for slot in (base_slots or {})
+        if slot.startswith("meal:")
+    }
+
+
+def _negated_delivery_preferences(message: str) -> list[str]:
+    return negated_delivery_preferences(message)
+
+
+def _negated_activity_preferences(message: str) -> list[str]:
+    return negated_activity_preferences(message)
 
 
 def _mentions_lunch(message: str) -> bool:
@@ -374,71 +438,19 @@ def _mentions_dinner(message: str) -> bool:
 
 
 def _delivery_preferences_from_message(message: str) -> list[str]:
-    if _negates_delivery(message):
-        return []
-    preferences: list[str] = []
-    has_delivery_verb = any(
-        kw in message
-        for kw in ["送", "送到", "送来", "送过去", "配送", "外卖", "闪送", "跑腿", "急送", "同城送"]
-    )
-    if any(kw in message for kw in ["外卖", "点个", "送餐", "送到餐厅", "送到", "送来", "送过去", "配送"]):
-        preferences.append("外卖")
-    if any(kw in message for kw in ["闪送", "跑腿", "急送", "同城送"]):
-        preferences.append("闪送")
-    if has_delivery_verb and any(kw in message for kw in ["奶茶", "果茶", "奶盖", "奈雪", "喜茶"]):
-        preferences.append("奶茶")
-    if any(kw in message for kw in ["蛋糕", "生日蛋糕"]):
-        preferences.append("蛋糕")
-    if any(kw in message for kw in ["花", "鲜花", "花束"]):
-        preferences.append("鲜花")
-    if any(kw in message for kw in ["水果", "水果拼盘"]):
-        preferences.append("水果")
-    return _ordered_unique(preferences, ["外卖", "闪送", "奶茶", "蛋糕", "鲜花", "水果"])
+    return extract_delivery_preferences(message)
 
 
 def _activity_preference_from_message(message: str) -> str | None:
-    rules = [
-        (["桌游", "剧本杀"], "桌游"),
-        (["KTV", "ktv", "唱歌", "K歌"], "唱歌"),
-        (["展览", "看展", "美术馆", "博物馆"], "艺术"),
-        (["citywalk", "Citywalk", "小吃街", "逛街", "逛逛"], "散步"),
-        (["密室"], "密室"),
-        (["电影", "影院"], "观影"),
-    ]
-    for keywords, preference in rules:
-        if any(keyword in message for keyword in keywords) and _is_positive_activity_preference(message, preference):
-            return preference
-    return None
+    return activity_preference_from_message(message)
 
 
 def _is_positive_activity_preference(message: str, preference: str) -> bool:
-    negated_by_pref = {
-        "桌游": ["不玩桌游", "不要桌游", "别玩桌游", "不想玩桌游"],
-        "唱歌": ["不唱歌", "不要KTV", "别去KTV", "不想唱歌"],
-    }
-    return not any(kw in message for kw in negated_by_pref.get(preference, []))
+    return preference not in set(_negated_activity_preferences(message))
 
 
 def _item_matches_activity_preference(item: dict[str, Any], preference: str) -> bool:
-    if not item:
-        return False
-    haystack = " ".join(
-        str(value)
-        for value in [
-            item.get("name", ""),
-            item.get("category", ""),
-            " ".join(item.get("tags") or []),
-        ]
-    )
-    aliases = {
-        "桌游": ["桌游", "剧本杀"],
-        "唱歌": ["KTV", "ktv", "唱歌", "K歌"],
-        "艺术": ["展览", "美术馆", "博物馆", "艺术"],
-        "散步": ["citywalk", "Citywalk", "散步", "逛街", "小吃街"],
-        "密室": ["密室"],
-        "观影": ["电影", "影院", "观影"],
-    }
-    return any(alias in haystack for alias in aliases.get(preference, [preference]))
+    return item_matches_activity_preference(item, preference)
 
 
 def _find_plan_by_activity_preference(plans: list[dict[str, Any]], preference: str) -> dict[str, Any] | None:
@@ -453,11 +465,7 @@ def _find_plan_by_activity_preference(plans: list[dict[str, Any]], preference: s
 
 
 def _negates_delivery(message: str) -> bool:
-    patterns = [
-        r"(不需要|不要|不用|别|取消|去掉|删掉|移除).{0,8}(送花|鲜花|花束|配送|外卖|闪送)",
-        r"(送花|鲜花|花束|配送|外卖|闪送).{0,8}(不需要|不要|不用|取消)",
-    ]
-    return any(re.search(pattern, message) for pattern in patterns)
+    return negates_delivery(message)
 
 
 def _is_child_oriented_activity(activity: dict[str, Any]) -> bool:
@@ -514,10 +522,7 @@ def _meal_from_time(time_value: str | None) -> str | None:
 
 
 def _ordered_unique(values: list[str], order: list[str]) -> list[str]:
-    seen = set(values)
-    ordered = [value for value in order if value in seen]
-    ordered.extend(value for value in values if value not in ordered)
-    return ordered
+    return ordered_unique(values, order)
 
 
 def _plan_summary(plan: dict[str, Any] | None) -> dict[str, Any]:
@@ -565,3 +570,20 @@ def _remove_child_mentions(message: str) -> str:
         cleaned = re.sub(pattern, "", cleaned)
     cleaned = re.sub(r"[，,。；;]\s*[，,。；;]+", "，", cleaned)
     return cleaned.strip("，,。；; ")
+
+
+def _remove_negated_delivery_mentions(message: str, revision: str) -> str:
+    aliases: list[str] = []
+    for preference in _negated_delivery_preferences(revision):
+        aliases.extend(delivery_aliases_for_preference(preference))
+    return strip_aliases(message, aliases) if aliases else message
+
+
+def _remove_negated_activity_mentions(message: str, revision: str) -> str:
+    aliases: list[str] = []
+    for preference in _negated_activity_preferences(revision):
+        if preference == "*":
+            aliases.extend(["活动", "游玩", "玩"])
+        else:
+            aliases.extend(activity_aliases_for_preference(preference))
+    return strip_aliases(message, aliases) if aliases else message

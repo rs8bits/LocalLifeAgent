@@ -6,6 +6,14 @@ from typing import Optional
 
 from backend.config import DATA_DIR
 from backend.agent.schemas import Intent
+from backend.agent.semantic_rules import (
+    delivery_tags_for_preferences,
+    delivery_keywords_from_message,
+    extract_delivery_preferences,
+    has_delivery_with_deliverable,
+    negated_delivery_preferences,
+    ordered_unique,
+)
 from backend.llm.deepseek_client import deepseek_client, LLMResult
 
 TAG_CATALOG_FILE = "tag_catalog.json"
@@ -44,7 +52,7 @@ _DRINK_KEYWORDS = [
 _DELIVERY_KEYWORDS = [
     "外卖", "点个", "送餐", "送到", "送到餐厅", "配送", "闪送", "跑腿",
     "急送", "同城送", "蛋糕", "生日蛋糕", "鲜花", "花束", "礼物", "礼盒",
-    "气球", "惊喜", "水果", "水果拼盘", "纪念日", "仪式感", "送来", "送过去",
+    "气球", "水果", "水果拼盘", "送来", "送过去",
 ]
 
 # 标签类别 → tag_catalog 真实标签/类目/子品类 的规则映射
@@ -211,11 +219,13 @@ _ALIGN_RULES = {
         "水果": ["fruit", "水果"],
         "水果拼盘": ["fruit", "水果"],
         "轻食": ["food", "轻食"],
+        "沙拉": ["food", "轻食"],
         "低卡": ["food", "低卡"],
         "奶茶": ["drink", "奶茶"],
-        "纪念日": ["纪念日", "约会", "仪式感", "鲜花", "惊喜"],
+        "果茶": ["drink", "奶茶"],
+        "纪念日": ["纪念日", "约会", "仪式感", "惊喜"],
         "仪式感": ["仪式感"],
-        "约会": ["约会", "鲜花"],
+        "约会": ["约会"],
         "高端": ["高端"],
         "生日": ["cake", "蛋糕", "生日"],
     },
@@ -228,6 +238,7 @@ def _rule_resolve_domains(message: str, intent: Intent) -> dict:
     act_prefs = intent.activity_preferences or []
     food_prefs = intent.food_preferences or []
     delivery_prefs = intent.delivery_preferences or []
+    message_delivery_prefs = extract_delivery_preferences(message, party_type=intent.party_type)
 
     # required 表示用户明确提出的领域；domains 可以包含系统补充的可选领域。
     required_play = _contains_keyword(message, _PLAY_KEYWORDS) or len(act_prefs) > 0
@@ -235,7 +246,8 @@ def _rule_resolve_domains(message: str, intent: Intent) -> dict:
     required_drink = _contains_keyword(message, _DRINK_KEYWORDS) or len(prefs) > 0
     required_delivery = (
         _contains_keyword(message, _DELIVERY_KEYWORDS)
-        or len(intent.delivery_preferences or []) > 0
+        or len(delivery_prefs) > 0
+        or len(message_delivery_prefs) > 0
         or _has_delivery_with_deliverable(message)
     )
 
@@ -257,7 +269,7 @@ def _rule_resolve_domains(message: str, intent: Intent) -> dict:
 
     occasion_full_plan = _needs_occasion_full_plan(message, intent)
     if occasion_full_plan:
-        for domain_name in ["play", "eat", "drink", "delivery"]:
+        for domain_name in ["play", "eat", "drink"]:
             if domain_name not in domains:
                 domains.append(domain_name)
         required_play = required_play or _needs_composite_plan(message)
@@ -312,7 +324,13 @@ def _rule_resolve_domains(message: str, intent: Intent) -> dict:
         _align_domain("drink", raw_prefs, result)
 
     if "delivery" in domains:
-        raw_delivery = intent.tags + delivery_prefs + _extract_delivery_keywords(message)
+        negated_delivery = set(negated_delivery_preferences(message))
+        blocked_delivery_values = delivery_tags_for_preferences(negated_delivery) if negated_delivery else set()
+        raw_delivery = [
+            value
+            for value in intent.tags + delivery_prefs + message_delivery_prefs + _extract_delivery_keywords(message)
+            if value not in blocked_delivery_values
+        ]
         _align_domain("delivery", raw_delivery, result)
 
     _refresh_domain_specs(result)
@@ -325,9 +343,7 @@ def _contains_keyword(message: str, keywords: list[str]) -> bool:
 
 
 def _has_delivery_with_deliverable(message: str) -> bool:
-    has_verb = any(kw in message for kw in ["送", "送到", "送来", "送过去", "配送", "外卖", "闪送", "跑腿"])
-    has_item = any(kw in message for kw in ["奶茶", "果茶", "咖啡", "蛋糕", "鲜花", "花束", "水果", "礼物"])
-    return has_verb and has_item
+    return has_delivery_with_deliverable(message)
 
 
 def _needs_composite_plan(message: str) -> bool:
@@ -376,15 +392,9 @@ def _extract_drink_keywords(message: str) -> list[str]:
 
 
 def _extract_delivery_keywords(message: str) -> list[str]:
-    found = []
-    for kw in _DELIVERY_KEYWORDS:
-        if kw in message:
-            found.append(kw)
-    if _has_delivery_with_deliverable(message):
-        for kw in ["奶茶", "果茶", "咖啡"]:
-            if kw in message and kw not in found:
-                found.append("奶茶" if kw in {"奶茶", "果茶"} else kw)
-    return found
+    found = [kw for kw in _DELIVERY_KEYWORDS if kw in message]
+    found.extend(delivery_keywords_from_message(message))
+    return ordered_unique(found)
 
 
 def _align_domain(domain: str, raw_keywords: list[str], result: dict) -> None:
@@ -511,7 +521,7 @@ TAG_RESOLVE_SYSTEM_PROMPT = """你是一个标签对齐器。根据用户输入�
 - 只使用给定的可用标签和子品类，不允许编造。
 - domains 只列出用户明确需要查询的领域；不要把 play/eat/drink/delivery 模板式全部返回。
 - 未明确提到的领域必须省略，并把 domain_required 设为 false。
-- domain_required 判断用户是否明确要求该领域（说了唱歌→play required，说了吃饭→eat required，说了喝→drink required，说了外卖/闪送/蛋糕/鲜花→delivery required）。
+- domain_required 判断用户是否明确要求该领域（说了唱歌/展览/桌游等活动→play required，说了吃饭/餐厅/菜系→eat required，说了咖啡/奶茶/酒吧等饮品→drink required，说了外卖/闪送/跑腿或明确要配送的商品→delivery required）；不要把“约会/纪念日/仪式感”自动推成某个配送商品。
 - 英文输入应对齐到中文标签。
 """
 

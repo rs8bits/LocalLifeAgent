@@ -241,6 +241,71 @@ class TestAgentRevise:
         assert patch["intent_patch"]["delivery_preferences"] == ["奶茶"]
         assert "delivery" in patch["add_slots"]
 
+    def test_revise_negates_delivery_item_generically(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        first = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "今天下午和4个朋友去唱歌吃饭，再送奶茶到餐厅",
+        })
+        assert first.status_code == 200
+        first_data = first.json()
+        base_plan = next(plan for plan in first_data["plans"] if plan.get("delivery_items"))
+
+        revised = client.post("/api/agent/revise", json={
+            "session_id": first_data["session_id"],
+            "base_plan_id": base_plan["plan_id"],
+            "message": "不要奶茶了，其他不变",
+        })
+        assert revised.status_code == 200
+        data = revised.json()
+
+        assert "奶茶" not in data["intent"].get("delivery_preferences", [])
+        assert all(not plan.get("delivery_items") for plan in data["plans"])
+        assert all(
+            action["type"] != "order_delivery"
+            for plan in data["plans"]
+            for action in plan.get("actions", [])
+        )
+
+        session = client.get(f"/api/agent/session/{data['session_id']}").json()
+        patch = session["revision_patch"]
+        assert "delivery" in patch["remove_slots"]
+        assert patch["intent_patch"]["remove_delivery_preferences"] == ["奶茶"]
+
+    def test_revise_replaces_delivery_item_generically(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        first = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "今天下午和4个朋友去唱歌吃饭，再送奶茶到餐厅",
+        })
+        assert first.status_code == 200
+        first_data = first.json()
+        base_plan = next(plan for plan in first_data["plans"] if plan.get("delivery_items"))
+
+        revised = client.post("/api/agent/revise", json={
+            "session_id": first_data["session_id"],
+            "base_plan_id": base_plan["plan_id"],
+            "message": "不要奶茶了，换成生日蛋糕，其他不变",
+        })
+        assert revised.status_code == 200
+        data = revised.json()
+
+        assert "奶茶" not in data["intent"].get("delivery_preferences", [])
+        assert "蛋糕" in data["intent"].get("delivery_preferences", [])
+        first_plan = next(plan for plan in data["plans"] if plan.get("delivery_items"))
+        assert first_plan["delivery_items"][0]["id"] == "delivery_003"
+
+        session = client.get(f"/api/agent/session/{data['session_id']}").json()
+        patch = session["revision_patch"]
+        assert "delivery" in patch["add_slots"]
+        assert "delivery" not in patch["remove_slots"]
+        assert patch["intent_patch"]["remove_delivery_preferences"] == ["奶茶"]
+        assert patch["intent_patch"]["delivery_preferences"] == ["蛋糕"]
+
     def test_revise_spouse_join_does_not_add_flower_delivery(self, monkeypatch):
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
@@ -322,6 +387,34 @@ class TestAgentRevise:
         assert "delivery" in patch["remove_slots"]
         assert patch["locked_slots"]["activity"]["item"]["id"] == "act_006"
 
+    def test_revise_can_reselect_activity_by_generic_preference(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        first = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "明天两个朋友来，我要和他们叙叙旧，帮我安排一下",
+        })
+        assert first.status_code == 200
+        first_data = first.json()
+        ktv_plan = next(
+            plan for plan in first_data["plans"]
+            if plan.get("activity", {}).get("id") == "act_009"
+        )
+
+        revised = client.post("/api/agent/revise", json={
+            "session_id": first_data["session_id"],
+            "message": "你前面给的KTV和餐厅方案挺好的，四个人",
+        })
+        assert revised.status_code == 200
+        data = revised.json()
+
+        assert data["plans"][0]["activity"]["id"] == "act_009"
+        session = client.get(f"/api/agent/session/{data['session_id']}").json()
+        patch = session["revision_patch"]
+        assert patch["base_plan_id"] == ktv_plan["plan_id"]
+        assert patch["locked_slots"]["activity"]["item"]["id"] == "act_009"
+
     def test_revise_only_replace_dinner_keeps_activity(self, monkeypatch):
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
@@ -348,6 +441,36 @@ class TestAgentRevise:
         patch = session["revision_patch"]
         assert "meal:dinner" in patch["replace_slots"]
         assert "activity" in patch["keep_slots"]
+
+    def test_revise_generic_restaurant_replace_keeps_activity(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        first = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "今天下午和4个朋友去唱歌吃饭",
+        })
+        assert first.status_code == 200
+        first_data = first.json()
+        base_plan = first_data["plans"][0]
+        base_activity_id = base_plan["activity"]["id"]
+        base_restaurant_id = base_plan["restaurant"]["id"]
+
+        revised = client.post("/api/agent/revise", json={
+            "session_id": first_data["session_id"],
+            "base_plan_id": base_plan["plan_id"],
+            "message": "餐厅换一家，活动不要动",
+        })
+        assert revised.status_code == 200
+        data = revised.json()
+
+        assert data["plans"][0]["activity"]["id"] == base_activity_id
+        session = client.get(f"/api/agent/session/{data['session_id']}").json()
+        patch = session["revision_patch"]
+        assert "meal:dinner" in patch["replace_slots"]
+        assert "activity" in patch["keep_slots"]
+        assert patch["locked_slots"]["activity"]["item"]["id"] == base_activity_id
+        assert patch["locked_slots"].get("meal:dinner", {}).get("item", {}).get("id") != base_restaurant_id
 
     def test_revise_not_bringing_child_can_replace_child_activity(self, monkeypatch):
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
