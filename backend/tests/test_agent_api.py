@@ -198,6 +198,49 @@ class TestAgentRevise:
         assert patch["locked_slots"]["meal:dinner"]["item"]["id"] == base_dinner_id
         assert patch["locked_slots"]["activity"]["item"]["id"] == base_activity_id
 
+    def test_revise_adds_milk_tea_delivery_and_updates_people_count(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        first = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "明天爸妈来我的城市，我想带他们逛逛，帮我安排一下",
+        })
+        assert first.status_code == 200
+        first_data = first.json()
+        base_plan = first_data["plans"][0]
+
+        revised = client.post("/api/agent/revise", json={
+            "session_id": first_data["session_id"],
+            "base_plan_id": base_plan["plan_id"],
+            "message": "下午逛的时候送两杯奶茶过去，我们有四个人",
+        })
+        assert revised.status_code == 200
+        data = revised.json()
+
+        assert data["intent"]["people_count"] == 4
+        assert "奶茶" in data["intent"]["delivery_preferences"]
+        first_plan = data["plans"][0]
+        assert first_plan["delivery_items"]
+        delivery = first_plan["delivery_items"][0]
+        assert delivery["id"] == "delivery_002"
+        assert delivery["_delivery_target_area"] == "国贸商圈"
+        assert delivery["_delivery_target_ref_id"] == base_plan["activity"]["id"]
+        assert first_plan["actions"]
+        assert any(
+            action["type"] == "order_delivery"
+            and action["ref_id"] == "delivery_002"
+            and action["target_ref_id"] == base_plan["activity"]["id"]
+            for action in first_plan["actions"]
+        )
+        assert any(action.get("quantity") == 4 for action in first_plan["actions"] if action["type"] == "book_activity")
+
+        session = client.get(f"/api/agent/session/{data['session_id']}").json()
+        patch = session["revision_patch"]
+        assert patch["intent_patch"]["people_count"] == 4
+        assert patch["intent_patch"]["delivery_preferences"] == ["奶茶"]
+        assert "delivery" in patch["add_slots"]
+
     def test_revise_only_replace_dinner_keeps_activity(self, monkeypatch):
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)

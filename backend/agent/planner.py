@@ -118,6 +118,7 @@ async def plan_for_message(
         for i, spec in enumerate(llm_specs)
     ] if llm_specs else fallback_plans
     _apply_multi_meal_constraints_to_plans(plans, intent, restaurants)
+    _attach_delivery_to_plans(plans, delivery_items, intent)
 
     # 7. 错误/警告语义：有可用方案时，领域缺失进入风险提示；无方案才进入 errors。
     for domain_name in domains:
@@ -1210,16 +1211,22 @@ def _attach_delivery_to_plans(
 
 
 def _select_delivery_for_plan(delivery_items: list[dict], plan: dict) -> tuple[dict | None, dict]:
-    targets = [
-        *_plan_restaurants(plan),
-        plan.get("activity") or {},
-        plan.get("drink") or {},
-    ]
-    for target in [t for t in targets if t]:
-        item = next((candidate for candidate in delivery_items if _delivery_supports_target(candidate, target)), None)
-        if item:
+    for item in delivery_items:
+        targets = _delivery_targets_for_item(item, plan)
+        target = next((candidate for candidate in targets if _delivery_supports_target(item, candidate)), None)
+        if target:
             return item, target
     return None, {}
+
+
+def _delivery_targets_for_item(item: dict, plan: dict) -> list[dict]:
+    restaurants = _plan_restaurants(plan)
+    activity = plan.get("activity") or {}
+    drink = plan.get("drink") or {}
+    tags = set(item.get("tags") or [])
+    if item.get("sub_category") == "drink" or tags.intersection({"奶茶", "果茶", "低糖"}):
+        return [target for target in [activity, *restaurants, drink] if target]
+    return [target for target in [*restaurants, activity, drink] if target]
 
 
 def _delivery_supports_target(item: dict, target: dict) -> bool:
@@ -2005,6 +2012,20 @@ def _plan_restaurants(plan: dict) -> list[dict]:
 
 
 def _delivery_time_for_plan(plan: dict, item: dict) -> str:
+    target_id = item.get("_delivery_target_ref_id")
+    if target_id:
+        target_time = next(
+            (
+                entry.get("time")
+                for entry in plan.get("timeline") or []
+                if entry.get("poi_id") == target_id
+            ),
+            None,
+        )
+        if target_time:
+            if item.get("sub_category") == "drink" or "奶茶" in set(item.get("tags") or []):
+                return _minutes_to_time(_time_to_minutes(target_time) + 45)
+            return target_time
     restaurant_time = _timeline_time_for(plan, "restaurant")
     if restaurant_time:
         return restaurant_time

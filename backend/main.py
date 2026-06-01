@@ -19,7 +19,14 @@ app.add_middleware(
 @app.get("/health")
 async def health_check():
     """健康检查接口"""
-    return {"status": "ok", "service": "LocalLife Agent Mock API"}
+    from backend.llm.deepseek_client import deepseek_client
+    return {
+        "status": "ok",
+        "service": "LocalLife Agent Mock API",
+        "llm_available": deepseek_client.available,
+        "llm_api_key_set": bool(deepseek_client.api_key),
+        "llm_model": deepseek_client.model,
+    }
 
 
 # 注册 Mock API 路由

@@ -56,7 +56,8 @@
     "available_areas": [
       "朝阳大悦城商圈",
       "三里屯商圈",
-      "798艺术区"
+      "798艺术区",
+      "国贸商圈"
     ],
     "avg_price": 128,
     "delivery_fee": 10,
@@ -64,14 +65,17 @@
     "prep_time_min": 18,
     "tags": [
       "外卖",
+      "闪送",
       "奶茶",
       "果茶",
       "朋友聚会",
-      "拍照"
+      "拍照",
+      "长辈友好"
     ],
     "suitable_scenes": [
       "friends",
       "family",
+      "family_elder",
       "general"
     ],
     "scene": "general",
@@ -86,6 +90,7 @@
       "friends",
       "family",
       "family_with_child",
+      "family_elder",
       "couple"
     ]
   },

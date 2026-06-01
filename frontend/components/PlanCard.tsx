@@ -4,12 +4,14 @@ import type { Plan } from "@/types/agent";
 
 export default function PlanCard({
   plan,
+  peopleCount,
   onConfirm,
   onSelectForRevision,
   disabled,
   isRevisionBase = false,
 }: {
   plan: Plan;
+  peopleCount?: number | null;
   onConfirm: (planId: string) => void;
   onSelectForRevision?: (planId: string) => void;
   disabled: boolean;
@@ -36,6 +38,11 @@ export default function PlanCard({
             {plan.party_type && (
               <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">
                 {plan.party_type}
+              </span>
+            )}
+            {typeof peopleCount === "number" && peopleCount > 0 && (
+              <span className="text-xs bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">
+                {peopleCount}人
               </span>
             )}
             {typeof plan.score === "number" && plan.score > 0 && (

@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from backend.agent.intent_parser import _extract_people_count
+
 
 ACTIVITY_CHANGE_KW = [
     "换活动", "改活动", "换个活动", "改成唱歌", "改成KTV", "改成ktv",
@@ -67,7 +69,7 @@ def build_revision_patch(
         for slot in base_slots:
             if slot not in only_replace_slots:
                 keep_slots.add(slot)
-    elif _should_preserve_unchanged_slots(revision, add_slots, replace_slots, remove_slots, keep_slots):
+    elif _should_preserve_unchanged_slots(revision, add_slots, replace_slots, remove_slots, keep_slots, intent_patch):
         for slot, slot_info in base_slots.items():
             if slot in replace_slots or slot in remove_slots:
                 continue
@@ -143,12 +145,18 @@ def apply_revision_intent_patch(intent: Any, revision_patch: dict[str, Any] | No
     for pref in patch.get("drink_preferences") or []:
         if pref not in intent.drink_preferences:
             intent.drink_preferences.append(pref)
+    for pref in patch.get("delivery_preferences") or []:
+        if pref not in intent.delivery_preferences:
+            intent.delivery_preferences.append(pref)
     for pref in patch.get("activity_preferences") or []:
         if pref not in intent.activity_preferences:
             intent.activity_preferences.append(pref)
     for tag in patch.get("tags") or []:
         if tag not in intent.tags:
             intent.tags.append(tag)
+    people_count = patch.get("people_count")
+    if isinstance(people_count, int) and people_count > 0:
+        intent.people_count = people_count
     if patch.get("clear_child_context"):
         intent.child_age = None
         intent.companions = [c for c in intent.companions if c.get("role") != "child"]
@@ -239,6 +247,8 @@ def _detect_add_slots(message: str) -> set[str]:
         slots.update({"meal:lunch", "meal:dinner"})
     if any(kw in message for kw in ["喝酒", "精酿", "酒吧", "小酌", "啤酒"]):
         slots.add("drink")
+    if _delivery_preferences_from_message(message):
+        slots.add("delivery")
     return slots
 
 
@@ -300,6 +310,10 @@ def _build_intent_patch(
     remove_slots: set[str],
 ) -> dict[str, Any]:
     patch: dict[str, Any] = {}
+    people_count = _extract_people_count(message)
+    if people_count is not None:
+        patch["people_count"] = people_count
+
     meal_slots = [
         slot.split(":", 1)[1]
         for slot in sorted(add_slots | replace_slots)
@@ -316,6 +330,12 @@ def _build_intent_patch(
     if any(kw in message for kw in ["喝酒", "精酿", "酒吧", "小酌", "啤酒"]):
         patch["drink_preferences"] = ["bar"]
         patch.setdefault("tags", []).append("聚会")
+    delivery_preferences = _delivery_preferences_from_message(message)
+    if delivery_preferences:
+        patch["delivery_preferences"] = delivery_preferences
+        for pref in delivery_preferences:
+            if pref not in {"外卖", "闪送"}:
+                patch.setdefault("tags", []).append(pref)
     activity_pref = _activity_preference_from_message(message)
     if activity_pref:
         patch.setdefault("activity_preferences", []).append(activity_pref)
@@ -336,6 +356,27 @@ def _mentions_lunch(message: str) -> bool:
 
 def _mentions_dinner(message: str) -> bool:
     return bool(re.search(r"晚饭|晚餐|晚上.*吃|晚上.*用餐|傍晚.*吃", message))
+
+
+def _delivery_preferences_from_message(message: str) -> list[str]:
+    preferences: list[str] = []
+    has_delivery_verb = any(
+        kw in message
+        for kw in ["送", "送到", "送来", "送过去", "配送", "外卖", "闪送", "跑腿", "急送", "同城送"]
+    )
+    if any(kw in message for kw in ["外卖", "点个", "送餐", "送到餐厅", "送到", "送来", "送过去", "配送"]):
+        preferences.append("外卖")
+    if any(kw in message for kw in ["闪送", "跑腿", "急送", "同城送"]):
+        preferences.append("闪送")
+    if has_delivery_verb and any(kw in message for kw in ["奶茶", "果茶", "奶盖", "奈雪", "喜茶"]):
+        preferences.append("奶茶")
+    if any(kw in message for kw in ["蛋糕", "生日蛋糕"]):
+        preferences.append("蛋糕")
+    if any(kw in message for kw in ["花", "鲜花", "花束"]):
+        preferences.append("鲜花")
+    if any(kw in message for kw in ["水果", "水果拼盘"]):
+        preferences.append("水果")
+    return _ordered_unique(preferences, ["外卖", "闪送", "奶茶", "蛋糕", "鲜花", "水果"])
 
 
 def _activity_preference_from_message(message: str) -> str | None:
@@ -373,10 +414,11 @@ def _should_preserve_unchanged_slots(
     replace_slots: set[str],
     remove_slots: set[str],
     keep_slots: set[str],
+    intent_patch: dict[str, Any],
 ) -> bool:
     if _requests_full_replan(message):
         return False
-    if add_slots or replace_slots or remove_slots or keep_slots:
+    if add_slots or replace_slots or remove_slots or keep_slots or intent_patch:
         return True
     return any(
         kw in message

@@ -320,6 +320,9 @@ export default function Home() {
     ? (result?.intent?.domains as unknown[]).filter((domain): domain is string => typeof domain === "string")
     : [];
   const selectedRevisionPlan = result?.plans.find((plan) => plan.plan_id === selectedRevisionPlanId);
+  const intentPeopleCount = typeof result?.intent?.people_count === "number"
+    ? result.intent.people_count
+    : null;
 
   return (
     <main className="max-w-3xl mx-auto p-4 space-y-6">
@@ -474,6 +477,7 @@ export default function Home() {
             <PlanCard
               key={plan.plan_id}
               plan={plan}
+              peopleCount={intentPeopleCount}
               onConfirm={handleConfirm}
               onSelectForRevision={setSelectedRevisionPlanId}
               isRevisionBase={selectedRevisionPlanId === plan.plan_id}

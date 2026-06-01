@@ -186,6 +186,38 @@ def _extract_gender_composition_count(message: str) -> int | None:
     return None
 
 
+def _extract_people_count(message: str) -> int | None:
+    digit_patterns = [
+        r"(?:我们|咱们|一共|总共|总共有|有)\s*(\d+)\s*个?\s*(?:人|位)",
+        r"(\d+)\s*个人",
+        r"(\d+)\s*人(?!均)",
+        r"(\d+)\s*位",
+        r"(\d+)\s*个(?:朋友|同学|同事|人)",
+        r"(\d+)\s*个[人位]",
+    ]
+    for pattern in digit_patterns:
+        match = re.search(pattern, message)
+        if match:
+            return int(match.group(1))
+
+    chinese_patterns = [
+        r"(?:我们|咱们|一共|总共|总共有|有)\s*([一二两三四五六七八九十])\s*个?\s*(?:人|位)",
+        r"([一二两三四五六七八九十])\s*个人",
+        r"([一二两三四五六七八九十])\s*人",
+        r"([一二两三四五六七八九十])\s*位",
+        r"([一二两三四五六七八九十])\s*个(?:朋友|同学|同事|人)",
+    ]
+    for pattern in chinese_patterns:
+        match = re.search(pattern, message)
+        if match:
+            return _chinese_digit_to_int(match.group(1))
+    return None
+
+
+def _has_delivery_verb(message: str) -> bool:
+    return any(kw in message for kw in ["送", "送到", "送来", "送过去", "配送", "外卖", "闪送", "跑腿", "急送", "同城送"])
+
+
 def _extract_intent_tags(message: str, party_type: str) -> list[str]:
     tags: list[str] = []
     for keywords, tag in TAG_RULES:
@@ -244,20 +276,7 @@ def _rule_parse(message: str) -> Intent:
     duration_hours = _extract_duration_hours(message)
 
     # 人数
-    people_count = None
-    people_patterns = [
-        r"(\d+)\s*个人",
-        r"(\d+)\s*位",
-        r"(\d+)\s*个朋友",
-        r"(\d+)\s*个同学",
-        r"(\d+)\s*个同事",
-        r"(\d+)\s*个[人位]",
-    ]
-    for pat in people_patterns:
-        m = re.search(pat, message)
-        if m:
-            people_count = int(m.group(1))
-            break
+    people_count = _extract_people_count(message)
     if people_count is None:
         people_count = _extract_gender_composition_count(message)
     # 同行人默认人数
@@ -339,10 +358,13 @@ def _rule_parse(message: str) -> Intent:
 
     # 外卖/闪送偏好
     delivery_preferences = []
-    if any(kw in message for kw in ["外卖", "点个", "送餐", "送到餐厅", "送到", "配送"]):
+    delivery_verb = _has_delivery_verb(message)
+    if any(kw in message for kw in ["外卖", "点个", "送餐", "送到餐厅", "送到", "送来", "送过去", "配送"]):
         delivery_preferences.append("外卖")
     if any(kw in message for kw in ["闪送", "跑腿", "急送", "同城送"]):
         delivery_preferences.append("闪送")
+    if delivery_verb and any(kw in message for kw in ["奶茶", "果茶", "奶盖", "奈雪", "喜茶"]):
+        delivery_preferences.append("奶茶")
     if any(kw in message for kw in ["蛋糕", "生日蛋糕"]):
         delivery_preferences.append("蛋糕")
     if any(kw in message for kw in ["花", "鲜花", "花束"]):

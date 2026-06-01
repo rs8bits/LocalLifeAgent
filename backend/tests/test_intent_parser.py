@@ -88,6 +88,12 @@ class TestRuleParseFriends:
         assert genders.count("male") == 2
         assert genders.count("female") == 2
 
+    def test_chinese_people_count(self):
+        msg = "明天爸妈来，我们一共四个人，帮我安排一下"
+        intent = _rule_parse(msg)
+        assert intent.party_type == "family_elder"
+        assert intent.people_count == 4
+
     def test_friends_no_count(self):
         msg = "下午和朋友喝咖啡"
         intent = _rule_parse(msg)

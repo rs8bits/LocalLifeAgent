@@ -183,6 +183,7 @@ async def planner_node(state: AgentState) -> AgentState:
     ] if llm_specs else fallback_plans
     _apply_revision_constraints_to_plans(plans, intent, revision_patch)
     _apply_multi_meal_constraints_to_plans(plans, intent, restaurants)
+    _attach_delivery_to_plans(plans, delivery_items, intent)
     await emit_event(state, {
         "event": "composer_done",
         "message": "方案组合完成" if llm_specs else "已使用本地规则组合方案",

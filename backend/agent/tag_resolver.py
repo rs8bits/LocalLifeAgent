@@ -44,7 +44,7 @@ _DRINK_KEYWORDS = [
 _DELIVERY_KEYWORDS = [
     "外卖", "点个", "送餐", "送到", "送到餐厅", "配送", "闪送", "跑腿",
     "急送", "同城送", "蛋糕", "生日蛋糕", "鲜花", "花束", "礼物", "礼盒",
-    "气球", "惊喜", "水果", "水果拼盘", "纪念日", "仪式感",
+    "气球", "惊喜", "水果", "水果拼盘", "纪念日", "仪式感", "送来", "送过去",
 ]
 
 # 标签类别 → tag_catalog 真实标签/类目/子品类 的规则映射
@@ -231,7 +231,11 @@ def _rule_resolve_domains(message: str, intent: Intent) -> dict:
     required_play = _contains_keyword(message, _PLAY_KEYWORDS) or len(act_prefs) > 0
     required_eat = _contains_keyword(message, _EAT_KEYWORDS) or intent.needs_low_calorie
     required_drink = _contains_keyword(message, _DRINK_KEYWORDS) or len(prefs) > 0
-    required_delivery = _contains_keyword(message, _DELIVERY_KEYWORDS) or len(intent.delivery_preferences or []) > 0
+    required_delivery = (
+        _contains_keyword(message, _DELIVERY_KEYWORDS)
+        or len(intent.delivery_preferences or []) > 0
+        or _has_delivery_with_deliverable(message)
+    )
 
     domains: list[str] = []
     if required_play:
@@ -318,6 +322,12 @@ def _contains_keyword(message: str, keywords: list[str]) -> bool:
     return any(kw in message or kw.lower() in msg_lower for kw in keywords)
 
 
+def _has_delivery_with_deliverable(message: str) -> bool:
+    has_verb = any(kw in message for kw in ["送", "送到", "送来", "送过去", "配送", "外卖", "闪送", "跑腿"])
+    has_item = any(kw in message for kw in ["奶茶", "果茶", "咖啡", "蛋糕", "鲜花", "花束", "水果", "礼物"])
+    return has_verb and has_item
+
+
 def _needs_composite_plan(message: str) -> bool:
     keywords = [
         "安排一下", "规划", "几个小时", "一下午", "下午空", "今天下午是空的",
@@ -368,6 +378,10 @@ def _extract_delivery_keywords(message: str) -> list[str]:
     for kw in _DELIVERY_KEYWORDS:
         if kw in message:
             found.append(kw)
+    if _has_delivery_with_deliverable(message):
+        for kw in ["奶茶", "果茶", "咖啡"]:
+            if kw in message and kw not in found:
+                found.append("奶茶" if kw in {"奶茶", "果茶"} else kw)
     return found
 
 
