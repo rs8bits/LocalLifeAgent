@@ -241,6 +241,87 @@ class TestAgentRevise:
         assert patch["intent_patch"]["delivery_preferences"] == ["奶茶"]
         assert "delivery" in patch["add_slots"]
 
+    def test_revise_spouse_join_does_not_add_flower_delivery(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        first = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "明天两个朋友来，我要和他们叙叙旧，帮我安排一下",
+        })
+        assert first.status_code == 200
+        first_data = first.json()
+        ktv_plan = next(
+            plan for plan in first_data["plans"]
+            if plan.get("activity", {}).get("id") == "act_009"
+        )
+
+        revised = client.post("/api/agent/revise", json={
+            "session_id": first_data["session_id"],
+            "base_plan_id": ktv_plan["plan_id"],
+            "message": "我老婆也去，四个人",
+        })
+        assert revised.status_code == 200
+        data = revised.json()
+
+        assert data["intent"]["party_type"] == "friends"
+        assert data["intent"]["people_count"] == 4
+        assert "约会" not in data["intent"].get("tags", [])
+        assert "鲜花" not in data["intent"].get("delivery_preferences", [])
+        assert all(not plan.get("delivery_items") for plan in data["plans"])
+        assert not any(log["tool"] == "search_delivery_items" for log in data["tool_logs"])
+
+    def test_revise_negates_flower_and_recovers_parent_boardgame_plan(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        first = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "明天两个朋友来，我要和他们叙叙旧，帮我安排一下",
+        })
+        assert first.status_code == 200
+        first_data = first.json()
+        boardgame_plan = next(
+            plan for plan in first_data["plans"]
+            if plan.get("activity", {}).get("id") == "act_006"
+        )
+        ktv_plan = next(
+            plan for plan in first_data["plans"]
+            if plan.get("activity", {}).get("id") == "act_009"
+        )
+
+        spouse_revised = client.post("/api/agent/revise", json={
+            "session_id": first_data["session_id"],
+            "base_plan_id": ktv_plan["plan_id"],
+            "message": "我老婆也去，四个人",
+        })
+        assert spouse_revised.status_code == 200
+        spouse_data = spouse_revised.json()
+
+        corrected = client.post("/api/agent/revise", json={
+            "session_id": spouse_data["session_id"],
+            "message": "不需要送花，只是带上我老婆一起玩，主要还是叙叙旧，你前面给的桌游和晚上喝酒方案挺好的",
+        })
+        assert corrected.status_code == 200
+        data = corrected.json()
+
+        assert data["intent"]["people_count"] == 4
+        assert "bar" in data["intent"]["drink_preferences"]
+        assert "鲜花" not in data["intent"].get("delivery_preferences", [])
+        assert data["plans"][0]["activity"]["id"] == "act_006"
+        assert all(not plan.get("delivery_items") for plan in data["plans"])
+        assert all(
+            action["type"] != "order_delivery"
+            for plan in data["plans"]
+            for action in plan.get("actions", [])
+        )
+
+        session = client.get(f"/api/agent/session/{data['session_id']}").json()
+        patch = session["revision_patch"]
+        assert patch["base_plan_id"] == boardgame_plan["plan_id"]
+        assert "delivery" in patch["remove_slots"]
+        assert patch["locked_slots"]["activity"]["item"]["id"] == "act_006"
+
     def test_revise_only_replace_dinner_keeps_activity(self, monkeypatch):
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
         monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)

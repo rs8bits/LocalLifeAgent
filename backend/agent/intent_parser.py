@@ -20,6 +20,7 @@ ELDER_KW = ["爸妈", "父母", "爸爸", "妈妈", "老人", "长辈", "爷爷"
 RELATIVE_KW = ["亲戚", "亲人", "全家", "一家人", "家里人", "表哥", "表姐", "堂哥", "堂姐", "兄弟姐妹"]
 COUPLE_KW = ["情侣", "约会", "对象", "女朋友", "男朋友", "纪念日", "二人世界"]
 FRIENDS_KW = ["朋友", "同学", "哥们", "闺蜜", "聚会", "拍照", "好玩", "桌游", "喝咖啡"]
+EXPLICIT_FRIEND_KW = ["朋友", "同学", "哥们", "闺蜜", "同事", "团队", "团建", "部门"]
 BUSINESS_KW = ["客户", "商务", "领导", "老板", "合作方", "商务饭局", "商务宴请"]
 COLLEAGUE_KW = ["同事", "团队", "团建", "部门"]
 SOLO_KW = ["一个人", "自己", "独自", "单人", "我一个"]
@@ -31,11 +32,11 @@ DISTANCE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(公里|千米|km|KM|米|m)")
 
 TAG_RULES = [
     (["纪念日", "周年", "情人节", "七夕"], "纪念日"),
-    (["约会", "二人世界", "情侣", "对象", "女朋友", "男朋友", "老婆", "老公", "爱人"], "约会"),
+    (["约会", "二人世界", "情侣", "对象", "女朋友", "男朋友"], "约会"),
     (["仪式感", "正式一点", "有感觉"], "仪式感"),
     (["拍照", "打卡", "好看", "出片", "网红"], "拍照"),
     (["高端", "高级", "品质", "精致", "贵一点", "好一点"], "高端"),
-    (["安静", "别吵", "不吵", "私密", "适合聊天"], "安静"),
+    (["安静", "别吵", "不吵", "私密", "适合聊天", "叙旧", "聊天"], "安静"),
     (["包间", "包房"], "包间"),
     (["清淡", "低卡", "轻食", "健康", "减脂", "减肥"], "健康"),
     (["少走路", "别太累", "不累", "腿脚", "老人方便"], "少走路"),
@@ -93,10 +94,10 @@ def _infer_party_type_and_scene(message: str) -> tuple[str, str]:
         return "family_elder", "family_elder"
     if has_relative:
         return "family", "family"
+    if (has_friends or has_colleague) and (not has_spouse or _has_any(message, EXPLICIT_FRIEND_KW)):
+        return "friends", "friends"
     if has_couple or has_spouse:
         return "couple", "couple"
-    if has_friends or has_colleague:
-        return "friends", "friends"
     if has_solo:
         return "solo", "solo"
     return "general", "general"
@@ -216,6 +217,22 @@ def _extract_people_count(message: str) -> int | None:
 
 def _has_delivery_verb(message: str) -> bool:
     return any(kw in message for kw in ["送", "送到", "送来", "送过去", "配送", "外卖", "闪送", "跑腿", "急送", "同城送"])
+
+
+def _has_negated_delivery_context(message: str) -> bool:
+    patterns = [
+        r"(不需要|不要|不用|别|取消|去掉|删掉|移除).{0,8}(送花|鲜花|花束|配送|外卖|闪送)",
+        r"(送花|鲜花|花束|配送|外卖|闪送).{0,8}(不需要|不要|不用|取消)",
+    ]
+    return any(re.search(pattern, message) for pattern in patterns)
+
+
+def _has_romantic_context(message: str) -> bool:
+    return any(kw in message for kw in ["约会", "纪念日", "周年", "情人节", "七夕", "二人世界", "情侣"])
+
+
+def _has_friend_spouse_context(message: str) -> bool:
+    return _has_any(message, EXPLICIT_FRIEND_KW) and _has_any(message, SPOUSE_KW)
 
 
 def _extract_intent_tags(message: str, party_type: str) -> list[str]:
@@ -346,6 +363,8 @@ def _rule_parse(message: str) -> Intent:
         activity_preferences.append("社交")
     if any(kw in message for kw in ["桌游", "剧本杀", "小吃街", "citywalk", "Citywalk"]):
         activity_preferences.append("社交")
+    if party_type == "friends" and any(kw in message for kw in ["叙旧", "聊天", "聊聊天"]):
+        activity_preferences.append("桌游")
     if any(kw in message for kw in ["电影", "看电影", "影院", "电影院"]):
         activity_preferences.append("观影")
 
@@ -359,20 +378,21 @@ def _rule_parse(message: str) -> Intent:
     # 外卖/闪送偏好
     delivery_preferences = []
     delivery_verb = _has_delivery_verb(message)
-    if any(kw in message for kw in ["外卖", "点个", "送餐", "送到餐厅", "送到", "送来", "送过去", "配送"]):
-        delivery_preferences.append("外卖")
-    if any(kw in message for kw in ["闪送", "跑腿", "急送", "同城送"]):
-        delivery_preferences.append("闪送")
-    if delivery_verb and any(kw in message for kw in ["奶茶", "果茶", "奶盖", "奈雪", "喜茶"]):
-        delivery_preferences.append("奶茶")
-    if any(kw in message for kw in ["蛋糕", "生日蛋糕"]):
-        delivery_preferences.append("蛋糕")
-    if any(kw in message for kw in ["花", "鲜花", "花束"]):
-        delivery_preferences.append("鲜花")
-    if any(kw in message for kw in ["礼物", "礼盒", "气球", "惊喜"]):
-        delivery_preferences.append("儿童礼物" if party_type == "family_with_child" else "惊喜")
-    if any(kw in message for kw in ["水果", "水果拼盘"]):
-        delivery_preferences.append("水果")
+    if not _has_negated_delivery_context(message):
+        if any(kw in message for kw in ["外卖", "点个", "送餐", "送到餐厅", "送到", "送来", "送过去", "配送"]):
+            delivery_preferences.append("外卖")
+        if any(kw in message for kw in ["闪送", "跑腿", "急送", "同城送"]):
+            delivery_preferences.append("闪送")
+        if delivery_verb and any(kw in message for kw in ["奶茶", "果茶", "奶盖", "奈雪", "喜茶"]):
+            delivery_preferences.append("奶茶")
+        if any(kw in message for kw in ["蛋糕", "生日蛋糕"]):
+            delivery_preferences.append("蛋糕")
+        if any(kw in message for kw in ["花", "鲜花", "花束"]):
+            delivery_preferences.append("鲜花")
+        if any(kw in message for kw in ["礼物", "礼盒", "气球", "惊喜"]):
+            delivery_preferences.append("儿童礼物" if party_type == "family_with_child" else "惊喜")
+        if any(kw in message for kw in ["水果", "水果拼盘"]):
+            delivery_preferences.append("水果")
 
     tags = _extract_intent_tags(message, party_type)
 
@@ -585,6 +605,8 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
             pass  # LLM 部分字段解析失败，保留规则结果
 
     _apply_negative_child_override(intent, message)
+    _apply_negative_delivery_override(intent, message)
+    _apply_friend_spouse_override(intent, message)
     _normalize_time_fields(intent)
     _normalize_party_fields(intent)
 
@@ -609,9 +631,13 @@ async def parse_intent(message: str, user_memory: Optional[dict] = None) -> Inte
 
     _normalize_preferences(intent)
     _apply_negative_child_override(intent, message)
+    _apply_negative_delivery_override(intent, message)
+    _apply_friend_spouse_override(intent, message)
     _normalize_time_fields(intent)
     _normalize_party_fields(intent)
     _apply_negative_child_override(intent, message)
+    _apply_negative_delivery_override(intent, message)
+    _apply_friend_spouse_override(intent, message)
     return intent
 
 
@@ -708,6 +734,33 @@ def _apply_negative_child_override(intent: Intent, message: str) -> None:
         else:
             intent.party_type = "general"
         intent.scene = intent.party_type
+
+
+def _apply_negative_delivery_override(intent: Intent, message: str) -> None:
+    """处理“不需要送花/取消闪送”这类显式配送否定。"""
+    if not _has_negated_delivery_context(message):
+        return
+    intent.delivery_preferences = []
+    intent.tags = [
+        tag for tag in intent.tags
+        if tag not in {"鲜花", "flower", "闪送", "外卖"}
+    ]
+
+
+def _apply_friend_spouse_override(intent: Intent, message: str) -> None:
+    """朋友局里临时带上配偶，不应被改写成约会/送花场景。"""
+    if not _has_friend_spouse_context(message):
+        return
+    if intent.party_type in {"couple", "general"}:
+        intent.party_type = "friends"
+        intent.scene = "friends"
+    if not _has_romantic_context(message):
+        intent.tags = [tag for tag in intent.tags if tag != "约会"]
+        if not any(kw in message for kw in ["送花", "鲜花", "花束"]):
+            intent.delivery_preferences = [
+                pref for pref in intent.delivery_preferences
+                if pref not in {"鲜花", "flower"}
+            ]
 
 
 def _merge_memory_tags(intent: Intent, prefs: dict) -> None:

@@ -83,8 +83,15 @@ def _build_revise_context(req: AgentReviseRequest) -> tuple[dict, str, dict | No
 
     user_id = previous_session.get("user_id", "user_001")
     base_plan_id = req.base_plan_id or infer_base_plan_id(previous_session, req.message)
-    base_plan = select_base_plan(previous_session, base_plan_id)
-    revision_patch = build_revision_patch(previous_session, req.message, base_plan_id)
+    base_session = previous_session
+    if not req.base_plan_id:
+        parent_session = get_session(str(previous_session.get("parent_session_id") or ""))
+        parent_base_plan_id = infer_base_plan_id(parent_session or {}, req.message) if parent_session else None
+        if parent_session and parent_base_plan_id:
+            base_session = parent_session
+            base_plan_id = parent_base_plan_id
+    base_plan = select_base_plan(base_session, base_plan_id)
+    revision_patch = build_revision_patch(base_session, req.message, base_plan_id)
     revised_message = build_revision_message(previous_session, req.message)
     return previous_session, user_id, base_plan, revision_patch, revised_message
 

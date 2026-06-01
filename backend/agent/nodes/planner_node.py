@@ -12,6 +12,7 @@ from backend.agent.planner import (
     _attach_delivery_to_plans,
     _inject_revision_locked_candidates,
     _apply_revision_constraints_to_plans,
+    _revision_removes_delivery,
     _apply_multi_meal_constraints_to_plans,
     _make_plan_from_composer_spec,
     _ensure_plan_actions,
@@ -156,7 +157,8 @@ async def planner_node(state: AgentState) -> AgentState:
         fallback_plans = _build_delivery_only_plans(intent, delivery_items)
     _apply_revision_constraints_to_plans(fallback_plans, intent, revision_patch)
     _apply_multi_meal_constraints_to_plans(fallback_plans, intent, restaurants)
-    _attach_delivery_to_plans(fallback_plans, delivery_items, intent)
+    if not _revision_removes_delivery(revision_patch):
+        _attach_delivery_to_plans(fallback_plans, delivery_items, intent)
     llm_specs, composer_warning = await compose_plan_specs_with_llm(
         message=state.get("user_message", ""),
         intent=intent,
@@ -183,7 +185,8 @@ async def planner_node(state: AgentState) -> AgentState:
     ] if llm_specs else fallback_plans
     _apply_revision_constraints_to_plans(plans, intent, revision_patch)
     _apply_multi_meal_constraints_to_plans(plans, intent, restaurants)
-    _attach_delivery_to_plans(plans, delivery_items, intent)
+    if not _revision_removes_delivery(revision_patch):
+        _attach_delivery_to_plans(plans, delivery_items, intent)
     await emit_event(state, {
         "event": "composer_done",
         "message": "方案组合完成" if llm_specs else "已使用本地规则组合方案",

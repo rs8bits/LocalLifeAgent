@@ -17,7 +17,7 @@ ACTIVITY_CHANGE_KW = [
 ]
 ACTIVITY_KEEP_KW = [
     "不要动活动", "活动不要动", "保留活动", "继续这个活动", "活动不变",
-    "桌游不要动", "保留桌游", "继续桌游", "还是桌游",
+    "桌游不要动", "保留桌游", "继续桌游", "还是桌游", "桌游挺好", "桌游方案挺好",
 ]
 DINNER_REPLACE_RE = re.compile(r"(只)?(替换|更换|换|改)(一下)?(晚饭|晚餐|晚上吃饭)|((晚饭|晚餐).*(换|改))")
 LUNCH_REPLACE_RE = re.compile(r"(只)?(替换|更换|换|改)(一下)?(中饭|午饭|午餐)|((中饭|午饭|午餐).*(换|改))")
@@ -60,6 +60,14 @@ def build_revision_patch(
     remove_slots = _detect_remove_slots(revision)
     keep_slots = _detect_keep_slots(revision)
     intent_patch = _build_intent_patch(session, revision, base_slots, add_slots, replace_slots, remove_slots)
+    activity_pref = _activity_preference_from_message(revision)
+    if activity_pref and base_slots.get("activity"):
+        base_activity = base_slots["activity"].get("item") or {}
+        if _item_matches_activity_preference(base_activity, activity_pref):
+            keep_slots.add("activity")
+        elif _is_positive_activity_preference(revision, activity_pref):
+            replace_slots.add("activity")
+            keep_slots.discard("activity")
 
     if _should_lock_activity(revision, base_slots, replace_slots, keep_slots):
         keep_slots.add("activity")
@@ -117,7 +125,7 @@ def select_base_plan(session: dict[str, Any], base_plan_id: str | None = None) -
 
 
 def infer_base_plan_id(session: dict[str, Any], revision_message: str) -> str | None:
-    """从“第一个/第二个方案”这类文本中推断要修改的方案。"""
+    """从“第一个/桌游方案”这类文本中推断要修改的方案。"""
     plans = session.get("plans") or []
     if not plans:
         return None
@@ -129,6 +137,11 @@ def infer_base_plan_id(session: dict[str, Any], revision_message: str) -> str | 
     for index, patterns in ordinal_patterns:
         if index < len(plans) and any(re.search(pattern, revision_message) for pattern in patterns):
             return plans[index].get("plan_id")
+    preferred_activity = _activity_preference_from_message(revision_message)
+    if preferred_activity:
+        found = _find_plan_by_activity_preference(plans, preferred_activity)
+        if found:
+            return found.get("plan_id")
     return None
 
 
@@ -258,6 +271,8 @@ def _detect_remove_slots(message: str) -> set[str]:
         slots.add("drink")
     if any(kw in message for kw in ["不要活动", "不安排活动"]):
         slots.add("activity")
+    if _negates_delivery(message):
+        slots.add("delivery")
     return slots
 
 
@@ -359,6 +374,8 @@ def _mentions_dinner(message: str) -> bool:
 
 
 def _delivery_preferences_from_message(message: str) -> list[str]:
+    if _negates_delivery(message):
+        return []
     preferences: list[str] = []
     has_delivery_verb = any(
         kw in message
@@ -389,9 +406,58 @@ def _activity_preference_from_message(message: str) -> str | None:
         (["电影", "影院"], "观影"),
     ]
     for keywords, preference in rules:
-        if any(keyword in message for keyword in keywords):
+        if any(keyword in message for keyword in keywords) and _is_positive_activity_preference(message, preference):
             return preference
     return None
+
+
+def _is_positive_activity_preference(message: str, preference: str) -> bool:
+    negated_by_pref = {
+        "桌游": ["不玩桌游", "不要桌游", "别玩桌游", "不想玩桌游"],
+        "唱歌": ["不唱歌", "不要KTV", "别去KTV", "不想唱歌"],
+    }
+    return not any(kw in message for kw in negated_by_pref.get(preference, []))
+
+
+def _item_matches_activity_preference(item: dict[str, Any], preference: str) -> bool:
+    if not item:
+        return False
+    haystack = " ".join(
+        str(value)
+        for value in [
+            item.get("name", ""),
+            item.get("category", ""),
+            " ".join(item.get("tags") or []),
+        ]
+    )
+    aliases = {
+        "桌游": ["桌游", "剧本杀"],
+        "唱歌": ["KTV", "ktv", "唱歌", "K歌"],
+        "艺术": ["展览", "美术馆", "博物馆", "艺术"],
+        "散步": ["citywalk", "Citywalk", "散步", "逛街", "小吃街"],
+        "密室": ["密室"],
+        "观影": ["电影", "影院", "观影"],
+    }
+    return any(alias in haystack for alias in aliases.get(preference, [preference]))
+
+
+def _find_plan_by_activity_preference(plans: list[dict[str, Any]], preference: str) -> dict[str, Any] | None:
+    for plan in plans:
+        if _item_matches_activity_preference(plan.get("activity") or {}, preference):
+            return plan
+    for plan in plans:
+        title = str(plan.get("title") or "")
+        if _item_matches_activity_preference({"name": title}, preference):
+            return plan
+    return None
+
+
+def _negates_delivery(message: str) -> bool:
+    patterns = [
+        r"(不需要|不要|不用|别|取消|去掉|删掉|移除).{0,8}(送花|鲜花|花束|配送|外卖|闪送)",
+        r"(送花|鲜花|花束|配送|外卖|闪送).{0,8}(不需要|不要|不用|取消)",
+    ]
+    return any(re.search(pattern, message) for pattern in patterns)
 
 
 def _is_child_oriented_activity(activity: dict[str, Any]) -> bool:

@@ -1057,6 +1057,14 @@ def _make_plan_with_timeline(
     ):
         drink = None
         timeline = _schedule_slots(start_time, budget_min, activity, drink, restaurant, effective_window)
+    if (
+        restaurant
+        and not any(item.get("type") == "restaurant" for item in timeline)
+        and effective_window == "afternoon"
+    ):
+        retry_timeline = _schedule_slots(start_time, budget_min, activity, drink, restaurant, "dinner")
+        if any(item.get("type") == "restaurant" for item in retry_timeline):
+            timeline = retry_timeline
 
     # 标题
     parts = []
@@ -1375,6 +1383,9 @@ def _apply_revision_constraints_to_plans(
         elif locked_slots.get("drink"):
             changed = _apply_locked_single_slot(plan, "drink", locked_slots["drink"], intent) or changed
 
+        if "delivery" in remove_slots:
+            changed = _remove_delivery_slot(plan) or changed
+
         meal_changed = _apply_locked_meal_slots(plan, intent, locked_slots, remove_slots)
         changed = changed or meal_changed
         if changed:
@@ -1404,6 +1415,26 @@ def _apply_locked_single_slot(
     if reason not in plan.setdefault("recommend_reasons", []):
         plan["recommend_reasons"].append(reason)
     return previous_id != item.get("id") or not had_timeline_item
+
+
+def _remove_delivery_slot(plan: dict) -> bool:
+    had_delivery = bool(plan.get("delivery_items")) or any(
+        item.get("type") == "delivery" for item in plan.get("timeline") or []
+    )
+    plan["delivery_items"] = []
+    plan["timeline"] = [
+        item for item in (plan.get("timeline") or [])
+        if item.get("type") != "delivery"
+    ]
+    plan["actions"] = [
+        action for action in (plan.get("actions") or [])
+        if action.get("type") != "order_delivery"
+    ]
+    return had_delivery
+
+
+def _revision_removes_delivery(revision_patch: dict[str, Any] | None) -> bool:
+    return bool(revision_patch and "delivery" in set(revision_patch.get("remove_slots") or []))
 
 
 def _apply_locked_meal_slots(
