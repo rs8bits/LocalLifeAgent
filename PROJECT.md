@@ -14,13 +14,15 @@
 
 1. 理解用户意图；
 2. 判断家庭 / 朋友等场景；
-3. 查询附近活动、餐厅、路线、天气、排队和预约情况；
+3. 查询附近活动、餐厅、饮品、配送商品、路线、天气、排队和预约情况；
 4. 生成 2～3 个可执行的 4～6 小时活动方案；
 5. 等待用户确认；
 6. 用户确认后模拟预约、订位或下单；
 7. 生成可转发给家人或朋友的消息。
 
 本项目不是简单搜索推荐，而是 Planning + Tool Use + Execution 的本地生活 Agent。
+
+当前实现状态（2026-06-03）：端到端 Demo 已完成，包含 FastAPI 后端、Next.js 前端、LangGraph Agent、Mock API / Mock Data、SSE 流式过程、多轮修改、Reflection / Guardrails、确认执行、后端测试和 `docs/design.md` 设计文档。
 
 ---
 
@@ -30,9 +32,8 @@
 
 - Next.js
 - React
+- TypeScript
 - Tailwind CSS
-- shadcn/ui（可选）
-- Zustand 或 React Context
 
 ### 后端
 
@@ -43,15 +44,16 @@
 ### Agent
 
 - LangGraph
-- LangChain Core（可选）
 - DeepSeek API
+- 规则兜底与本地校验
 
 ### 数据与工具
 
 - JSON Mock Data
 - FastAPI Mock API
 - 本地模拟预约、下单、排队、路线和库存
-- 预留 MCP Tool Adapter
+- 本地模拟饮品店、外卖 / 闪送商品、配送报价和配送订单
+- Tool Interface 可替换为 MCP / 真实业务 API
 
 ---
 
@@ -100,20 +102,23 @@ FastAPI Backend
 LangGraph Orchestrator
   ↓
 Agent Nodes
+  ├── Input Safety
+  ├── Memory
+  ├── Rewrite
   ├── Intent Parser
-  ├── Planner
-  ├── Tool Executor
+  ├── Planner / Plan Composer
   ├── Reflection
   ├── Guardrails
-  ├── Memory Manager
-  └── Human-in-the-loop Confirm Node
+  ├── Executor
+  └── Message Generator
   ↓
 Tool Interface
   ↓
 Mock APIs
-  ├── User Profile API
   ├── Activity API
   ├── Restaurant API
+  ├── Drink API
+  ├── Delivery API
   ├── Route API
   ├── Weather API
   ├── Deal API
@@ -123,7 +128,7 @@ Mock APIs
 JSON Mock Data
 ```
 
-未来可替换为：
+生产化时可替换为：
 
 ```text
 Agent → Tool Interface → MCP Server → Real Business API
@@ -163,7 +168,7 @@ Agent → Tool Interface → MCP Server → Real Business API
 要求：
 
 - 根据 `session_id` 和 `plan_id` 找到候选方案；
-- 执行 Mock 预约、订位、下单；
+- 执行 Mock 预约、订位、团购券下单或配送下单；
 - 返回执行结果；
 - 生成可转发消息。
 
@@ -185,12 +190,15 @@ Agent → Tool Interface → MCP Server → Real Business API
 
 | 节点 | 职责 |
 |---|---|
-| Intent Agent | 解析时间、人群、距离、预算、偏好，并合并用户记忆 |
-| Planner Agent | 制定工具调用计划，组合候选活动、餐厅和路线 |
-| Executor Agent | 执行工具调用，记录日志，并在确认后执行预约 / 下单 |
-| Reflection Agent | 检查方案时间、路线、餐厅、儿童适配、距离和可执行性 |
-| Guardrails Agent | 校验 POI 来源、执行阶段、儿童安全和支付承诺 |
-| Message Agent | 生成用户展示文案和可转发消息 |
+| Input Safety Agent | 检查违法、暴力、色情、仇恨、Prompt 注入等输入风险 |
+| Memory Agent | 读取长期记忆；用户显式输入优先于记忆 |
+| Rewrite Agent | 合并原始输入与上下文，生成稳定规划输入 |
+| Intent Agent | 解析时间、人群、人数、距离、预算、活动/餐饮/饮品/配送偏好 |
+| Planner Agent | 标签对齐、候选召回、LLM 方案组合、本地兜底、路线/团购券丰富、评分 |
+| Reflection Agent | 检查需求覆盖、时间线、actions 可见性、顺序、儿童/长辈/减脂/排队/配送风险 |
+| Guardrails Agent | 校验 POI/action 来源、执行阶段、儿童安全、订单号边界和支付承诺 |
+| Executor Agent | 仅在用户确认后执行 Mock 预约、订位、团购券订单和配送订单 |
+| Message Agent | 生成并校验用户展示文案和可转发消息 |
 
 建议统一状态对象包含：
 
@@ -203,8 +211,11 @@ class AgentState(TypedDict):
     user_profile: dict
     candidate_activities: list
     candidate_restaurants: list
+    candidate_drinks: list
+    candidate_delivery_items: list
     candidate_routes: list
     plans: list
+    revision_patch: dict | None
     selected_plan_id: str | None
     tool_logs: list
     reflection_result: dict
@@ -238,11 +249,16 @@ Mock API 使用 FastAPI 实现，只读写本地 JSON，不访问真实外部服
 ```text
 GET  /api/mock/activities
 GET  /api/mock/restaurants
+GET  /api/mock/drinks
+GET  /api/mock/delivery/items
+POST /api/mock/delivery/quote
+POST /api/mock/delivery/orders
 GET  /api/mock/routes
 GET  /api/mock/weather
 GET  /api/mock/deals
 POST /api/mock/bookings/activity
 POST /api/mock/bookings/restaurant
+POST /api/mock/bookings/drink
 POST /api/mock/orders
 ```
 
@@ -253,29 +269,36 @@ POST /api/mock/orders
 ```text
 activities.json
 restaurants.json
+drinks.json
+delivery_items.json
+delivery_orders.json
+tag_catalog.json
 routes.json
 weather.json
 deals.json
 user_memory.json
+bookings.json
 orders.json
 ```
 
 数据至少覆盖：
 
-- 8 个活动；
-- 10 个餐厅；
+- 16 个活动；
+- 13 个餐厅；
+- 7 个饮品店；
+- 8 个外卖 / 闪送商品；
 - 5 条路线；
-- 5 个团购券；
-- 2 种天气；
+- 13 个团购券；
+- 4 条天气样例；
 - 3 个用户记忆样例；
 - 成功和失败预约案例；
-- 家庭、朋友、距离过远、儿童不适合、餐厅无位、排队过长等异常样例。
+- 家庭、朋友、长辈、约会、距离过远、儿童不适合、餐厅无位、排队过长、配送覆盖不足等异常样例。
 
 ---
 
 ## 8. 页面设计
 
-至少包含：
+当前页面包含：
 
 - 输入区；
 - Agent 回复区；
@@ -289,9 +312,11 @@ orders.json
 
 - 方案名称；
 - 推荐标签；
+- 识别人数；
 - 时间线；
-- 活动地点；
+- 主活动和额外活动；
 - 餐厅；
+- 饮品和外卖 / 闪送；
 - 路线；
 - 人均预算；
 - 排队时间；
@@ -304,17 +329,22 @@ orders.json
 
 ## 9. 异常处理
 
-必须支持：
+当前支持：
 
 | 异常 | 处理方式 |
 |---|---|
-| LLM 调用失败 | 使用规则兜底 |
-| Mock API 无数据 | 返回空结果和可理解提示 |
-| 餐厅无位 | 自动选择同商圈备选餐厅 |
+| 输入安全风险 | 阻断规划并返回安全提示 |
+| LLM 调用失败或 JSON 非法 | 使用规则兜底，并对 LLM 输出做本地 schema / ID / action 校验 |
+| Mock API 无数据 | 返回空结果、放宽软过滤或给出可理解提示 |
+| 标签过窄 | 逐步放宽软条件，不编造不存在的 POI |
+| 明确需求缺失 | Reflection / Guardrails 标记 retryable，返回规划节点重新生成一次 |
+| 餐厅无位 | 自动选择同商圈备选餐厅或写入风险提示 |
 | 排队过久 | 家庭场景降权或更换餐厅 |
 | 活动不适合孩子 | 按 `suitable_age` 过滤 |
 | 距离过远 | 过滤或降低排序 |
 | 天气不佳 | 优先推荐室内活动 |
+| 多轮修改误删旧需求 | 通过 keep / replace / add / remove / locked 槽位约束保留或替换 |
+| 饮品 / 配送 action 隐藏 | 校验 timeline、selected_refs 和 actions 一致性 |
 | 预约失败 | 执行阶段尝试备选方案 |
 | plan_id 不存在 | 返回明确错误 |
 
@@ -356,15 +386,15 @@ LocalLifeAgent/
 
 ## 11. 成功标准
 
-MVP 必须达到：
+当前交付已达到：
 
 1. 可以启动前端；
 2. 可以启动后端；
 3. 用户输入自然语言后，可以返回结构化意图；
-4. 可以生成至少 2 个候选方案；
+4. 可以生成候选方案，并在无数据时返回明确错误或风险提示；
 5. 每个方案都来自 Mock API 数据；
 6. 用户确认后，可以生成 Mock 预约 / 订单；
 7. 可以展示工具调用日志；
 8. 可以生成可转发消息；
-9. 至少包含一个异常处理案例；
+9. 支持输入安全、LLM 失败、无数据、预约失败、多轮修改和语义缺失等异常处理案例；
 10. 设计文档不超过 2 页。

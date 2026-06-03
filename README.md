@@ -4,22 +4,23 @@
 
 用户输入一句自然语言需求，系统可以理解意图、查询本地生活工具、生成活动方案，并在用户确认后模拟执行预约 / 下单。
 
-## 当前完成范围
+## 当前交付范围（已完成）
 
-- **阶段 0**：项目骨架（FastAPI 后端、基础前端配置、启动脚本）
-- **阶段 1**：Mock Data 与 Mock API（8 类业务数据、7 个查询/写入接口）
+- **阶段 0**：项目骨架（FastAPI 后端、Next.js 前端、启动脚本）
+- **阶段 1**：Mock Data 与 Mock API（活动、餐厅、饮品、配送、路线、天气、团购券、记忆、订单）
 - **阶段 2**：Tool Interface 与基础规划（BaseTool、Intent Parser、Planner、Scorer）
-- **阶段 3**：Agent API 与 Human-in-the-loop（`/api/agent/plan`、`/api/agent/confirm`、Session 管理）
-- **阶段 4**：最小可演示前端 Demo（Next.js 页面、方案卡片、确认交互、执行结果）
-- **阶段 5**：LangGraph 多 Agent 结构（7 个节点、流式 SSE 输出）
+- **阶段 3**：Agent API 与 Human-in-the-loop（规划、确认、Session 管理）
+- **阶段 4**：可演示前端 Demo（流式过程、方案卡片、修改基准、确认执行、转发消息）
+- **阶段 5**：LangGraph 多 Agent 结构（输入安全、记忆、改写、意图、规划、反思、风控、执行、消息）
 - **阶段 6**：Reflection、Guardrails 与 Memory（质量检查、安全边界校验、用户记忆读取）
 - **阶段 7**：标签对齐 + LLM 方案组合器（吃/喝/玩/外卖闪送分类与标签解析 → 精准候选检索 → 严格 JSON action 输出）
+- **阶段 8**：多轮修改语义一致性（保留/替换/新增/删除槽位、人数修改、额外活动、配送和饮品 action 对齐、反思重试）
 
 ## 技术栈
 
 | 层面 | 技术 |
 |------|------|
-| 前端 | Next.js + React + Tailwind CSS（阶段 4 实现） |
+| 前端 | Next.js + React + TypeScript + Tailwind CSS |
 | 后端 | FastAPI + Pydantic + Uvicorn |
 | Agent | LangGraph + DeepSeek API（无 Key 时规则兜底） |
 | 数据 | 本地 JSON Mock Data |
@@ -99,7 +100,7 @@ curl -X POST http://127.0.0.1:8000/api/mock/orders \
 .venv/bin/pytest backend/tests -v
 ```
 
-目前共 187 个测试，覆盖 Mock API、工具、意图解析、标签对齐、LLM 方案组合兜底、评分、规划、流式 API 和确认执行。
+目前共 301 个后端测试，覆盖 Mock API、工具、输入安全、改写、意图解析、标签对齐、LLM 方案组合兜底、评分、规划、反思风控、流式 API 和确认执行。
 
 ## DeepSeek 配置（可选）
 
@@ -152,15 +153,16 @@ DEEPSEEK_RETRY_BACKOFF_SECONDS=0.8
 
 对候选方案进行可解释评分（0～1），家庭和朋友场景使用不同权重公式。每个方案的评分维度都会输出 `score_reasons`。
 
-### Planner (`backend/agent/planner.py`)
+### Planner / Plan Composer (`backend/agent/planner.py`, `backend/agent/plan_composer.py`)
 
 核心规划流程：
-1. 读取用户长期记忆
-2. 解析意图（用户输入优先于记忆）
-3. 依次查询天气 → 活动 → 餐厅 → 路线 → 团购券
-4. 组合 2～3 个候选方案
-5. 对每个方案评分并排序
-6. 所有工具调用记录在 `tool_logs` 中
+1. 读取用户长期记忆，用户显式输入优先于记忆
+2. 解析意图并对齐到 `play` / `eat` / `drink` / `delivery` 领域标签
+3. 依次查询天气、场所/商品候选、路线、团购券
+4. LLM 输出严格 JSON 方案，本地校验 ID、槽位、timeline 和 actions
+5. LLM 失败或结果非法时使用本地兜底组合
+6. Reflection / Guardrails 对不合理方案触发一次可修复重试
+7. 对每个方案评分并排序，所有工具调用记录在 `tool_logs` 中
 
 Planner 不会调用预约、订位或下单工具。
 
@@ -171,7 +173,9 @@ Planner 不会调用预约、订位或下单工具。
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/agent/plan` | 规划阶段：生成候选方案（不预约/不下单） |
+| POST | `/api/agent/plan/stream` | 规划阶段 SSE：实时输出节点事件、工具日志和候选方案 |
 | POST | `/api/agent/confirm` | 确认阶段：执行预约、订位、Mock 订单 |
+| POST | `/api/agent/confirm/stream` | 确认阶段 SSE：实时输出执行和消息生成事件 |
 | GET | `/api/agent/session/{session_id}` | 查询 session 详情 |
 
 ### 规划示例
@@ -182,7 +186,7 @@ curl -X POST http://127.0.0.1:8000/api/agent/plan \
   -d '{"user_id":"user_001","message":"下午带老婆孩子去亲子乐园，孩子5岁，老婆减肥"}'
 ```
 
-响应包含：`session_id`、`intent`、`plans`（2~3个方案）、`tool_logs`、`errors`。
+响应包含：`session_id`、`intent`、`plans`（候选方案）、`tool_logs`、`errors`。
 
 ### 确认示例
 
@@ -203,7 +207,7 @@ curl -X POST http://127.0.0.1:8000/api/agent/confirm \
 
 ## 前端 Demo 启动
 
-前端是 MVP 演示版本，使用 Next.js + Tailwind CSS。
+前端是完整 Demo 界面，使用 Next.js + TypeScript + Tailwind CSS。
 
 ```bash
 cd frontend
@@ -218,29 +222,35 @@ npm run dev
 1. 启动后端：`./scripts/run_backend.sh`
 2. 新终端启动前端：`cd frontend && npm run dev`
 3. 浏览器打开 `http://127.0.0.1:3000`
-4. 点击"家庭场景示例"或"朋友场景示例"
+4. 点击示例输入，或直接输入家庭、朋友、约会、长辈、本地配送等需求
 5. 点击"开始规划"→ 看到实时流式过程（意图解析→工具调用→质量检查→安全校验）
-6. 查看候选方案卡片（含分数、推荐理由、风险提示）
+6. 查看候选方案卡片（含人数、分数、时间线、活动/餐饮/饮品/配送、推荐理由、风险提示）
 7. 点击某个方案的"确认并安排"→ 看到确认流式过程（预约→订位→订单）
 8. 查看执行结果和转发消息，可复制
 
 ## LangGraph 多 Agent 结构
 
-系统使用 LangGraph 编排 7 个 Agent 节点，流程如下：
+系统使用 LangGraph 编排规划与确认两个阶段，流程如下：
 
 ```
-Memory → Intent → Planner → Reflection → Guardrails → (确认阶段) Executor → Message
+input_safety → memory → rewrite → intent → planner → reflection → guardrails
+                                      ↑                         |
+                                      └──── retry when allowed ─┘
+
+确认阶段：executor → message_llm → guardrails
 ```
 
 | 节点 | 职责 | 流式事件 |
 |------|------|----------|
+| Input Safety Node | 输入安全检查，阻断违法/暴力/色情/仇恨/Prompt 注入等风险 | `input_safety_start`, `input_safety_done` |
 | Memory Node | 读取用户长期记忆（位置/孩子年龄/饮食偏好/距离偏好） | `memory_loaded` |
+| Rewrite Node | 合并原始输入与上下文，生成更稳定的规划输入 | `rewrite_start`, `rewrite_done` |
 | Intent Node | 解析自然语言意图（LLM 优先 + 规则兜底） | `intent_start`, `intent_done` |
 | Planner Node | 使用 Tag Resolver 输出的 `domain_specs` 只检索必要领域，交给 LLM 组合 JSON 方案，本地校验并兜底 | `tool_start`, `tool_done`, `planner_start`, `composer_start`, `composer_done`, `plan_delta` |
-| Reflection Node | 规则检查 + LLM 语义反思，检查方案是否真正满足用户意图 | `reflection_start`, `reflection_done` |
-| Guardrails Node | 安全校验（POI 来源/阶段检查/支付承诺/儿童安全） | `guardrails_start`, `guardrails_done` |
+| Reflection Node | 规则检查 + LLM 语义反思，检查方案是否真正满足用户意图，必要时触发重试 | `reflection_start`, `reflection_done` |
+| Guardrails Node | 安全校验（POI/action 来源、阶段检查、支付承诺、儿童安全） | `guardrails_start`, `guardrails_done` |
 | Executor Node | 确认阶段执行预约+订位+Mock 订单 | `booking_start`, `booking_done`, `order_start`, `order_done` |
-| Message Node | 生成可转发消息 | `message_done` |
+| Message LLM / Message Node | 生成并校验可转发消息 | `message_done` |
 
 ## Reflection 检查项
 
@@ -255,7 +265,8 @@ Memory → Intent → Planner → Reflection → Guardrails → (确认阶段) E
 7. 天气不佳时是否优先室内
 8. 是否存在路线
 9. 活动/餐厅/饮品是否可预约/有位，配送时效是否过长
-10. 不可执行环节 → 写入风险提示
+10. 用户明确要求的活动/餐饮/饮品/配送是否出现在 timeline 和 actions 中
+11. 不可执行环节 → 写入风险提示；可修复的需求缺失 → 返回规划节点重新生成
 
 ## Guardrails 检查项
 
@@ -301,6 +312,8 @@ Memory → Intent → Planner → Reflection → Guardrails → (确认阶段) E
 
 活动、餐厅和团购券数据已补充接近本地生活平台的业务字段，例如评分、评价数、月销量、营业时间、剩余库存、预约说明、排队状态、服务设施、退款规则和核销方式。所有字段仍然是 Mock Data，仅用于 Demo，不代表真实平台库存、价格或交易结果。
 
-## 下一阶段计划
+## 当前交付状态
 
-- **阶段 7**：测试与演示打磨
+- 后端 Agent、Mock API、Mock Data、前端 Demo、测试和设计文档均已完成。
+- 真实交易、真实地图、真实库存和真实支付未接入，当前仅作为本地 Demo。
+- 可选后续优化：接入真实业务 API/MCP、扩充更多城市和商圈数据、补充前端 E2E 测试、增加持久化数据库。

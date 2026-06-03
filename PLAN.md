@@ -2,9 +2,11 @@
 
 目标：先完成可演示的端到端 MVP，再补齐 Agent 架构、风控检查、记忆和异常案例。所有阶段都坚持 Mock Data 优先，禁止 LLM 编造业务事实。
 
+当前状态（2026-06-03）：阶段 0～8 已完成并形成可演示交付。本文件保留实施拆分和验收口径，便于复盘；后续工作仅剩可选增强，不影响当前交付。
+
 ---
 
-## 阶段 0：项目骨架
+## 阶段 0：项目骨架（已完成）
 
 目标：让前后端项目能启动，并明确目录边界。
 
@@ -24,41 +26,46 @@
 
 ---
 
-## 阶段 1：Mock Data 与 Mock API
+## 阶段 1：Mock Data 与 Mock API（已完成）
 
 目标：先把业务事实层做稳，后续 Agent 只能使用这些数据。
 
 任务：
 
-1. 创建活动、餐厅、路线、天气、团购券、用户记忆和订单 JSON。
+1. 创建活动、餐厅、饮品、配送商品、路线、天气、团购券、用户记忆和订单 JSON。
 2. 数据覆盖家庭、朋友、餐厅无位、排队过长、距离过远、儿童不适合、预约失败等案例。
 3. 实现 Mock API：
    - `GET /api/mock/activities`
    - `GET /api/mock/restaurants`
+   - `GET /api/mock/drinks`
+   - `GET /api/mock/delivery/items`
+   - `POST /api/mock/delivery/quote`
+   - `POST /api/mock/delivery/orders`
    - `GET /api/mock/routes`
    - `GET /api/mock/weather`
    - `GET /api/mock/deals`
    - `POST /api/mock/bookings/activity`
    - `POST /api/mock/bookings/restaurant`
+   - `POST /api/mock/bookings/drink`
    - `POST /api/mock/orders`
 4. 为 Mock API 增加基础 schema 和错误返回。
 
 验收：
 
-- 能通过 API 查询到活动、餐厅、路线、天气和团购券。
+- 能通过 API 查询到活动、餐厅、饮品、配送商品、路线、天气和团购券。
 - 能模拟预约成功和失败。
-- 能模拟创建订单。
+- 能模拟创建团购券订单和配送订单。
 
 ---
 
-## 阶段 2：Tool Interface 与基础规划
+## 阶段 2：Tool Interface 与基础规划（已完成）
 
 目标：让后端可以通过工具查询 Mock API，并生成第一版候选方案。
 
 任务：
 
 1. 实现 `BaseTool`。
-2. 实现活动、餐厅、路线、天气、团购券、预约和订单工具。
+2. 实现活动、餐厅、饮品、配送、路线、天气、团购券、预约和订单工具。
 3. 实现 `tool_logs` 记录。
 4. 实现基础 Intent 解析规则兜底。
 5. 实现简单 Planner：
@@ -76,17 +83,17 @@
 
 ---
 
-## 阶段 3：Agent API 与 Human-in-the-loop
+## 阶段 3：Agent API 与 Human-in-the-loop（已完成）
 
 目标：打通规划和确认执行两个核心接口。
 
 任务：
 
-1. 实现 `POST /api/agent/plan`。
+1. 实现 `POST /api/agent/plan` 和 `POST /api/agent/plan/stream`。
 2. 实现 session 保存，记录用户输入、意图、候选方案和工具日志。
-3. 实现 `POST /api/agent/confirm`。
+3. 实现 `POST /api/agent/confirm` 和 `POST /api/agent/confirm/stream`。
 4. 确认前禁止调用预约、订位、下单工具。
-5. 确认后执行活动预约、餐厅订位、Mock 订单创建。
+5. 确认后执行活动预约、餐厅/饮品订位、团购券订单和配送订单创建。
 6. 生成执行结果和可转发消息。
 
 验收：
@@ -97,7 +104,7 @@
 
 ---
 
-## 阶段 4：前端 Demo
+## 阶段 4：前端 Demo（已完成）
 
 目标：完成黑客松演示所需的主流程页面。
 
@@ -119,7 +126,7 @@
 
 ---
 
-## 阶段 5：LangGraph 与多 Agent 结构
+## 阶段 5：LangGraph 与多 Agent 结构（已完成）
 
 目标：把 MVP 的流程整理成清晰的 Agent 节点。
 
@@ -128,11 +135,14 @@
 1. 定义 `AgentState`。
 2. 实现 LangGraph Orchestrator。
 3. 拆分节点：
+   - Input Safety Agent
+   - Memory Agent
+   - Rewrite Agent
    - Intent Agent
    - Planner Agent
-   - Executor Agent
    - Reflection Agent
    - Guardrails Agent
+   - Executor Agent
    - Message Agent
 4. 保留规则兜底，避免 LLM 不可用时 Demo 失效。
 
@@ -143,7 +153,7 @@
 
 ---
 
-## 阶段 6：Reflection、Guardrails 与 Memory
+## 阶段 6：Reflection、Guardrails 与 Memory（已完成）
 
 目标：补强方案质量、执行边界和用户偏好。
 
@@ -177,7 +187,7 @@
 
 ---
 
-## 阶段 7：测试与演示打磨
+## 阶段 7：测试与演示打磨（已完成）
 
 目标：降低 Demo 翻车风险，并准备可讲解亮点。
 
@@ -211,9 +221,29 @@
 
 ---
 
+## 阶段 8：语义一致性与多轮修改打磨（已完成）
+
+目标：解决多轮修改时“新增需求误删旧活动”“否定语义写死到某个商品”“timeline 和 actions 不一致”等问题。
+
+任务：
+
+1. 抽象通用语义规则，覆盖保留、替换、新增、删除、锁定槽位和人数覆盖。
+2. 多轮修改支持 `keep_slots`、`replace_slots`、`add_slots`、`remove_slots`、`locked_slots` 和 `intent_patch`。
+3. 将主活动、额外活动、餐饮、饮品、配送统一到 timeline、selected_refs 和 actions。
+4. Reflection / Guardrails 对需求缺失、隐藏 action、饭后饮品顺序等可修复问题触发一次重新生成。
+5. 前端方案卡片显示识别人数，并展示额外活动、饮品和配送。
+
+验收：
+
+- “下午桌游，晚饭后喝酒”等明确需求不会被上一轮上下文覆盖或删除。
+- “不要某个商品/餐厅/活动”按领域和槽位泛化处理，不写死成鲜花等特例。
+- 方案不可执行或不满足明确需求时，会返回规划节点重试，而不是直接展示明显不合理结果。
+
+---
+
 ## 优先级
 
-### P0：必须完成
+### P0：已完成
 
 - FastAPI 后端启动；
 - Next.js 前端启动；
@@ -225,7 +255,7 @@
 - 前端输入、方案展示和确认执行；
 - 用户确认后 Mock 预约 / 订单。
 
-### P1：建议完成
+### P1：已完成
 
 - LangGraph；
 - Reflection；
@@ -234,19 +264,26 @@
 - Memory；
 - DeepSeek 意图解析。
 
-### P2：时间充足再做
+### P2：已完成/部分转为可选
+
+- 多轮对话：已支持基于上一轮方案的修改基准；
+- 更精致的 UI：已完成可演示卡片、流式过程、修改基准、确认执行；
+- 更多异常案例：已覆盖输入安全、LLM 失败、无数据、预约失败、语义缺失、风控阻断；
+- 设计文档和演示说明：已完成 `docs/design.md` 与 README 更新。
+
+### 可选后续增强
 
 - MCP Adapter；
-- 多轮对话；
-- 更精致的 UI；
-- 更多异常案例；
-- 设计文档和演示讲稿。
+- 真实地图 / 真实交易 / 真实库存 API；
+- 前端 E2E 测试；
+- 持久化数据库；
+- 更多城市、商圈和真实业务字段。
 
 ---
 
-## 当前建议实施顺序
+## 当前交付结论
 
-1. 先做阶段 0～3，确保后端主流程可用。
-2. 再做阶段 4，让 Demo 可视化。
-3. 然后做阶段 5～6，把 Agent 亮点补齐。
-4. 最后做阶段 7，补测试、README 和演示材料。
+1. 阶段 0～8 已完成，当前仓库具备完整代码、Mock 数据、测试和设计文档。
+2. 规划阶段只读工具和 Mock Data；确认阶段才写入预约、订单和配送订单。
+3. LLM 不可用时可规则兜底，LLM 输出必须经过本地校验、Reflection 和 Guardrails。
+4. 后续若接真实业务 API，优先从 Tool Interface / MCP Adapter 替换 Mock API，保持 Agent 编排不变。

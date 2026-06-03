@@ -14,7 +14,7 @@
 - 涉及写代码、改代码、新建文件、重构、补测试、修 bug 时，优先在项目根目录生成 `TEMP_TASK_*.md`，由用户调用 Claude Code 执行。
 - 很小的修改可以由 Codex 直接完成，例如少量文档调整、单文件小修复、短测试补充。
 - `TEMP_TASK_*.md` 使用完成后必须删除，不提交到仓库。
-- 完成编码、审查和测试后只创建本地提交，不自动 `git push`。
+- 完成编码、审查和测试后默认只创建本地提交；只有用户明确要求推送时才执行 `git push`。
 
 ---
 
@@ -52,7 +52,7 @@ Mock 预约 / 下单
 
 禁止让 LLM 凭空编造：
 
-- 餐厅、活动、路线和商圈；
+- 餐厅、活动、饮品店、配送商品、路线和商圈；
 - 价格、排队时间、库存和预约状态；
 - 订单号、团购券和预约成功结果。
 
@@ -105,13 +105,17 @@ LLM 不可以作为业务事实来源。
 |---|---|
 | `search_activities` | 搜索活动 |
 | `search_restaurants` | 搜索餐厅 |
+| `search_drinks` | 搜索饮品店 |
+| `search_delivery_items` | 搜索外卖 / 闪送商品 |
+| `estimate_delivery` | 估算配送费用和时效 |
 | `estimate_route` | 估算路线 |
 | `get_weather` | 获取天气 |
 | `get_deals` | 获取团购券 |
-| `check_availability` | 检查可预约时间 |
 | `book_activity` | 预约活动 |
 | `reserve_restaurant` | 订位餐厅 |
+| `book_drink` | 预约饮品店 |
 | `create_mock_order` | 创建模拟订单 |
+| `create_delivery_order` | 创建模拟配送订单 |
 | `generate_share_message` | 生成转发消息 |
 
 ### 3.4 LLM 配置
@@ -141,7 +145,9 @@ DEEPSEEK_MODEL=
 
 - `book_activity`
 - `reserve_restaurant`
+- `book_drink`
 - `create_mock_order`
+- `create_delivery_order`
 
 ---
 

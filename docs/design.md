@@ -93,7 +93,7 @@ parse_intent
 
 ## 5. 交付范围
 
-当前交付包含后端 Agent、前端界面、Mock API、Mock Data、测试和本文档。关键代码路径：
+当前交付包含后端 Agent、前端界面、Mock API、Mock Data、后端测试、前端构建和本文档。关键代码路径：
 
 - Agent 编排：`backend/agent/graph.py`
 - API 入口：`backend/agent/api.py`
