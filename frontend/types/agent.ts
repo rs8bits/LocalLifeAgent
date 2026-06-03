@@ -20,6 +20,7 @@ export interface Plan {
   party_type?: string;
   timeline: TimelineItem[];
   activity: Record<string, unknown> | null;
+  extra_activities?: Record<string, unknown>[];
   restaurant: Record<string, unknown> | null;
   meal_restaurants?: {
     meal: string;

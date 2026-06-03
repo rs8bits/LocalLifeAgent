@@ -10,6 +10,11 @@ from backend.mock_api.storage import read_json, write_json
 client = TestClient(app)
 
 
+def _minutes(value: str) -> int:
+    hour, minute = value.split(":", 1)
+    return int(hour) * 60 + int(minute)
+
+
 @pytest.fixture(autouse=True)
 def reset_all():
     """每个测试前重置 sessions / bookings / orders"""
@@ -386,6 +391,64 @@ class TestAgentRevise:
         assert patch["base_plan_id"] == boardgame_plan["plan_id"]
         assert "delivery" in patch["remove_slots"]
         assert patch["locked_slots"]["activity"]["item"]["id"] == "act_006"
+
+    def test_revise_boardgame_afternoon_and_after_dinner_drink_visible(self, monkeypatch):
+        monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")
+        monkeypatch.setattr("backend.llm.deepseek_client.deepseek_client.available", False)
+
+        first = client.post("/api/agent/plan", json={
+            "user_id": "user_002",
+            "message": "明天两个朋友来，我要和他们叙叙旧，帮我安排一下",
+        })
+        assert first.status_code == 200
+        first_data = first.json()
+        base_plan = next(
+            plan for plan in first_data["plans"]
+            if plan.get("activity", {}).get("id") == "act_006"
+        )
+
+        revised = client.post("/api/agent/revise", json={
+            "session_id": first_data["session_id"],
+            "base_plan_id": base_plan["plan_id"],
+            "message": "下午玩桌游，晚饭后喝酒",
+        })
+        assert revised.status_code == 200
+        data = revised.json()
+        assert data["plans"], data
+
+        plan = data["plans"][0]
+        activity = plan.get("activity") or {}
+        assert activity.get("id") == "act_006"
+        assert plan.get("drink", {}).get("sub_category") == "bar"
+        timeline = plan["timeline"]
+        assert any(item["type"] == "activity" and item["poi_id"] == "act_006" for item in timeline)
+        assert any(item["type"] == "restaurant" for item in timeline)
+        assert any(item["type"] == "drink" and item["poi_id"] == plan["drink"]["id"] for item in timeline)
+
+        dinner_item = max(
+            (item for item in timeline if item["type"] == "restaurant"),
+            key=lambda item: item["time"],
+        )
+        drink_item = next(item for item in timeline if item["type"] == "drink")
+        dinner_end = _minutes(dinner_item["time"]) + int(dinner_item["duration_min"])
+        assert _minutes(drink_item["time"]) >= dinner_end
+
+        visible_refs = {
+            ref
+            for ref in [
+                activity.get("id"),
+                plan.get("drink", {}).get("id"),
+                *[
+                    entry["restaurant"]["id"]
+                    for entry in plan.get("meal_restaurants", [])
+                ],
+                *((plan.get("restaurant") or {}).get("id"),),
+            ]
+            if ref
+        }
+        visible_refs.update(item.get("id") for item in plan.get("delivery_items", []))
+        visible_refs.update(deal.get("id") for deal in plan.get("deals", []))
+        assert all(action["ref_id"] in visible_refs for action in plan.get("actions", []))
 
     def test_revise_can_reselect_activity_by_generic_preference(self, monkeypatch):
         monkeypatch.setattr("backend.config.settings.DEEPSEEK_API_KEY", "")

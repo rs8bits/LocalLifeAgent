@@ -294,8 +294,7 @@ async def _execute_actions(
 
 def _build_plan_item_map(plan: dict) -> dict[str, dict]:
     mapping = {}
-    for key in ["activity", "restaurant", "drink"]:
-        item = plan.get(key)
+    for item in [plan.get("activity"), *(plan.get("extra_activities") or []), plan.get("restaurant"), plan.get("drink")]:
         if item and item.get("id"):
             mapping[item["id"]] = item
     for entry in plan.get("meal_restaurants") or []:

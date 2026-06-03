@@ -7,6 +7,7 @@ from backend.agent.planner import (
     _run_tool,
     plan_for_message,
 )
+from backend.agent.plan_composer import validate_plan_specs
 from backend.agent.schemas import Intent
 from backend.llm.deepseek_client import LLMResult
 
@@ -564,19 +565,19 @@ class TestDeliveryPlanner:
                     "title": "LLM鲜花聚会方案",
                     "selected_refs": {
                         "activity_id": "act_009",
-                        "restaurant_id": "rest_002",
+                        "restaurant_id": "rest_015",
                         "drink_id": None,
                         "delivery_item_ids": ["delivery_004"],
                     },
                     "timeline": [
                         {"time": "14:00", "type": "activity", "ref_id": "act_009", "title": "唱歌", "duration_min": 120},
-                        {"time": "17:30", "type": "restaurant", "ref_id": "rest_002", "title": "吃饭", "duration_min": 75},
+                        {"time": "17:30", "type": "restaurant", "ref_id": "rest_015", "title": "吃饭", "duration_min": 75},
                         {"time": "17:30", "type": "delivery", "ref_id": "delivery_004", "title": "鲜花送达餐厅", "duration_min": 5},
                     ],
                     "actions": [
                         {"action_id": "a1", "type": "book_activity", "ref_id": "act_009", "scheduled_time": "14:00", "quantity": 4},
-                        {"action_id": "a2", "type": "book_restaurant", "ref_id": "rest_002", "scheduled_time": "17:30", "quantity": 4},
-                        {"action_id": "a3", "type": "order_delivery", "ref_id": "delivery_004", "scheduled_time": "17:30", "quantity": 1, "target_ref_id": "rest_002"},
+                        {"action_id": "a2", "type": "book_restaurant", "ref_id": "rest_015", "scheduled_time": "17:30", "quantity": 4},
+                        {"action_id": "a3", "type": "order_delivery", "ref_id": "delivery_004", "scheduled_time": "17:30", "quantity": 1, "target_ref_id": "rest_015"},
                     ],
                     "recommend_reasons": ["LLM 根据候选组合了唱歌、晚餐和鲜花闪送"],
                     "risk_tips": [],
@@ -619,6 +620,43 @@ class TestDeliveryPlanner:
         # 应能搜到活动
         has_activity = any(p.get("activity") for p in plans)
         assert has_activity, "photography/singing 应对齐到拍照/唱歌，搜到活动"
+
+
+class TestPlanComposerValidation:
+    """LLM 组合结果本地语义校验"""
+
+    def test_hidden_activity_action_is_rejected_when_play_required(self):
+        candidates = {
+            "activities": [{"id": "act_006", "name": "无限桌游俱乐部"}],
+            "restaurants": [{"id": "rest_016", "name": "胡同暖锅家常菜"}],
+            "drinks": [],
+            "delivery_items": [],
+        }
+        specs = [{
+            "selected_refs": {
+                "activity_id": None,
+                "restaurant_id": "rest_016",
+                "drink_id": None,
+                "delivery_item_ids": [],
+            },
+            "timeline": [
+                {"time": "17:30", "type": "restaurant", "ref_id": "rest_016", "title": "晚饭", "duration_min": 75},
+            ],
+            "actions": [
+                {"type": "book_activity", "ref_id": "act_006", "scheduled_time": "14:00", "quantity": 3},
+                {"type": "book_restaurant", "ref_id": "rest_016", "scheduled_time": "17:30", "quantity": 3},
+            ],
+        }]
+        intent = Intent(party_type="friends", activity_preferences=["桌游"])
+        valid, issues = validate_plan_specs(
+            specs,
+            candidates,
+            intent=intent,
+            tag_result={"domain_required": {"play": True, "eat": True, "drink": False, "delivery": False}},
+        )
+
+        assert valid == []
+        assert any("activity" in issue or "selected_refs" in issue for issue in issues)
 
 
 class TestPlannerErrors:

@@ -27,8 +27,8 @@ input_safety -> memory -> rewrite -> intent -> planner -> reflection -> guardrai
 | `rewrite` | 整理原始输入和记忆上下文；LLM 不可用时走规则。 |
 | `intent` | 解析同行人画像、时间、人数、餐次、活动/餐饮/饮品/配送偏好、儿童年龄、距离和预算。 |
 | `planner` | 标签对齐、天气查询、候选召回、方案组合、多轮约束应用、路线/团购券丰富、评分。 |
-| `reflection` | 检查需求覆盖、时间线、路线、儿童/长辈/减脂/排队/配送风险。 |
-| `guardrails` | 校验 POI/action ID、订单号边界、儿童年龄；可修复问题触发重试。 |
+| `reflection` | 检查需求覆盖、时间线、actions 可见性、儿童/长辈/减脂/排队/配送风险。 |
+| `guardrails` | 校验 POI/action ID、订单号边界、儿童年龄，并把全量候选都硬性缺失的语义问题转为重试。 |
 
 确认执行阶段：
 
@@ -40,7 +40,7 @@ executor -> message_llm -> guardrails
 
 `executor` 按 plan.actions 调用 Mock API；`message_llm` 生成可转发消息；执行阶段 Guardrails 防止出现“真实支付成功”“保证有位”等误导性表述。
 
-多轮修改由 `revision.py` 生成 `revision_patch`，包含 `keep_slots`、`replace_slots`、`add_slots`、`remove_slots`、`locked_slots` 和 `intent_patch`。配送商品、活动偏好、否定/保留/替换语义集中在 `semantic_rules.py`，避免把逻辑写死成某个商品、餐厅或活动特例。
+多轮修改由 `revision.py` 生成 `revision_patch`，包含 `keep_slots`、`replace_slots`、`add_slots`、`remove_slots`、`locked_slots` 和 `intent_patch`。配送商品、活动偏好、否定/保留/替换语义集中在 `semantic_rules.py`，避免把逻辑写死成某个商品、餐厅或活动特例。方案主活动仍写入 `activity`，多活动行程通过 `extra_activities` 承载，确保卡片、timeline、actions 和执行器引用一致。
 
 ## 3. 工具调用链路
 
@@ -61,7 +61,7 @@ parse_intent
 -> reflection + guardrails
 ```
 
-`tag_resolver` 将意图对齐到 `play/eat/drink/delivery` 四个领域，输出 `domain_specs` 和 `domain_required`。场所搜索使用 `party_type`、距离、人数、儿童年龄、天气室内偏好、排队容忍和标签 OR 召回；无结果时逐步放宽软过滤。方案组合优先让 DeepSeek 输出严格 JSON，本地校验 ID、action 和锁定槽位；LLM 失败或输出非法时，使用 `_build_diverse_plans` / `_build_delivery_only_plans` 兜底。
+`tag_resolver` 将意图对齐到 `play/eat/drink/delivery` 四个领域，输出 `domain_specs` 和 `domain_required`。多轮删除槽位会覆盖上一轮上下文带来的领域 required。场所搜索使用 `party_type`、距离、人数、儿童年龄、天气室内偏好、排队容忍和标签 OR 召回；无结果时逐步放宽软过滤。方案组合优先让 DeepSeek 输出严格 JSON，本地校验 ID、action、锁定槽位、required 领域覆盖和 selected_refs/timeline/actions 一致性；LLM 失败或输出非法时，使用 `_build_diverse_plans` / `_build_delivery_only_plans` 兜底。
 
 确认链路：
 
@@ -85,9 +85,9 @@ parse_intent
 | LLM | API Key 缺失、超时、网络错误、JSON 失败时，Intent/Rewrite/Tag/Composer/Message 全部降级规则路径。 |
 | 意图解析 | `_valid_llm_field` 过滤零值/占位字段；距离等字段只有用户明确提及时才覆盖。 |
 | 标签/召回 | 标签过窄时放宽软条件；有方案则写 `risk_tips`，required 且无方案才写 `errors`。 |
-| 方案组合 | `validate_plan_specs` 丢弃编造 ID、非法 action、遗漏锁定槽位的 LLM 结果；无合法结果走本地兜底。 |
-| Reflection | 时间、路线、儿童年龄、排队、配送等问题写入风险提示，不直接阻断。 |
-| Guardrails | 编造 POI/action ID、规划阶段出现订单号为 fatal，blocked；儿童年龄和转发消息问题为 retryable。 |
+| 方案组合 | `validate_plan_specs` 丢弃编造 ID、非法 action、遗漏锁定槽位、required 领域缺失或隐藏 action 的 LLM 结果；无合法结果走本地兜底。 |
+| Reflection | 轻微时间、路线、排队等问题写入风险提示；明确需求缺失、timeline 未展示、饭后饮品顺序错误等输出 retryable issues。 |
+| Guardrails | 编造 POI/action ID、规划阶段出现订单号为 fatal，blocked；儿童年龄、全量候选硬性语义缺失和转发消息问题为 retryable。 |
 | 执行 | 单个预约/下单失败不影响其他 action，汇总为 `success`、`partial_success` 或 `failed`。 |
 | API | session/plan 不存在返回 HTTP 404；重复确认直接返回已有执行结果。 |
 

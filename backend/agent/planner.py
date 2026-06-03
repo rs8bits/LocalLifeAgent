@@ -8,6 +8,7 @@ from backend.agent.intent_parser import parse_intent
 from backend.agent.tag_resolver import resolve_domain_tags
 from backend.agent.plan_composer import compose_plan_specs_with_llm
 from backend.agent.scorer import score_plan
+from backend.agent.semantic_rules import item_matches_activity_preference
 from backend.agent.time_utils import infer_time_window_from_clock
 from backend.tools.registry import get_tool
 from backend.mock_api.storage import read_json
@@ -100,6 +101,7 @@ async def plan_for_message(
         user_memory=user_memory,
         tag_result=tag_result,
         weather=weather_data,
+        repair_feedback=None,
         candidates={
             "activities": activities,
             "restaurants": restaurants,
@@ -117,6 +119,7 @@ async def plan_for_message(
         _make_plan_from_composer_spec(i, spec, intent, activities, restaurants, drinks, delivery_items)
         for i, spec in enumerate(llm_specs)
     ] if llm_specs else fallback_plans
+    _apply_activity_preference_coverage(plans, intent, activities)
     _apply_multi_meal_constraints_to_plans(plans, intent, restaurants)
     _attach_delivery_to_plans(plans, delivery_items, intent)
 
@@ -394,6 +397,36 @@ def _domain_spec_map(tag_result: dict) -> dict[str, dict]:
     return result
 
 
+def _apply_revision_domain_removals(tag_result: dict, revision_patch: dict[str, Any] | None) -> None:
+    if not revision_patch:
+        return
+    remove_slots = set(revision_patch.get("remove_slots") or [])
+    slot_to_domain = {
+        "activity": "play",
+        "drink": "drink",
+        "delivery": "delivery",
+    }
+    domains_to_remove = {
+        domain for slot, domain in slot_to_domain.items()
+        if slot in remove_slots
+    }
+    if not domains_to_remove:
+        return
+    tag_result["domains"] = [
+        domain for domain in tag_result.get("domains", [])
+        if domain not in domains_to_remove
+    ]
+    tag_result["domain_specs"] = [
+        spec for spec in tag_result.get("domain_specs", [])
+        if spec.get("domain") not in domains_to_remove
+    ]
+    for domain in domains_to_remove:
+        tag_result.setdefault("domain_required", {})[domain] = False
+        tag_result.setdefault("domain_categories", {})[domain] = []
+        tag_result.setdefault("domain_tags", {})[domain] = []
+        tag_result.setdefault("domain_sub_categories", {})[domain] = []
+
+
 def _apply_domain_spec_filters(params: dict[str, Any], spec: dict, intent: Intent | None = None) -> None:
     categories = spec.get("categories") or []
     tags = spec.get("tags") or []
@@ -589,13 +622,19 @@ def _build_diverse_plans(
     unique_plans = []
     for p in plans:
         act_id = (p.get("activity") or {}).get("id", "")
+        extra_act_ids = tuple(
+            item.get("id", "")
+            for item in p.get("extra_activities", []) or []
+            if item.get("id")
+        )
         rest_id = (p.get("restaurant") or {}).get("id", "")
         drink_id = (p.get("drink") or {}).get("id", "")
-        combo = (act_id, rest_id, drink_id)
+        combo = (act_id, extra_act_ids, rest_id, drink_id)
         if combo not in seen_combos:
             seen_combos.add(combo)
             unique_plans.append(p)
 
+    _apply_activity_preference_coverage(unique_plans, intent, activities)
     return unique_plans
 
 
@@ -609,6 +648,7 @@ def _family_act_key(intent: Intent):
     def key(a: dict) -> float:
         s = a.get("_match_score", 0) * 2.0
         s += _memory_match_score(a, intent) * 0.6
+        s += _activity_preference_match_score(a, intent) * 6.0
         if a.get("child_friendly"): s += 3.0
         if intent.child_age and a.get("suitable_age_min", 0) <= intent.child_age <= a.get("suitable_age_max", 99):
             s += 2.0
@@ -637,6 +677,7 @@ def _family_group_act_key(intent: Intent):
     def key(a: dict) -> float:
         s = a.get("_match_score", 0) * 2.0
         s += _memory_match_score(a, intent) * 0.6
+        s += _activity_preference_match_score(a, intent) * 6.0
         tags = a.get("tags", [])
         if any(t in tags for t in ["户外", "公园", "展览", "艺术", "轻松"]):
             s += 1.5
@@ -674,6 +715,7 @@ def _general_act_key(intent: Intent):
     def key(a: dict) -> float:
         s = a.get("_match_score", 0) * 2.0
         s += _memory_match_score(a, intent) * 0.5
+        s += _activity_preference_match_score(a, intent) * 6.0
         tags = a.get("tags", [])
         if intent.party_type == "couple" and any(t in tags for t in ["拍照", "艺术", "音乐", "约会"]):
             s += 3.0
@@ -712,6 +754,7 @@ def _friends_act_key(intent: Intent):
     def key(a: dict) -> float:
         s = a.get("_match_score", 0) * 2.0
         s += _memory_match_score(a, intent) * 0.6
+        s += _activity_preference_match_score(a, intent) * 6.0
         tags = a.get("tags", [])
         if any(t in tags for t in ["社交", "聚会", "桌游", "拍照", "唱歌", "密室", "电竞", "音乐"]):
             s += 3.0
@@ -748,6 +791,110 @@ def _drink_key(intent: Intent):
         s += d.get("rating", 0) * 0.1
         return s
     return key
+
+
+def _activity_preference_match_score(activity: dict, intent: Intent) -> int:
+    return sum(
+        1 for preference in intent.activity_preferences or []
+        if item_matches_activity_preference(activity, preference)
+    )
+
+
+def _apply_activity_preference_coverage(
+    plans: list[dict],
+    intent: Intent,
+    candidates: list[dict],
+) -> None:
+    """让明确活动偏好在 plan 主结构中可见；多活动用 extra_activities 承载。"""
+    preferences = _activity_preferences_for_coverage(intent)
+    if not preferences or not candidates:
+        return
+    for index, plan in enumerate(plans):
+        if index > 0:
+            continue
+        used_ids = {
+            activity.get("id")
+            for activity in _plan_activities(plan)
+            if activity.get("id")
+        }
+        changed = False
+        for preference in preferences:
+            if any(item_matches_activity_preference(activity, preference) for activity in _plan_activities(plan)):
+                continue
+            candidate = _pick_activity_for_preference(candidates, preference, used_ids)
+            if not candidate:
+                continue
+            if not plan.get("activity"):
+                plan["activity"] = candidate
+            else:
+                extras = list(plan.get("extra_activities") or [])
+                extras.append(candidate)
+                plan["extra_activities"] = extras
+            used_ids.add(candidate.get("id"))
+            changed = True
+        if changed:
+            _dedupe_extra_activities(plan)
+        if preferences:
+            _promote_primary_activity_for_preference(plan, preferences[0])
+        if changed or preferences:
+            _ensure_activity_timeline(plan, intent)
+            _recalculate_budget(plan, intent)
+
+
+def _activity_preferences_for_coverage(intent: Intent) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for preference in intent.activity_preferences or []:
+        if not preference or preference in seen:
+            continue
+        seen.add(preference)
+        result.append(preference)
+    return result
+
+
+def _pick_activity_for_preference(
+    candidates: list[dict],
+    preference: str,
+    used_ids: set[str],
+) -> dict | None:
+    matches = [
+        candidate for candidate in candidates
+        if candidate.get("id") not in used_ids
+        and item_matches_activity_preference(candidate, preference)
+    ]
+    if not matches:
+        return None
+    return sorted(
+        matches,
+        key=lambda item: (
+            int(item.get("_match_score") or 0),
+            float(item.get("rating") or 0),
+            -float(item.get("distance_km") or 0),
+        ),
+        reverse=True,
+    )[0]
+
+
+def _promote_primary_activity_for_preference(plan: dict, preference: str) -> None:
+    primary = plan.get("activity")
+    if primary and item_matches_activity_preference(primary, preference):
+        return
+    extras = list(plan.get("extra_activities") or [])
+    match_index = next(
+        (
+            index for index, item in enumerate(extras)
+            if item_matches_activity_preference(item, preference)
+        ),
+        None,
+    )
+    if match_index is None:
+        return
+    matched = extras.pop(match_index)
+    if primary:
+        extras.insert(0, primary)
+    plan["activity"] = matched
+    plan["extra_activities"] = extras
+    _dedupe_extra_activities(plan)
 
 
 def _memory_match_score(item: dict, intent: Intent) -> int:
@@ -1502,6 +1649,9 @@ def _current_meal_assignments(plan: dict) -> dict[str, dict]:
 def _remove_plan_slot(plan: dict, slot: str) -> bool:
     changed = bool(plan.get(slot))
     plan[slot] = None
+    if slot == "activity" and plan.get("extra_activities"):
+        changed = True
+        plan["extra_activities"] = []
     plan["timeline"] = [
         item for item in (plan.get("timeline") or [])
         if item.get("type") != slot
@@ -1799,10 +1949,9 @@ def _timeline_with_meal_entries(plan: dict, meal_entries: list[dict]) -> list[di
             "poi_id": restaurant.get("id", ""),
             "duration_min": restaurant.get("recommended_duration_min", 90),
         })
-    activity = plan.get("activity")
-    if activity:
-        original_activity = _first_timeline_item(original_timeline, "activity")
-        activity_time, activity_duration = _activity_slot_between_meals(activity, meal_entries, original_activity)
+    for activity in _ordered_activities_for_meal_timeline(plan):
+        original_activity = _first_timeline_item(original_timeline, "activity", activity.get("id"))
+        activity_time, activity_duration = _activity_slot_for_meals(activity, meal_entries, original_activity)
         timeline.append({
             "time": activity_time,
             "type": "activity",
@@ -1824,8 +1973,30 @@ def _timeline_with_meal_entries(plan: dict, meal_entries: list[dict]) -> list[di
     return _insert_transits(_sort_timeline(timeline), _timeline_poi_map(plan, meal_entries))
 
 
-def _first_timeline_item(timeline: list[dict], slot_type: str) -> dict | None:
-    return next((item for item in timeline if item.get("type") == slot_type), None)
+def _first_timeline_item(timeline: list[dict], slot_type: str, poi_id: str | None = None) -> dict | None:
+    return next(
+        (
+            item for item in timeline
+            if item.get("type") == slot_type
+            and (not poi_id or item.get("poi_id") == poi_id)
+        ),
+        None,
+    )
+
+
+def _ordered_activities_for_meal_timeline(plan: dict) -> list[dict]:
+    activities = _plan_activities(plan)
+    return sorted(activities, key=lambda item: 1 if _prefers_after_dinner_activity(item) else 0)
+
+
+def _activity_slot_for_meals(
+    activity: dict,
+    meal_entries: list[dict],
+    original_item: dict | None,
+) -> tuple[str, int]:
+    if _prefers_after_dinner_activity(activity):
+        return _activity_slot_after_dinner(activity, meal_entries, original_item)
+    return _activity_slot_between_meals(activity, meal_entries, original_item)
 
 
 def _activity_slot_between_meals(
@@ -1853,6 +2024,30 @@ def _activity_slot_between_meals(
     latest_end = max(start_min + 60, dinner_start - _estimate_transit(activity, dinner_restaurant))
     duration = min(rec_duration, max(60, latest_end - start_min))
     return _minutes_to_time(start_min), duration
+
+
+def _activity_slot_after_dinner(
+    activity: dict,
+    meal_entries: list[dict],
+    original_item: dict | None,
+) -> tuple[str, int]:
+    dinner = next((entry for entry in meal_entries if entry.get("meal") == "dinner"), None)
+    rec_duration = int(activity.get("recommended_duration_min") or _default_duration("activity"))
+    if not dinner:
+        return (original_item or {}).get("time") or "19:00", rec_duration
+    dinner_restaurant = dinner["restaurant"]
+    dinner_end = _time_to_minutes(dinner["time"]) + int(dinner_restaurant.get("recommended_duration_min", 75))
+    earliest = _round_up_to_half_hour(dinner_end + _estimate_transit(dinner_restaurant, activity))
+    original_time = (original_item or {}).get("time")
+    if original_time:
+        try:
+            original_min = _time_to_minutes(original_time)
+        except ValueError:
+            original_min = 0
+        if original_min >= earliest:
+            return original_time, rec_duration
+    start_min = _choose_slot_between(activity.get("available_slots") or [], earliest, 23 * 60) or earliest
+    return _minutes_to_time(start_min), rec_duration
 
 
 def _drink_slot_after_dinner(
@@ -1907,8 +2102,7 @@ def _round_up_to_half_hour(minute: int) -> int:
 
 def _timeline_poi_map(plan: dict, meal_entries: list[dict]) -> dict[str, dict]:
     mapping: dict[str, dict] = {}
-    for key in ["activity", "drink"]:
-        item = plan.get(key)
+    for item in [*_plan_activities(plan), plan.get("drink")]:
         if item and item.get("id"):
             mapping[item["id"]] = item
     for entry in meal_entries:
@@ -1957,9 +2151,8 @@ def _insert_transits(timeline: list[dict], poi_map: dict[str, dict]) -> list[dic
 
 def _refresh_multi_meal_title(plan: dict, intent: Intent, meal_entries: list[dict]) -> None:
     parts: list[str] = []
-    activity = plan.get("activity")
     drink = plan.get("drink")
-    if activity:
+    for activity in _plan_activities(plan):
         parts.append(str(activity.get("name", "")))
     for entry in meal_entries:
         restaurant = entry["restaurant"]
@@ -2017,9 +2210,10 @@ def _next_available_slot_text(preferred_time: str | None, slots: list[str]) -> s
 
 def _refresh_plan_queue_and_status(plan: dict) -> None:
     queue = 0
-    for key in ["activity", "drink"]:
-        if plan.get(key):
-            queue += int(plan[key].get("queue_minutes") or 0)
+    for activity in _plan_activities(plan):
+        queue += int(activity.get("queue_minutes") or 0)
+    if plan.get("drink"):
+        queue += int(plan["drink"].get("queue_minutes") or 0)
     restaurants = _plan_restaurants(plan)
     queue += sum(int(r.get("queue_minutes") or 0) for r in restaurants)
     plan["queue_minutes"] = queue
@@ -2040,6 +2234,96 @@ def _plan_restaurants(plan: dict) -> list[dict]:
         return restaurants
     restaurant = plan.get("restaurant")
     return [restaurant] if restaurant else []
+
+
+def _plan_activities(plan: dict) -> list[dict]:
+    activities = []
+    primary = plan.get("activity")
+    if primary:
+        activities.append(primary)
+    for item in plan.get("extra_activities") or []:
+        if item:
+            activities.append(item)
+    seen: set[str] = set()
+    unique = []
+    for item in activities:
+        item_id = item.get("id")
+        if item_id and item_id in seen:
+            continue
+        if item_id:
+            seen.add(item_id)
+        unique.append(item)
+    return unique
+
+
+def _dedupe_extra_activities(plan: dict) -> None:
+    primary_id = (plan.get("activity") or {}).get("id")
+    seen = {primary_id} if primary_id else set()
+    extras = []
+    for item in plan.get("extra_activities") or []:
+        item_id = item.get("id")
+        if item_id and item_id in seen:
+            continue
+        if item_id:
+            seen.add(item_id)
+        extras.append(item)
+    if extras:
+        plan["extra_activities"] = extras
+    else:
+        plan.pop("extra_activities", None)
+
+
+def _ensure_activity_timeline(plan: dict, intent: Intent) -> None:
+    timeline = list(plan.get("timeline") or [])
+    changed = False
+    for activity in _plan_activities(plan):
+        if _timeline_has_item(plan, "activity", activity.get("id")):
+            continue
+        timeline.append({
+            "time": _next_activity_time(timeline, activity, intent),
+            "type": "activity",
+            "title": activity.get("name", ""),
+            "poi_id": activity.get("id", ""),
+            "duration_min": activity.get("recommended_duration_min", _default_duration("activity")),
+        })
+        changed = True
+    if changed:
+        plan["timeline"] = _sort_timeline(timeline)
+
+
+def _next_activity_time(timeline: list[dict], activity: dict, intent: Intent) -> str:
+    activity_items = [item for item in timeline if item.get("type") == "activity"]
+    if activity_items:
+        last = activity_items[-1]
+        try:
+            return _minutes_to_time(_time_to_minutes(last.get("time")) + int(last.get("duration_min") or 60) + 15)
+        except (TypeError, ValueError):
+            pass
+    if "dinner" in set(intent.meal_slots or []) and _prefers_after_dinner_activity(activity):
+        dinner_time = _last_restaurant_time(timeline)
+        if dinner_time:
+            try:
+                return _minutes_to_time(_time_to_minutes(dinner_time) + 90)
+            except ValueError:
+                pass
+    return "14:00" if intent.time_window not in {"morning"} else "10:00"
+
+
+def _prefers_after_dinner_activity(activity: dict) -> bool:
+    tags = set(activity.get("tags") or [])
+    category = activity.get("category")
+    return bool(
+        category in {"KTV", "LiveHouse"}
+        or tags.intersection({"唱歌", "音乐", "演出", "现场", "乐队", "夜生活"})
+    )
+
+
+def _last_restaurant_time(timeline: list[dict]) -> str | None:
+    times = [
+        item.get("time") for item in timeline
+        if item.get("type") == "restaurant" and item.get("time")
+    ]
+    return max(times) if times else None
 
 
 def _delivery_time_for_plan(plan: dict, item: dict) -> str:
@@ -2083,6 +2367,10 @@ def _make_plan_from_composer_spec(
         if (item := _find_by_id(restaurants, meal_ref_ids.get(meal)))
     ]
     activity = _find_by_id(activities, refs.get("activity_id"))
+    extra_activities = [
+        item for item_id in refs.get("extra_activity_ids", [])
+        if (item := _find_by_id(activities, item_id))
+    ]
     restaurant = _find_by_id(restaurants, refs.get("restaurant_id")) or (meal_restaurants[0] if meal_restaurants else None)
     drink = _find_by_id(drinks, refs.get("drink_id"))
     deliveries = [
@@ -2093,7 +2381,16 @@ def _make_plan_from_composer_spec(
     base = _make_plan_with_timeline(index, intent, activity, restaurant, drink)
     if spec.get("title"):
         base["title"] = str(spec["title"])
-    timeline = _timeline_from_spec(spec.get("timeline", []), activity, restaurants, drink, deliveries)
+    if extra_activities:
+        base["extra_activities"] = extra_activities
+    timeline = _timeline_from_spec(
+        spec.get("timeline", []),
+        activity,
+        extra_activities,
+        restaurants,
+        drink,
+        deliveries,
+    )
     if timeline:
         base["timeline"] = timeline
     if meal_restaurants:
@@ -2122,12 +2419,13 @@ def _make_plan_from_composer_spec(
 def _timeline_from_spec(
     raw_timeline: list[dict],
     activity: dict | None,
+    extra_activities: list[dict],
     restaurants: list[dict],
     drink: dict | None,
     delivery_items: list[dict],
 ) -> list[dict]:
     item_map = {}
-    for item in [activity, drink, *restaurants, *delivery_items]:
+    for item in [activity, *extra_activities, drink, *restaurants, *delivery_items]:
         if item:
             item_map[item.get("id")] = item
 
@@ -2165,22 +2463,22 @@ def _normalize_actions_from_spec(raw_actions: list[dict]) -> list[dict]:
 
 def _ensure_plan_actions(plan: dict, intent: Intent) -> None:
     """为前端确认页和执行器补齐可执行动作 JSON。"""
-    existing = plan.get("actions") or []
-    seen = {(a.get("type"), a.get("ref_id"), a.get("scheduled_time")) for a in existing}
-    actions = list(existing)
+    actions: list[dict] = []
+    seen: set[tuple[str, str | None, str]] = set()
 
-    activity = plan.get("activity")
-    activity_time = _timeline_time_for(plan, "activity") or "14:00"
-    if activity and activity.get("bookable") and ("book_activity", activity.get("id"), activity_time) not in seen:
-        actions.append({
-            "action_id": f"book_{activity.get('id')}",
-            "type": "book_activity",
-            "ref_id": activity.get("id"),
-            "scheduled_time": activity_time,
-            "quantity": intent.people_count or 1,
-            "target_ref_id": None,
-        })
-        seen.add(("book_activity", activity.get("id"), activity_time))
+    for activity in _plan_activities(plan):
+        activity_time = _timeline_time_for_poi(plan, "activity", activity.get("id")) or "14:00"
+        signature = ("book_activity", activity.get("id"), activity_time)
+        if activity and activity.get("bookable") and signature not in seen:
+            actions.append({
+                "action_id": f"book_{activity.get('id')}",
+                "type": "book_activity",
+                "ref_id": activity.get("id"),
+                "scheduled_time": activity_time,
+                "quantity": intent.people_count or 1,
+                "target_ref_id": None,
+            })
+            seen.add(signature)
 
     meal_entries = plan.get("meal_restaurants") or []
     if meal_entries:
@@ -2206,7 +2504,8 @@ def _ensure_plan_actions(plan: dict, intent: Intent) -> None:
     else:
         restaurant = plan.get("restaurant")
         scheduled_time = _timeline_time_for(plan, "restaurant") or "17:30"
-        if restaurant and restaurant.get("bookable") and restaurant.get("available") and ("book_restaurant", restaurant.get("id"), scheduled_time) not in seen:
+        signature = ("book_restaurant", restaurant.get("id") if restaurant else None, scheduled_time)
+        if restaurant and restaurant.get("bookable") and restaurant.get("available") and signature not in seen:
             actions.append({
                 "action_id": f"book_{restaurant.get('id')}",
                 "type": "book_restaurant",
@@ -2215,6 +2514,7 @@ def _ensure_plan_actions(plan: dict, intent: Intent) -> None:
                 "quantity": intent.people_count or 1,
                 "target_ref_id": None,
             })
+            seen.add(signature)
 
     drink = plan.get("drink")
     drink_time = _timeline_time_for(plan, "drink") or "16:00"
@@ -2230,7 +2530,7 @@ def _ensure_plan_actions(plan: dict, intent: Intent) -> None:
         seen.add(("book_drink", drink.get("id"), drink_time))
 
     for item in plan.get("delivery_items") or []:
-        delivery_time = _timeline_time_for(plan, "delivery") or _delivery_time_for_plan(plan, item)
+        delivery_time = _timeline_time_for_poi(plan, "delivery", item.get("id")) or _delivery_time_for_plan(plan, item)
         if ("order_delivery", item.get("id"), delivery_time) in seen:
             continue
         target = (_plan_restaurants(plan) or [None])[0] or plan.get("activity") or plan.get("drink") or {}
@@ -2246,6 +2546,9 @@ def _ensure_plan_actions(plan: dict, intent: Intent) -> None:
         seen.add(("order_delivery", item.get("id"), delivery_time))
 
     for deal in plan.get("deals") or []:
+        target_ref = deal.get("poi_id")
+        if target_ref and target_ref not in _plan_visible_ref_ids(plan):
+            continue
         if ("order_deal", deal.get("id"), "") in seen:
             continue
         actions.append({
@@ -2259,6 +2562,23 @@ def _ensure_plan_actions(plan: dict, intent: Intent) -> None:
         seen.add(("order_deal", deal.get("id"), ""))
 
     plan["actions"] = actions
+
+
+def _plan_visible_ref_ids(plan: dict) -> set[str]:
+    refs = set()
+    for activity in _plan_activities(plan):
+        if activity.get("id"):
+            refs.add(activity["id"])
+    for restaurant in _plan_restaurants(plan):
+        if restaurant.get("id"):
+            refs.add(restaurant["id"])
+    drink = plan.get("drink")
+    if drink and drink.get("id"):
+        refs.add(drink["id"])
+    for item in plan.get("delivery_items") or []:
+        if item.get("id"):
+            refs.add(item["id"])
+    return refs
 
 
 def _find_by_id(items: list[dict], item_id: str | None) -> dict | None:
@@ -2300,6 +2620,15 @@ def _timeline_time_for(plan: dict, slot_type: str) -> str | None:
     return None
 
 
+def _timeline_time_for_poi(plan: dict, slot_type: str, poi_id: str | None) -> str | None:
+    if not poi_id:
+        return _timeline_time_for(plan, slot_type)
+    for item in plan.get("timeline") or []:
+        if item.get("type") == slot_type and item.get("poi_id") == poi_id:
+            return item.get("time")
+    return None
+
+
 def _timeline_time_for_restaurant_id(plan: dict, restaurant_id: str | None) -> str | None:
     if not restaurant_id:
         return None
@@ -2316,9 +2645,10 @@ def _sort_timeline(timeline: list[dict]) -> list[dict]:
 def _recalculate_budget(plan: dict, intent: Intent) -> None:
     people = intent.people_count or _default_people_count(intent)
     per_person = 0
-    for key in ["activity", "drink"]:
-        if plan.get(key):
-            per_person += plan[key].get("avg_price", 0)
+    for activity in _plan_activities(plan):
+        per_person += activity.get("avg_price", 0)
+    if plan.get("drink"):
+        per_person += plan["drink"].get("avg_price", 0)
     meal_restaurants = _plan_restaurants(plan)
     if meal_restaurants:
         per_person += sum(restaurant.get("avg_price", 0) for restaurant in meal_restaurants)
@@ -2339,7 +2669,8 @@ def _recalculate_budget(plan: dict, intent: Intent) -> None:
 # ═══════════════════════════════════════════════════════════════
 
 async def _enrich_plan(plan: dict, tool_logs: list[dict]) -> None:
-    activity = plan.get("activity")
+    activities = _plan_activities(plan)
+    activity = activities[0] if activities else None
     restaurants = _plan_restaurants(plan)
     restaurant = restaurants[0] if restaurants else None
     drink = plan.get("drink")
@@ -2356,7 +2687,7 @@ async def _enrich_plan(plan: dict, tool_logs: list[dict]) -> None:
     # 团购券
     deals = []
     seen_poi_ids: set[str] = set()
-    for poi in [activity, *restaurants, drink]:
+    for poi in [*activities, *restaurants, drink]:
         if poi:
             if poi.get("id") in seen_poi_ids:
                 continue

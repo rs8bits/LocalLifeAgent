@@ -13,6 +13,7 @@ from backend.agent.planner import (
     _inject_revision_locked_candidates,
     _apply_revision_constraints_to_plans,
     _revision_removes_delivery,
+    _apply_activity_preference_coverage,
     _apply_multi_meal_constraints_to_plans,
     _make_plan_from_composer_spec,
     _ensure_plan_actions,
@@ -20,6 +21,7 @@ from backend.agent.planner import (
     _indoor_preference,
     _resolve_mock_weather_date,
     _domain_spec_map,
+    _apply_revision_domain_removals,
     _build_place_search_params,
     _build_delivery_search_params,
     _run_place_search_with_relaxation,
@@ -36,6 +38,7 @@ async def planner_node(state: AgentState) -> AgentState:
 
     intent_dict = state.get("intent", {})
     intent = Intent(**intent_dict)
+    revision_patch = state.get("revision_patch") or {}
 
     # 如果是重试，从 guardrail_feedback 中提取需要排除的 POI ID
     excluded_poi_ids: set[str] = set()
@@ -60,6 +63,7 @@ async def planner_node(state: AgentState) -> AgentState:
         intent=intent,
         intent_dict=intent_dict,
     )
+    _apply_revision_domain_removals(tag_result, revision_patch)
     await emit_event(state, {
         "event": "tag_resolve_done",
         "message": f"标签对齐完成: domains={tag_result['domains']}",
@@ -143,7 +147,6 @@ async def planner_node(state: AgentState) -> AgentState:
     state["candidate_restaurants"] = restaurants
     state["candidate_drinks"] = drinks
     state["candidate_delivery_items"] = delivery_items
-    revision_patch = state.get("revision_patch") or {}
     _inject_revision_locked_candidates(activities, restaurants, drinks, delivery_items, revision_patch)
 
     # ── 4. 方案组合 ──
@@ -166,6 +169,7 @@ async def planner_node(state: AgentState) -> AgentState:
         tag_result=tag_result,
         weather=state.get("weather"),
         revision_patch=revision_patch,
+        repair_feedback=guardrail_feedback,
         candidates={
             "activities": activities,
             "restaurants": restaurants,
@@ -183,6 +187,7 @@ async def planner_node(state: AgentState) -> AgentState:
         _make_plan_from_composer_spec(i, spec, intent, activities, restaurants, drinks, delivery_items)
         for i, spec in enumerate(llm_specs)
     ] if llm_specs else fallback_plans
+    _apply_activity_preference_coverage(plans, intent, activities)
     _apply_revision_constraints_to_plans(plans, intent, revision_patch)
     _apply_multi_meal_constraints_to_plans(plans, intent, restaurants)
     if not _revision_removes_delivery(revision_patch):

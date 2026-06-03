@@ -18,6 +18,8 @@ export default function PlanCard({
   isRevisionBase?: boolean;
 }) {
   const activity = plan.activity;
+  const extraActivities = plan.extra_activities ?? [];
+  const activities = [activity, ...extraActivities].filter(Boolean) as Record<string, unknown>[];
   const restaurant = plan.restaurant;
   const mealRestaurants = plan.meal_restaurants ?? [];
   const drink = plan.drink;
@@ -101,14 +103,16 @@ export default function PlanCard({
       )}
 
       {/* 活动 */}
-      {activity && (
+      {activities.length > 0 && (
         <div className="text-sm">
           <span className="text-gray-500">活动: </span>
-          <span className="font-medium">{activity.name as string}</span>
-          <span className="text-gray-400 ml-2">
-            {(activity.avg_price as number) ?? 0}元/人
+          <span className="font-medium">
+            {activities.map((item) => item.name as string).join(" + ")}
           </span>
-          {(activity.indoor as boolean) && (
+          <span className="text-gray-400 ml-2">
+            {activities.reduce((sum, item) => sum + ((item.avg_price as number) ?? 0), 0)}元/人
+          </span>
+          {activities.every((item) => item.indoor as boolean) && (
             <span className="text-blue-600 text-xs ml-1">室内</span>
           )}
         </div>

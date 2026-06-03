@@ -63,6 +63,7 @@ class Plan(BaseModel):
     party_type: str = "general"
     timeline: list[dict[str, Any]] = Field(default_factory=list)
     activity: Optional[dict[str, Any]] = None
+    extra_activities: list[dict[str, Any]] = Field(default_factory=list)
     restaurant: Optional[dict[str, Any]] = None
     meal_restaurants: list[dict[str, Any]] = Field(default_factory=list)
     drink: Optional[dict[str, Any]] = None

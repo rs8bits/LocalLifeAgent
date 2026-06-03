@@ -39,6 +39,24 @@ def _plan_restaurants(plan: dict[str, Any]) -> list[dict[str, Any]]:
     return [restaurant] if restaurant else []
 
 
+def _plan_activities(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    activities = []
+    primary = plan.get("activity")
+    if primary:
+        activities.append(primary)
+    activities.extend(plan.get("extra_activities") or [])
+    seen: set[str] = set()
+    unique = []
+    for item in activities:
+        item_id = item.get("id")
+        if item_id and item_id in seen:
+            continue
+        if item_id:
+            seen.add(item_id)
+        unique.append(item)
+    return unique
+
+
 def _score_restaurant_view(plan: dict[str, Any]) -> dict[str, Any]:
     restaurants = _plan_restaurants(plan)
     if not restaurants:
@@ -71,9 +89,8 @@ def _score_restaurant_view(plan: dict[str, Any]) -> dict[str, Any]:
 
 def _apply_tag_match_bonus(plan: dict[str, Any]) -> dict[str, Any]:
     match_count = 0
-    for key in ["activity", "drink"]:
-        poi = plan.get(key) or {}
-        match_count += int(poi.get("_match_score") or 0)
+    for poi in [*_plan_activities(plan), plan.get("drink") or {}]:
+        match_count += int((poi or {}).get("_match_score") or 0)
     for restaurant in _plan_restaurants(plan):
         match_count += int((restaurant or {}).get("_match_score") or 0)
     for item in plan.get("delivery_items") or []:

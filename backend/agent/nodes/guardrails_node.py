@@ -78,7 +78,8 @@ def _check_plan_guardrails(state: AgentState) -> dict:
     valid_delivery_ids = {d["id"] for d in read_json("delivery_items.json")}
 
     for plan in plans:
-        activity = plan.get("activity") or {}
+        activities = _plan_activities(plan)
+        activity = activities[0] if activities else {}
         restaurant = plan.get("restaurant") or {}
         restaurants = _plan_restaurants(plan)
         drink = plan.get("drink") or {}
@@ -87,11 +88,12 @@ def _check_plan_guardrails(state: AgentState) -> dict:
         deals = plan.get("deals", [])
 
         # 1. POI 来源校验 — FATAL (hallucinated data, can't fix by retry)
-        act_id = activity.get("id", "")
-        if act_id and act_id not in valid_activity_ids:
-            msg = f"活动 ID {act_id} 不在合法数据中"
-            issues.append(msg)
-            fatal_issues.append(msg)
+        for act in activities or ([activity] if activity else []):
+            act_id = act.get("id", "")
+            if act_id and act_id not in valid_activity_ids:
+                msg = f"活动 ID {act_id} 不在合法数据中"
+                issues.append(msg)
+                fatal_issues.append(msg)
 
         for rest in restaurants or ([restaurant] if restaurant else []):
             rest_id = rest.get("id", "")
@@ -160,13 +162,21 @@ def _check_plan_guardrails(state: AgentState) -> dict:
         intent = state.get("intent", {})
         if intent.get("party_type") == "family_with_child" or intent.get("child_age"):
             child_age = intent.get("child_age")
-            if child_age and activity:
-                age_min = activity.get("suitable_age_min", 0)
-                age_max = activity.get("suitable_age_max", 99)
-                if not (age_min <= child_age <= age_max):
-                    msg = f"家庭场景中活动「{activity.get('name')}」不适合{child_age}岁儿童"
-                    issues.append(msg)
-                    retryable_issues.append(msg)
+            if child_age:
+                for act in activities:
+                    age_min = act.get("suitable_age_min", 0)
+                    age_max = act.get("suitable_age_max", 99)
+                    if not (age_min <= child_age <= age_max):
+                        msg = f"家庭场景中活动「{act.get('name')}」不适合{child_age}岁儿童"
+                        issues.append(msg)
+                        retryable_issues.append(msg)
+
+    reflection_retryable = _reflection_retryable_issues(state)
+    for msg in reflection_retryable:
+        if msg not in issues:
+            issues.append(msg)
+        if msg not in retryable_issues:
+            retryable_issues.append(msg)
 
     passed = len(issues) == 0
     blocked = len(fatal_issues) > 0
@@ -202,6 +212,50 @@ def _plan_restaurants(plan: dict) -> list[dict]:
         return restaurants
     restaurant = plan.get("restaurant")
     return [restaurant] if restaurant else []
+
+
+def _plan_activities(plan: dict) -> list[dict]:
+    activities = []
+    primary = plan.get("activity")
+    if primary:
+        activities.append(primary)
+    activities.extend(plan.get("extra_activities") or [])
+    seen: set[str] = set()
+    unique = []
+    for item in activities:
+        item_id = item.get("id")
+        if item_id and item_id in seen:
+            continue
+        if item_id:
+            seen.add(item_id)
+        unique.append(item)
+    return unique
+
+
+def _reflection_retryable_issues(state: AgentState) -> list[str]:
+    result = state.get("reflection_result") or {}
+    retryable = _unique_strings(result.get("retryable_issues") or [])
+    plan_results = result.get("plan_results") or []
+    if not retryable:
+        return retryable
+    if not plan_results:
+        return retryable
+    # 只在所有候选都存在硬性语义缺失时触发重试；否则保留可用方案，把问题方案作为风险提示。
+    if any(item.get("passed") for item in plan_results):
+        return []
+    if any(not item.get("retryable_issues") for item in plan_results):
+        return []
+    return retryable
+
+
+def _unique_strings(values: list[str]) -> list[str]:
+    seen = set()
+    result = []
+    for value in values:
+        if value and value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
 
 
 def _check_message_guardrails(state: AgentState) -> dict:

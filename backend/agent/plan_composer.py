@@ -18,6 +18,7 @@ COMPOSER_SYSTEM_PROMPT = """你是本地生活短时活动规划 Agent 的方案
       "title": "简短标题",
       "selected_refs": {
         "activity_id": "act_001 或 null",
+        "extra_activity_ids": ["act_002"],
         "restaurant_id": "rest_001 或 null",
         "meal_restaurant_ids": {"lunch": "rest_001 或 null", "dinner": "rest_002 或 null"},
         "drink_id": "drink_001 或 null",
@@ -38,6 +39,7 @@ COMPOSER_SYSTEM_PROMPT = """你是本地生活短时活动规划 Agent 的方案
 规则：
 - 只使用 candidates 中出现的 ID，不允许编造 POI、商品、团购券或订单号。
 - planning 阶段只能给 actions，不允许出现 booking_id/order_id。
+- 用户明确要求的领域必须同时出现在 selected_refs 和 timeline 中；不能只把 POI 藏在 actions 里。
 - 时间线要符合用户时间段：lunch 从11:30左右开始，afternoon 可从13:30或用户 start_time 开始，dinner/evening 从17:30以后开始，night 从20:30以后开始。
 - 如果 intent.meal_slots 同时包含 lunch 和 dinner，必须分别选择午餐/晚餐餐厅；有 2 个以上可用餐厅时，午餐和晚餐不要使用同一个 restaurant_id，且优先不同菜系。
 - 如果输入包含 revision_patch.locked_slots，锁定槽位必须保留：activity/drink/meal:lunch/meal:dinner 对应 ID 不能被替换或遗漏；如果 revision_patch.remove_slots 包含某槽位，该槽位不能再出现在方案里。
@@ -46,6 +48,7 @@ COMPOSER_SYSTEM_PROMPT = """你是本地生活短时活动规划 Agent 的方案
 - 只有用户明确要求外卖/闪送/跑腿或可配送商品时，才选择 delivery_item_ids 并生成 order_delivery；不要从约会、纪念日、带配偶等语境自动推断具体商品。
 - 外卖/闪送 action 要包含 order_delivery，target_ref_id 优先选择餐厅，其次活动地点；scheduled_time 是希望送达或下单时间。
 - 如果某个候选不可预约，也可以放进方案，但 actions 中不要为它生成预约动作，并在 risk_tips 说明。
+- 如果输入包含 repair_feedback，必须优先修复其中指出的缺失领域、时间线顺序和 plan/actions 不一致问题。
 - 最多输出4个方案。
 """
 
@@ -59,6 +62,7 @@ async def compose_plan_specs_with_llm(
     weather: dict | None,
     candidates: dict[str, list[dict[str, Any]]],
     revision_patch: dict[str, Any] | None = None,
+    repair_feedback: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], str | None]:
     """调用 LLM 组合方案，返回经过本地 ID 校验的 plan specs。"""
     if not deepseek_client.available:
@@ -70,6 +74,7 @@ async def compose_plan_specs_with_llm(
         "user_memory": _compact_memory(user_memory),
         "tag_result": _compact_tag_result(tag_result),
         "revision_patch": _compact_revision_patch(revision_patch),
+        "repair_feedback": _compact_repair_feedback(repair_feedback),
         "weather": _compact_weather(weather),
         "candidates": {
             "activities": _compact_items(candidates.get("activities", []), "activity"),
@@ -92,7 +97,13 @@ async def compose_plan_specs_with_llm(
     if not isinstance(specs, list):
         return [], "LLM 组合结果缺少 plans 数组，已使用本地规则"
 
-    valid_specs, issues = validate_plan_specs(specs, candidates, revision_patch=revision_patch)
+    valid_specs, issues = validate_plan_specs(
+        specs,
+        candidates,
+        revision_patch=revision_patch,
+        intent=intent,
+        tag_result=tag_result,
+    )
     if not valid_specs:
         suffix = f": {'; '.join(issues[:3])}" if issues else ""
         return [], f"LLM 组合结果未通过本地校验，已使用本地规则{suffix}"
@@ -107,6 +118,8 @@ def validate_plan_specs(
     specs: list[dict[str, Any]],
     candidates: dict[str, list[dict[str, Any]]],
     revision_patch: dict[str, Any] | None = None,
+    intent: Intent | None = None,
+    tag_result: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """校验 LLM 输出中所有引用都来自候选集合。"""
     id_domain = _build_id_domain(candidates)
@@ -121,11 +134,16 @@ def validate_plan_specs(
         refs = spec.get("selected_refs") if isinstance(spec.get("selected_refs"), dict) else {}
         cleaned_refs = {
             "activity_id": _valid_ref(refs.get("activity_id"), id_domain, "activity", issues),
+            "extra_activity_ids": [],
             "restaurant_id": _valid_ref(refs.get("restaurant_id"), id_domain, "restaurant", issues),
             "meal_restaurant_ids": {},
             "drink_id": _valid_ref(refs.get("drink_id"), id_domain, "drink", issues),
             "delivery_item_ids": [],
         }
+        for item_id in refs.get("extra_activity_ids") or []:
+            valid_id = _valid_ref(item_id, id_domain, "activity", issues)
+            if valid_id and valid_id != cleaned_refs["activity_id"]:
+                cleaned_refs["extra_activity_ids"].append(valid_id)
         raw_meal_refs = refs.get("meal_restaurant_ids") if isinstance(refs.get("meal_restaurant_ids"), dict) else {}
         for meal in ("lunch", "dinner"):
             meal_ref = _valid_ref(raw_meal_refs.get(meal), id_domain, "restaurant", issues)
@@ -159,6 +177,7 @@ def validate_plan_specs(
         spec["timeline"] = timeline
 
         actions = []
+        selected_action_refs = _selected_action_refs(cleaned_refs)
         for action in spec.get("actions") or []:
             if not isinstance(action, dict):
                 continue
@@ -166,6 +185,9 @@ def validate_plan_specs(
             ref_id = str(action.get("ref_id") or "")
             if not _action_ref_matches(action_type, ref_id, id_domain):
                 issues.append(f"action 引用不合法: {action_type}/{ref_id}")
+                continue
+            if ref_id and action_type != "order_deal" and ref_id not in selected_action_refs:
+                issues.append(f"action 引用未出现在 selected_refs 中: {action_type}/{ref_id}")
                 continue
             target_ref_id = action.get("target_ref_id")
             if target_ref_id and target_ref_id not in id_domain:
@@ -183,6 +205,7 @@ def validate_plan_specs(
 
         has_any_ref = any([
             cleaned_refs["activity_id"],
+            cleaned_refs["extra_activity_ids"],
             cleaned_refs["restaurant_id"],
             cleaned_refs["meal_restaurant_ids"],
             cleaned_refs["drink_id"],
@@ -194,6 +217,15 @@ def validate_plan_specs(
         locked_issue = _locked_ref_issue(spec, revision_patch)
         if locked_issue:
             issues.append(f"plan[{idx}] {locked_issue}")
+            continue
+        semantic_issue = _semantic_ref_issue(
+            spec,
+            candidates,
+            intent=intent,
+            tag_result=tag_result,
+        )
+        if semantic_issue:
+            issues.append(f"plan[{idx}] {semantic_issue}")
             continue
         valid.append(spec)
 
@@ -236,6 +268,74 @@ def _compact_intent(intent: Intent) -> dict[str, Any]:
         "needs_less_walking", "avoid_queue_minutes",
     ]
     return {k: data.get(k) for k in keep}
+
+
+def _selected_action_refs(refs: dict[str, Any]) -> set[str]:
+    selected = set()
+    for key in ("activity_id", "restaurant_id", "drink_id"):
+        if refs.get(key):
+            selected.add(refs[key])
+    selected.update(refs.get("extra_activity_ids") or [])
+    selected.update(refs.get("meal_restaurant_ids", {}).values())
+    selected.update(refs.get("delivery_item_ids") or [])
+    return {str(ref_id) for ref_id in selected if ref_id}
+
+
+def _semantic_ref_issue(
+    spec: dict[str, Any],
+    candidates: dict[str, list[dict[str, Any]]],
+    *,
+    intent: Intent | None,
+    tag_result: dict[str, Any] | None,
+) -> str | None:
+    refs = spec.get("selected_refs") or {}
+    required = (tag_result or {}).get("domain_required") or {}
+    meal_slots = set(intent.meal_slots or []) if intent else set()
+    has_candidates = {
+        "play": bool(candidates.get("activities")),
+        "eat": bool(candidates.get("restaurants")),
+        "drink": bool(candidates.get("drinks")),
+        "delivery": bool(candidates.get("delivery_items")),
+    }
+
+    if _requires_play(required, intent) and has_candidates["play"]:
+        if not refs.get("activity_id") and not refs.get("extra_activity_ids"):
+            return "用户明确要求活动，但 selected_refs 缺少 activity"
+    if _requires_eat(required, intent) and has_candidates["eat"]:
+        if meal_slots:
+            meal_refs = refs.get("meal_restaurant_ids") or {}
+            missing_meals = [slot for slot in meal_slots if not meal_refs.get(slot)]
+            if missing_meals and not refs.get("restaurant_id"):
+                return f"用户明确要求餐次 {','.join(sorted(missing_meals))}，但 selected_refs 缺少餐厅"
+        elif not refs.get("restaurant_id") and not refs.get("meal_restaurant_ids"):
+            return "用户明确要求餐厅，但 selected_refs 缺少 restaurant"
+    if _requires_drink(required, intent) and has_candidates["drink"] and not refs.get("drink_id"):
+        return "用户明确要求饮品，但 selected_refs 缺少 drink"
+    if required.get("delivery") and has_candidates["delivery"] and not refs.get("delivery_item_ids"):
+        return "用户明确要求配送，但 selected_refs 缺少 delivery item"
+
+    timeline = spec.get("timeline") or []
+    timeline_refs = {item.get("ref_id") for item in timeline if item.get("ref_id")}
+    visible_refs = _selected_action_refs(refs)
+    missing_timeline_refs = [
+        ref_id for ref_id in visible_refs
+        if ref_id.startswith(("act_", "drink_", "delivery_")) and ref_id not in timeline_refs
+    ]
+    if missing_timeline_refs:
+        return f"selected_refs 未在 timeline 中展示: {','.join(missing_timeline_refs)}"
+    return None
+
+
+def _requires_play(required: dict[str, Any], intent: Intent | None) -> bool:
+    return bool(required.get("play") or (intent and intent.activity_preferences))
+
+
+def _requires_eat(required: dict[str, Any], intent: Intent | None) -> bool:
+    return bool(required.get("eat") or (intent and intent.meal_slots))
+
+
+def _requires_drink(required: dict[str, Any], intent: Intent | None) -> bool:
+    return bool(required.get("drink") or (intent and intent.drink_preferences))
 
 
 def _compact_memory(user_memory: dict | None) -> dict[str, Any]:
@@ -281,6 +381,15 @@ def _compact_revision_patch(revision_patch: dict[str, Any] | None) -> dict[str, 
         "remove_slots": revision_patch.get("remove_slots", []),
         "locked_slots": locked_slots,
         "intent_patch": revision_patch.get("intent_patch", {}),
+    }
+
+
+def _compact_repair_feedback(feedback: dict[str, Any] | None) -> dict[str, Any]:
+    if not feedback:
+        return {}
+    return {
+        "retryable_issues": (feedback.get("retryable_issues") or [])[:6],
+        "feedback": str(feedback.get("feedback") or "")[:300],
     }
 
 

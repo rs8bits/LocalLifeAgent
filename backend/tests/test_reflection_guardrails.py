@@ -237,6 +237,57 @@ class TestGuardrails:
         assert result["guardrail_result"]["passed"] is True
 
     @pytest.mark.asyncio
+    async def test_reflection_semantic_failure_is_retryable(self):
+        valid_rest = read_json("restaurants.json")[0]
+        state = _make_state(
+            intent={
+                "scene": "friends",
+                "party_type": "friends",
+                "radius_km": 10.0,
+                "avoid_queue_minutes": 30,
+                "activity_preferences": ["桌游"],
+            },
+            tag_resolve_result={
+                "domain_required": {"play": True, "eat": False, "drink": False, "delivery": False},
+            },
+            plans=[{
+                "plan_id": "g_reflection_retry",
+                "title": "只有餐厅",
+                "activity": None,
+                "restaurant": {"id": valid_rest["id"], "name": valid_rest["name"]},
+                "timeline": [{
+                    "time": "17:30",
+                    "type": "restaurant",
+                    "title": valid_rest["name"],
+                    "poi_id": valid_rest["id"],
+                    "duration_min": 75,
+                }],
+                "actions": [],
+                "deals": [],
+                "risk_tips": [],
+            }],
+            reflection_result={
+                "passed": False,
+                "retryable_issues": ["用户明确要求活动，但方案主体缺少活动"],
+                "plan_results": [{
+                    "plan_id": "g_reflection_retry",
+                    "passed": False,
+                    "issues": ["用户明确要求活动，但方案主体缺少活动"],
+                    "retryable_issues": ["用户明确要求活动，但方案主体缺少活动"],
+                }],
+            },
+            planner_retry_count=0,
+            max_retries=2,
+        )
+
+        result = await guardrails_node(state)
+
+        guardrail = result["guardrail_result"]
+        assert guardrail["retryable"] is True
+        assert guardrail["can_retry"] is True
+        assert result["planner_retry_count"] == 1
+
+    @pytest.mark.asyncio
     async def test_planning_phase_blocks_booking_id(self):
         state = _make_state(
             phase="planning",
