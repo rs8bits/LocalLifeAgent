@@ -429,7 +429,7 @@ export default function Home() {
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="我想去厦门旅行，从南昌出发。出行时间是8月，玩3天。请帮我设计出行的详细行程。"
+                placeholder="周末下午空的，帮我安排一下"
                 rows={4}
                 className="w-full resize-none bg-transparent text-base leading-7 outline-none placeholder:text-slate-500"
               />
