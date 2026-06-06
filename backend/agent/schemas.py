@@ -1,0 +1,87 @@
+"""Agent 状态与输出 Schema"""
+
+from typing import Optional, Any
+from pydantic import BaseModel, Field
+
+
+class Companion(BaseModel):
+    role: str  # "spouse" | "child" | "friend" | "parent" | "elder" | "relative" | "client" | "colleague"
+    age: Optional[int] = None
+    diet_preference: Optional[str] = None
+    mobility: Optional[str] = None
+
+
+class Intent(BaseModel):
+    # scene 仅保留旧会话/旧接口兼容；新规划、搜索、评分都使用 party_type。
+    scene: str = "general"
+    # party_type 表达真实同行人画像，用于规划、搜索、评分和解释。
+    party_type: str = "general"  # family_with_child | family_elder | family | friends | couple | solo | business | general
+    # tags 统一表达时机、体验、偏好和约束，不再拆 occasion/occasion_tags/experience_tags。
+    tags: list[str] = Field(default_factory=list)
+    # memory_tags 来自用户长期记忆，只用于排序/打分，不参与搜索硬过滤。
+    memory_tags: list[str] = Field(default_factory=list)
+    date: str = "today"
+    time_window: str = "afternoon"  # morning | lunch | afternoon | dinner | evening | night | unknown
+    start_time: Optional[str] = None  # 精确开始时间，HH:MM
+    duration_hours: Optional[int] = None
+    meal_slots: list[str] = Field(default_factory=list)  # lunch | dinner
+    people_count: Optional[int] = None
+    companions: list[dict[str, Any]] = Field(default_factory=list)
+    radius_km: float = 5.0
+    distance_preference: str = "nearby"  # "nearby" | "flexible"
+    budget_per_person: Optional[int] = None
+    food_preferences: list[str] = Field(default_factory=list)
+    activity_preferences: list[str] = Field(default_factory=list)
+    drink_preferences: list[str] = Field(default_factory=list)
+    delivery_preferences: list[str] = Field(default_factory=list)
+    child_age: Optional[int] = None
+    needs_low_calorie: bool = False
+    needs_photo_spot: bool = False
+    needs_quiet: bool = False
+    needs_less_walking: bool = False
+    avoid_queue_minutes: int = 30
+
+
+class TimelineItem(BaseModel):
+    time: str
+    type: str  # "activity" | "restaurant" | "drink" | "delivery" | "transit"
+    title: str
+    poi_id: str
+    duration_min: int
+
+
+class Budget(BaseModel):
+    total: int
+    per_person: int
+    currency: str = "CNY"
+
+
+class Plan(BaseModel):
+    plan_id: str
+    title: str
+    scene: str
+    party_type: str = "general"
+    timeline: list[dict[str, Any]] = Field(default_factory=list)
+    activity: Optional[dict[str, Any]] = None
+    extra_activities: list[dict[str, Any]] = Field(default_factory=list)
+    restaurant: Optional[dict[str, Any]] = None
+    meal_restaurants: list[dict[str, Any]] = Field(default_factory=list)
+    drink: Optional[dict[str, Any]] = None
+    delivery_items: list[dict[str, Any]] = Field(default_factory=list)
+    actions: list[dict[str, Any]] = Field(default_factory=list)
+    route: Optional[dict[str, Any]] = None
+    deals: list[dict[str, Any]] = Field(default_factory=list)
+    budget: dict[str, Any] = Field(default_factory=dict)
+    queue_minutes: int = 0
+    booking_status: str = "available"  # "available" | "partial" | "unavailable"
+    risk_tips: list[str] = Field(default_factory=list)
+    recommend_reasons: list[str] = Field(default_factory=list)
+    score: float = 0.0
+    score_reasons: list[str] = Field(default_factory=list)
+
+
+class PlannerOutput(BaseModel):
+    intent: dict[str, Any] = Field(default_factory=dict)
+    plans: list[dict[str, Any]] = Field(default_factory=list)
+    tool_logs: list[dict[str, Any]] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)

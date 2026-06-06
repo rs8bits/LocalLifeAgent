@@ -1,0 +1,232 @@
+[
+    {
+        "id":  "addon_001",
+        "name":  "小号庆祝蛋糕",
+        "poi_type":  "add_on",
+        "domain":  "add_on",
+        "category":  "蛋糕",
+        "sub_category":  "cake",
+        "available_areas":  [
+                                "三里屯商圈",
+                                "朝阳大悦城商圈",
+                                "鼓楼商圈"
+                            ],
+        "avg_price":  168,
+        "tags":  [
+                     "生日",
+                     "庆祝",
+                     "可配送",
+                     "朋友聚会",
+                     "家庭"
+                 ],
+        "suitable_scenes":  [
+                                "friends",
+                                "family",
+                                "general"
+                            ],
+        "scene":  "general",
+        "bookable":  true,
+        "available_slots":  [
+                                "14:00",
+                                "15:00",
+                                "16:00",
+                                "17:00",
+                                "18:00"
+                            ],
+        "lead_time_min":  90,
+        "queue_minutes":  0,
+        "risk":  null,
+        "description":  "Mock 蛋糕配送服务，可送至指定餐厅前台，6寸鲜奶蛋糕",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实履约能力",
+        "source":  "mock_add_on_service",
+        "party_types":  [
+                            "couple",
+                            "friends",
+                            "family",
+                            "business"
+                        ],
+        "lat":  28.6908,
+        "lng":  115.8584,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "红谷滩万达广场商圈",
+        "address":  "南昌市红谷滩区会展路999号",
+        "image_url":  "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "addon_002",
+        "name":  "闺蜜鲜花束",
+        "poi_type":  "add_on",
+        "domain":  "add_on",
+        "category":  "鲜花",
+        "sub_category":  "flower",
+        "available_areas":  [
+                                "三里屯商圈",
+                                "朝阳大悦城商圈",
+                                "798艺术区",
+                                "鼓楼商圈"
+                            ],
+        "avg_price":  128,
+        "tags":  [
+                     "鲜花",
+                     "约会",
+                     "拍照",
+                     "庆祝",
+                     "可配送",
+                     "惊喜"
+                 ],
+        "suitable_scenes":  [
+                                "friends",
+                                "general"
+                            ],
+        "scene":  "general",
+        "bookable":  true,
+        "available_slots":  [
+                                "13:00",
+                                "14:00",
+                                "15:00",
+                                "16:00",
+                                "17:00",
+                                "18:00"
+                            ],
+        "lead_time_min":  60,
+        "queue_minutes":  0,
+        "risk":  null,
+        "description":  "Mock 鲜花配送服务，12支混搭花束，可送至指定餐厅或活动地点",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实履约能力",
+        "source":  "mock_add_on_service",
+        "party_types":  [
+                            "couple",
+                            "friends",
+                            "business"
+                        ],
+        "lat":  28.6842,
+        "lng":  115.8579,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "秋水广场商圈",
+        "address":  "南昌市红谷滩区赣江中大道秋水广场",
+        "image_url":  "https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "addon_003",
+        "name":  "儿童惊喜礼盒",
+        "poi_type":  "add_on",
+        "domain":  "add_on",
+        "category":  "礼物",
+        "sub_category":  "gift",
+        "available_areas":  [
+                                "朝阳大悦城商圈",
+                                "三里屯商圈",
+                                "合生汇商圈"
+                            ],
+        "avg_price":  88,
+        "tags":  [
+                     "儿童礼物",
+                     "气球",
+                     "亲子",
+                     "庆祝",
+                     "可配送"
+                 ],
+        "suitable_scenes":  [
+                                "family",
+                                "general"
+                            ],
+        "scene":  "family",
+        "bookable":  true,
+        "available_slots":  [
+                                "13:00",
+                                "14:00",
+                                "15:00",
+                                "16:00",
+                                "17:00"
+                            ],
+        "lead_time_min":  120,
+        "queue_minutes":  0,
+        "risk":  null,
+        "description":  "Mock 儿童礼品配送，含小玩具、气球和手工贺卡，可送至指定餐厅",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实履约能力",
+        "source":  "mock_add_on_service",
+        "party_types":  [
+                            "family_with_child",
+                            "family"
+                        ],
+        "lat":  28.6867,
+        "lng":  115.8621,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "绿地中心商圈",
+        "address":  "南昌市红谷滩区红谷中大道998号",
+        "image_url":  "https://images.unsplash.com/photo-1513885535751-8b9238bd345a?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1513885535751-8b9238bd345a?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "addon_004",
+        "name":  "纪念日桌花布置",
+        "poi_type":  "add_on",
+        "domain":  "add_on",
+        "category":  "鲜花",
+        "sub_category":  "flower",
+        "available_areas":  [
+                                "三里屯商圈",
+                                "国贸商圈",
+                                "朝阳大悦城商圈"
+                            ],
+        "avg_price":  188,
+        "tags":  [
+                     "鲜花",
+                     "纪念日",
+                     "约会",
+                     "仪式感",
+                     "拍照",
+                     "惊喜",
+                     "可配送"
+                 ],
+        "party_types":  [
+                            "couple",
+                            "business"
+                        ],
+        "suitable_scenes":  [
+                                "couple",
+                                "business",
+                                "general"
+                            ],
+        "scene":  "couple",
+        "bookable":  true,
+        "available_slots":  [
+                                "11:00",
+                                "13:00",
+                                "17:00",
+                                "18:00",
+                                "19:00"
+                            ],
+        "lead_time_min":  90,
+        "queue_minutes":  0,
+        "risk":  null,
+        "description":  "Mock 桌花布置服务，可送至指定餐厅，适合纪念日和求婚前置氛围",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实履约能力",
+        "source":  "mock_add_on_service",
+        "lat":  28.6745,
+        "lng":  115.8486,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "红谷滩中心区",
+        "address":  "南昌市红谷滩区世贸路",
+        "image_url":  "https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1490750967868-88aa4486c946?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    }
+]

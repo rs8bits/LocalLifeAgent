@@ -1,0 +1,613 @@
+[
+    {
+        "id":  "drink_001",
+        "name":  "喜茶",
+        "category":  "奶茶果茶",
+        "sub_category":  "milk_tea",
+        "address":  "南昌市红谷滩区会展路999号 · 喜茶",
+        "distance_km":  2.3,
+        "avg_price":  32,
+        "tags":  [
+                     "奶茶",
+                     "果茶",
+                     "网红",
+                     "拍照",
+                     "甜品"
+                 ],
+        "scene":  "general",
+        "indoor":  true,
+        "queue_minutes":  10,
+        "available_slots":  [
+
+                            ],
+        "bookable":  false,
+        "risk":  null,
+        "description":  "网红茶饮，招牌多肉葡萄和多肉芒芒",
+        "poi_type":  "drink",
+        "meituan_poi_id":  "mt_drink_001",
+        "suitable_scenes":  [
+                                "family",
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-22:00",
+        "rating":  4.7,
+        "review_count":  12500,
+        "monthly_sales":  5800,
+        "popularity_score":  93,
+        "recommended_duration_min":  20,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "到店点单，不支持预约",
+        "refund_policy":  "到店消费",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "seating":  true
+                       },
+        "domain":  "drink",
+        "party_types":  [
+                            "couple",
+                            "friends",
+                            "family_with_child",
+                            "family",
+                            "solo"
+                        ],
+        "lat":  28.6908,
+        "lng":  115.8584,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "红谷滩万达广场商圈",
+        "image_url":  "https://images.unsplash.com/photo-1558857563-b371033873b8?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1558857563-b371033873b8?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "drink_002",
+        "name":  "星巴克臻选",
+        "category":  "咖啡",
+        "sub_category":  "coffee",
+        "address":  "南昌市红谷滩区赣江中大道秋水广场 · 星巴克臻选",
+        "distance_km":  3.9,
+        "avg_price":  45,
+        "tags":  [
+                     "咖啡",
+                     "安静",
+                     "办公",
+                     "约会"
+                 ],
+        "scene":  "general",
+        "indoor":  true,
+        "queue_minutes":  5,
+        "available_slots":  [
+
+                            ],
+        "bookable":  false,
+        "risk":  null,
+        "description":  "星巴克臻选门店，提供精品手冲和甄选咖啡豆",
+        "poi_type":  "drink",
+        "meituan_poi_id":  "mt_drink_002",
+        "suitable_scenes":  [
+                                "family",
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "07:00-23:00",
+        "rating":  4.5,
+        "review_count":  6210,
+        "monthly_sales":  4100,
+        "popularity_score":  82,
+        "recommended_duration_min":  30,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "到店点单",
+        "refund_policy":  "到店消费",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "seating":  true
+                       },
+        "domain":  "drink",
+        "party_types":  [
+                            "couple",
+                            "solo",
+                            "business",
+                            "friends",
+                            "family_elder"
+                        ],
+        "lat":  28.6842,
+        "lng":  115.8579,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "秋水广场商圈",
+        "image_url":  "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "drink_003",
+        "name":  "蜜雪冰城",
+        "category":  "茶饮",
+        "sub_category":  "tea",
+        "address":  "南昌市红谷滩区红谷中大道998号 · 蜜雪冰城",
+        "distance_km":  6,
+        "avg_price":  8,
+        "tags":  [
+                     "奶茶",
+                     "平价",
+                     "外卖",
+                     "甜品"
+                 ],
+        "scene":  "general",
+        "indoor":  true,
+        "queue_minutes":  8,
+        "available_slots":  [
+
+                            ],
+        "bookable":  false,
+        "risk":  null,
+        "description":  "高性价比茶饮连锁，柠檬水和冰淇淋爆款",
+        "poi_type":  "drink",
+        "meituan_poi_id":  "mt_drink_003",
+        "suitable_scenes":  [
+                                "family",
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "09:00-22:30",
+        "rating":  4.3,
+        "review_count":  8900,
+        "monthly_sales":  7200,
+        "popularity_score":  78,
+        "recommended_duration_min":  10,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "到店点单，支持小程序提前下单自取",
+        "refund_policy":  "到店消费",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  false,
+                           "seating":  false
+                       },
+        "domain":  "drink",
+        "party_types":  [
+                            "family_with_child",
+                            "family",
+                            "friends",
+                            "solo"
+                        ],
+        "lat":  28.6867,
+        "lng":  115.8621,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "绿地中心商圈",
+        "image_url":  "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "drink_004",
+        "name":  "京A精酿啤酒",
+        "category":  "酒吧",
+        "sub_category":  "bar",
+        "address":  "南昌市红谷滩区世贸路 · 京A精酿啤酒",
+        "distance_km":  3,
+        "avg_price":  85,
+        "tags":  [
+                     "精酿",
+                     "酒吧",
+                     "聚会",
+                     "社交",
+                     "拍照",
+                     "约会"
+                 ],
+        "scene":  "friends",
+        "indoor":  true,
+        "queue_minutes":  15,
+        "available_slots":  [
+                                "18:00",
+                                "19:00",
+                                "20:00",
+                                "21:00",
+                                "22:00"
+                            ],
+        "bookable":  true,
+        "risk":  "营业时间17:00开始，不适合下午场",
+        "description":  "北京本土精酿品牌，招牌工人淡色艾尔和飞拳IPA",
+        "poi_type":  "drink",
+        "meituan_poi_id":  "mt_drink_004",
+        "suitable_scenes":  [
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "17:00-02:00",
+        "rating":  4.6,
+        "review_count":  2800,
+        "monthly_sales":  1200,
+        "popularity_score":  85,
+        "recommended_duration_min":  60,
+        "stock_remaining":  20,
+        "booking_required":  true,
+        "reservation_notice":  "建议提前1天预约",
+        "refund_policy":  "预约开始前4小时可退",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  false,
+                           "seating":  true
+                       },
+        "domain":  "drink",
+        "party_types":  [
+                            "couple",
+                            "friends",
+                            "business"
+                        ],
+        "lat":  28.6745,
+        "lng":  115.8486,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "红谷滩中心区",
+        "image_url":  "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "drink_005",
+        "name":  "奈雪的茶",
+        "category":  "奶茶果茶",
+        "sub_category":  "milk_tea",
+        "address":  "南昌市红谷滩区丰和北大道 · 奈雪的茶",
+        "distance_km":  5.5,
+        "avg_price":  35,
+        "tags":  [
+                     "奶茶",
+                     "欧包",
+                     "甜品",
+                     "拍照",
+                     "网红"
+                 ],
+        "scene":  "general",
+        "indoor":  true,
+        "queue_minutes":  8,
+        "available_slots":  [
+
+                            ],
+        "bookable":  false,
+        "risk":  null,
+        "description":  "茶饮+软欧包组合，招牌霸气草莓和芋泥宝藏茶",
+        "poi_type":  "drink",
+        "meituan_poi_id":  "mt_drink_005",
+        "suitable_scenes":  [
+                                "family",
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-22:00",
+        "rating":  4.6,
+        "review_count":  7800,
+        "monthly_sales":  4600,
+        "popularity_score":  88,
+        "recommended_duration_min":  25,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "到店点单",
+        "refund_policy":  "到店消费",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "seating":  true
+                       },
+        "domain":  "drink",
+        "party_types":  [
+                            "couple",
+                            "friends",
+                            "family",
+                            "solo"
+                        ],
+        "lat":  28.6993,
+        "lng":  115.8512,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "凤凰洲商圈",
+        "image_url":  "https://images.unsplash.com/photo-1558857563-b371033873b8?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1558857563-b371033873b8?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "drink_006",
+        "name":  "瑞幸咖啡",
+        "category":  "咖啡",
+        "sub_category":  "coffee",
+        "address":  "南昌市红谷滩区九龙大道 · 瑞幸咖啡",
+        "distance_km":  4.6,
+        "avg_price":  18,
+        "tags":  [
+                     "咖啡",
+                     "平价",
+                     "外卖",
+                     "办公"
+                 ],
+        "scene":  "general",
+        "indoor":  true,
+        "queue_minutes":  3,
+        "available_slots":  [
+
+                            ],
+        "bookable":  false,
+        "risk":  null,
+        "description":  "互联网咖啡连锁，线上下单自取，生椰拿铁和厚乳拿铁爆款",
+        "poi_type":  "drink",
+        "meituan_poi_id":  "mt_drink_006",
+        "suitable_scenes":  [
+                                "family",
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "07:00-21:00",
+        "rating":  4.4,
+        "review_count":  10500,
+        "monthly_sales":  8900,
+        "popularity_score":  80,
+        "recommended_duration_min":  10,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "APP下单自取",
+        "refund_policy":  "到店消费",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  false,
+                           "seating":  false
+                       },
+        "domain":  "drink",
+        "party_types":  [
+                            "solo",
+                            "business",
+                            "friends"
+                        ],
+        "lat":  28.6639,
+        "lng":  115.8417,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "九龙湖商圈",
+        "image_url":  "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "drink_007",
+        "name":  "柏悦大堂茶廊",
+        "category":  "茶饮",
+        "sub_category":  "tea",
+        "address":  "南昌市红谷滩区西站大街 · 柏悦大堂茶廊",
+        "distance_km":  5,
+        "avg_price":  88,
+        "tags":  [
+                     "茶饮",
+                     "纪念日",
+                     "约会",
+                     "仪式感",
+                     "高端",
+                     "安静",
+                     "商务",
+                     "长辈友好",
+                     "少走路",
+                     "好停车"
+                 ],
+        "party_types":  [
+                            "couple",
+                            "business",
+                            "solo",
+                            "family_elder",
+                            "family"
+                        ],
+        "scene":  "couple",
+        "indoor":  true,
+        "queue_minutes":  0,
+        "available_slots":  [
+                                "10:00",
+                                "14:00",
+                                "16:00",
+                                "19:00"
+                            ],
+        "bookable":  true,
+        "risk":  null,
+        "description":  "酒店大堂茶廊，环境安静，适合约会收尾、商务聊天，也适合带长辈短暂停留喝茶",
+        "poi_type":  "drink",
+        "meituan_poi_id":  "mt_drink_007",
+        "suitable_scenes":  [
+                                "couple",
+                                "business",
+                                "solo",
+                                "family_elder",
+                                "family",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-22:00",
+        "rating":  4.7,
+        "review_count":  760,
+        "monthly_sales":  410,
+        "popularity_score":  79,
+        "recommended_duration_min":  35,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "可预约靠窗座位",
+        "refund_policy":  "到店消费",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "seating":  true
+                       },
+        "domain":  "drink",
+        "lat":  28.6318,
+        "lng":  115.7927,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "南昌西站商圈",
+        "image_url":  "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "drink_008",
+        "name":  "三里屯低度微醺酒馆",
+        "category":  "酒吧",
+        "sub_category":  "bar",
+        "address":  "南昌市红谷滩区赣江南大道 · 三里屯低度微醺酒馆",
+        "distance_km":  3.8,
+        "avg_price":  78,
+        "tags":  [
+                     "酒吧",
+                     "精酿",
+                     "低度酒",
+                     "聚会",
+                     "社交",
+                     "朋友聚会",
+                     "拍照"
+                 ],
+        "scene":  "friends",
+        "indoor":  true,
+        "queue_minutes":  8,
+        "available_slots":  [
+                                "18:00",
+                                "19:00",
+                                "20:00",
+                                "21:00"
+                            ],
+        "bookable":  true,
+        "risk":  "仅适合成年人，18:00后体验更完整",
+        "description":  "低度酒和无酒精特调都有，适合2男2女朋友局饭后小坐。",
+        "poi_type":  "drink",
+        "meituan_poi_id":  "mt_drink_008",
+        "suitable_scenes":  [
+                                "friends",
+                                "couple",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "18:00-01:00",
+        "rating":  4.6,
+        "review_count":  1480,
+        "monthly_sales":  820,
+        "popularity_score":  82,
+        "recommended_duration_min":  75,
+        "stock_remaining":  18,
+        "booking_required":  true,
+        "reservation_notice":  "建议提前预约卡座",
+        "refund_policy":  "预约开始前4小时可退",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  false,
+                           "seating":  true
+                       },
+        "domain":  "drink",
+        "party_types":  [
+                            "friends",
+                            "couple",
+                            "business"
+                        ],
+        "lat":  28.6788,
+        "lng":  115.8665,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "赣江市民公园商圈",
+        "image_url":  "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "drink_009",
+        "name":  "亲子友好鲜果茶铺",
+        "category":  "茶饮",
+        "sub_category":  "tea",
+        "address":  "南昌市红谷滩区学府大道 · 亲子友好鲜果茶铺",
+        "distance_km":  2.2,
+        "avg_price":  28,
+        "tags":  [
+                     "茶饮",
+                     "果茶",
+                     "亲子",
+                     "健康",
+                     "低糖",
+                     "休息",
+                     "外卖"
+                 ],
+        "scene":  "family",
+        "indoor":  true,
+        "queue_minutes":  5,
+        "available_slots":  [
+
+                            ],
+        "bookable":  false,
+        "risk":  null,
+        "description":  "低糖果茶和儿童鲜榨果汁，适合亲子活动后休息。",
+        "poi_type":  "drink",
+        "meituan_poi_id":  "mt_drink_009",
+        "suitable_scenes":  [
+                                "family",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-22:00",
+        "rating":  4.5,
+        "review_count":  980,
+        "monthly_sales":  1600,
+        "popularity_score":  76,
+        "recommended_duration_min":  20,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "到店点单，支持提前自取",
+        "refund_policy":  "到店消费",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "seating":  true
+                       },
+        "domain":  "drink",
+        "party_types":  [
+                            "family_with_child",
+                            "family",
+                            "solo"
+                        ],
+        "lat":  28.6921,
+        "lng":  115.8718,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "红角洲商圈",
+        "image_url":  "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    }
+]

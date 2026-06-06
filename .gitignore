@@ -1,0 +1,36 @@
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+.claude/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp task files
+TEMP_TASK_*.md
+*.log
+
+# Frontend
+.next/
+frontend/node_modules/
+frontend/.next/
+frontend/.npm-cache/
+frontend/.npm-global/
+frontend/out/
+frontend/tsconfig.tsbuildinfo

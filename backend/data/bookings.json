@@ -1,0 +1,22 @@
+[
+  {
+    "booking_id": "booking_act_87277519_37e0a0",
+    "type": "activity",
+    "poi_id": "act_009",
+    "poi_name": "纯K KTV",
+    "user_id": "user_002",
+    "people": 4,
+    "time": "14:00",
+    "status": "confirmed"
+  },
+  {
+    "booking_id": "booking_rest_87277537_d88e0a",
+    "type": "restaurant",
+    "poi_id": "rest_002",
+    "poi_name": "云海肴·云南菜",
+    "user_id": "user_002",
+    "people": 4,
+    "time": "13:30",
+    "status": "confirmed"
+  }
+]

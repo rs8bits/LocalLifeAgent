@@ -1,0 +1,26 @@
+[
+  {
+    "order_id": "order_87277548_6b6ca2",
+    "user_id": "user_002",
+    "order_type": "deal",
+    "payload": {
+      "poi_id": "act_009",
+      "deal_id": "deal_006",
+      "quantity": 1
+    },
+    "status": "confirmed",
+    "message": "Mock 订单已创建（非真实支付），订单号: order_87277548_6b6ca2"
+  },
+  {
+    "order_id": "order_87277558_6bd112",
+    "user_id": "user_002",
+    "order_type": "deal",
+    "payload": {
+      "poi_id": "rest_002",
+      "deal_id": "deal_013",
+      "quantity": 1
+    },
+    "status": "confirmed",
+    "message": "Mock 订单已创建（非真实支付），订单号: order_87277558_6bd112"
+  }
+]

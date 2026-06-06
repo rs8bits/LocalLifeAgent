@@ -1,0 +1,60 @@
+"""LocalLife Agent 后端入口"""
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from backend.config import settings
+
+app = FastAPI(title=settings.APP_TITLE, version=settings.APP_VERSION)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/health")
+async def health_check():
+    """健康检查接口"""
+    from backend.llm.deepseek_client import deepseek_client
+    return {
+        "status": "ok",
+        "service": "LocalLife Agent Mock API",
+        "llm_available": deepseek_client.available,
+        "llm_api_key_set": bool(deepseek_client.api_key),
+        "llm_model": deepseek_client.model,
+    }
+
+
+# 注册 Mock API 路由
+from backend.mock_api.activities import router as activities_router
+from backend.mock_api.restaurants import router as restaurants_router
+from backend.mock_api.routes import router as routes_router
+from backend.mock_api.weather import router as weather_router
+from backend.mock_api.deals import router as deals_router
+from backend.mock_api.bookings import router as bookings_router
+from backend.mock_api.orders import router as orders_router
+from backend.mock_api.drinks import router as drinks_router
+from backend.mock_api.add_ons import router as add_ons_router
+from backend.mock_api.tags import router as tags_router
+from backend.mock_api.delivery import router as delivery_router
+
+app.include_router(activities_router)
+app.include_router(restaurants_router)
+app.include_router(routes_router)
+app.include_router(weather_router)
+app.include_router(deals_router)
+app.include_router(bookings_router)
+app.include_router(orders_router)
+app.include_router(drinks_router)
+app.include_router(add_ons_router)
+app.include_router(tags_router)
+app.include_router(delivery_router)
+
+# 注册 Agent API 路由
+from backend.agent.api import router as agent_router
+
+app.include_router(agent_router)

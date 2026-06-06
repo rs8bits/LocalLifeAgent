@@ -1,0 +1,1637 @@
+[
+    {
+        "id":  "act_001",
+        "name":  "欢乐亲子乐园",
+        "category":  "亲子乐园",
+        "address":  "南昌市红谷滩区会展路999号 · 欢乐亲子乐园",
+        "distance_km":  2.3,
+        "avg_price":  198,
+        "tags":  [
+                     "亲子",
+                     "室内",
+                     "游乐",
+                     "安全"
+                 ],
+        "scene":  "family",
+        "indoor":  true,
+        "suitable_age_min":  2,
+        "suitable_age_max":  12,
+        "child_friendly":  true,
+        "has_nursing_room":  true,
+        "has_kids_meal":  true,
+        "queue_minutes":  5,
+        "available_slots":  [
+                                "10:00",
+                                "11:00",
+                                "14:00",
+                                "15:00",
+                                "16:00"
+                            ],
+        "bookable":  true,
+        "risk":  null,
+        "description":  "大型室内亲子乐园，含攀爬区、积木区和角色扮演区，适合2-12岁儿童",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_001",
+        "suitable_scenes":  [
+                                "family",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-21:30",
+        "rating":  4.8,
+        "review_count":  3264,
+        "monthly_sales":  1260,
+        "popularity_score":  92,
+        "recommended_duration_min":  150,
+        "stock_remaining":  38,
+        "booking_required":  true,
+        "reservation_notice":  "支持在线预约，请按可用时段下单",
+        "peak_hours":  [
+                           "14:00-17:00"
+                       ],
+        "refund_policy":  "未核销随时退，过期自动退",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  true,
+                           "stroller_friendly":  true,
+                           "kids_meal":  true,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "family_with_child",
+                            "family"
+                        ],
+        "lat":  28.6908,
+        "lng":  115.8584,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "红谷滩万达广场商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_002",
+        "name":  "奥林匹克森林公园",
+        "category":  "公园",
+        "address":  "南昌市红谷滩区赣江中大道秋水广场 · 奥林匹克森林公园",
+        "distance_km":  8.5,
+        "avg_price":  0,
+        "tags":  [
+                     "户外",
+                     "自然",
+                     "跑步",
+                     "野餐",
+                     "拍照"
+                 ],
+        "scene":  "general",
+        "indoor":  false,
+        "suitable_age_min":  0,
+        "suitable_age_max":  99,
+        "child_friendly":  true,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  0,
+        "available_slots":  [
+
+                            ],
+        "bookable":  false,
+        "risk":  "户外活动受天气影响，雨天不建议前往",
+        "description":  "北京最大的城市公园，适合散步、跑步、野餐和拍照，免费开放",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_002",
+        "suitable_scenes":  [
+                                "family",
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "06:00-21:00",
+        "rating":  4.7,
+        "review_count":  8451,
+        "monthly_sales":  0,
+        "popularity_score":  88,
+        "recommended_duration_min":  120,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "无需在线预约或暂不支持预约",
+        "peak_hours":  [
+                           "09:00-11:00",
+                           "16:00-18:00"
+                       ],
+        "refund_policy":  "免费开放，无需购买",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  false,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "family_with_child",
+                            "family_elder",
+                            "family",
+                            "friends",
+                            "solo"
+                        ],
+        "lat":  28.6842,
+        "lng":  115.8579,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "秋水广场商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_003",
+        "name":  "梵高沉浸式艺术展",
+        "category":  "展览",
+        "address":  "南昌市红谷滩区红谷中大道998号 · 梵高沉浸式艺术展",
+        "distance_km":  6.8,
+        "avg_price":  128,
+        "tags":  [
+                     "艺术",
+                     "室内",
+                     "拍照",
+                     "约会"
+                 ],
+        "scene":  "friends",
+        "indoor":  true,
+        "suitable_age_min":  8,
+        "suitable_age_max":  99,
+        "child_friendly":  false,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  15,
+        "available_slots":  [
+                                "10:00",
+                                "11:30",
+                                "13:00",
+                                "14:30",
+                                "16:00"
+                            ],
+        "bookable":  true,
+        "risk":  null,
+        "description":  "沉浸式光影艺术展，适合拍照打卡，艺术爱好者必去",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_003",
+        "suitable_scenes":  [
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-19:00",
+        "rating":  4.6,
+        "review_count":  1890,
+        "monthly_sales":  740,
+        "popularity_score":  84,
+        "recommended_duration_min":  90,
+        "stock_remaining":  22,
+        "booking_required":  true,
+        "reservation_notice":  "支持在线预约，请按可用时段下单",
+        "peak_hours":  [
+                           "14:00-16:00"
+                       ],
+        "refund_policy":  "开场前2小时可退",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  false,
+                           "nursing_room":  false,
+                           "stroller_friendly":  false,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "couple",
+                            "friends",
+                            "solo",
+                            "business"
+                        ],
+        "lat":  28.6867,
+        "lng":  115.8621,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "绿地中心商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_004",
+        "name":  "荟聚购物中心",
+        "category":  "商场",
+        "address":  "南昌市红谷滩区世贸路 · 荟聚购物中心",
+        "distance_km":  15.2,
+        "avg_price":  0,
+        "tags":  [
+                     "室内",
+                     "购物",
+                     "餐饮",
+                     "亲子"
+                 ],
+        "scene":  "family",
+        "indoor":  true,
+        "suitable_age_min":  0,
+        "suitable_age_max":  99,
+        "child_friendly":  true,
+        "has_nursing_room":  true,
+        "has_kids_meal":  true,
+        "queue_minutes":  0,
+        "available_slots":  [
+
+                            ],
+        "bookable":  false,
+        "risk":  null,
+        "description":  "大型综合购物中心，内含儿童游乐区、母婴室和多家亲子餐厅",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_004",
+        "suitable_scenes":  [
+                                "family",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-22:00",
+        "rating":  4.5,
+        "review_count":  5210,
+        "monthly_sales":  0,
+        "popularity_score":  76,
+        "recommended_duration_min":  180,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "无需在线预约或暂不支持预约",
+        "peak_hours":  [
+                           "15:00-20:00"
+                       ],
+        "refund_policy":  "免费开放，无需购买",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  true,
+                           "stroller_friendly":  true,
+                           "kids_meal":  true,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "family_with_child",
+                            "family",
+                            "solo"
+                        ],
+        "lat":  28.6745,
+        "lng":  115.8486,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "红谷滩中心区",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_005",
+        "name":  "胡同里咖啡馆",
+        "category":  "咖啡店",
+        "address":  "南昌市红谷滩区丰和北大道 · 胡同里咖啡馆",
+        "distance_km":  3.1,
+        "avg_price":  45,
+        "tags":  [
+                     "咖啡",
+                     "室内",
+                     "安静",
+                     "约会",
+                     "阅读",
+                     "独处"
+                 ],
+        "scene":  "friends",
+        "indoor":  true,
+        "suitable_age_min":  12,
+        "suitable_age_max":  99,
+        "child_friendly":  false,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  0,
+        "available_slots":  [
+
+                            ],
+        "bookable":  false,
+        "risk":  null,
+        "description":  "藏在胡同里的精品咖啡馆，手冲咖啡和自制甜点，环境安静适合小聚",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_005",
+        "suitable_scenes":  [
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "09:30-22:30",
+        "rating":  4.4,
+        "review_count":  936,
+        "monthly_sales":  420,
+        "popularity_score":  71,
+        "recommended_duration_min":  90,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "无需在线预约或暂不支持预约",
+        "peak_hours":  [
+                           "14:00-17:00"
+                       ],
+        "refund_policy":  "到店消费，无需预约",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  false,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "couple",
+                            "solo",
+                            "friends",
+                            "business"
+                        ],
+        "lat":  28.6993,
+        "lng":  115.8512,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "凤凰洲商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_006",
+        "name":  "无限桌游俱乐部",
+        "category":  "桌游",
+        "address":  "南昌市红谷滩区九龙大道 · 无限桌游俱乐部",
+        "distance_km":  4.5,
+        "avg_price":  68,
+        "tags":  [
+                     "桌游",
+                     "室内",
+                     "社交",
+                     "聚会"
+                 ],
+        "scene":  "friends",
+        "indoor":  true,
+        "suitable_age_min":  10,
+        "suitable_age_max":  99,
+        "child_friendly":  false,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  5,
+        "available_slots":  [
+                                "13:00",
+                                "14:00",
+                                "15:00",
+                                "16:00",
+                                "18:00"
+                            ],
+        "bookable":  true,
+        "risk":  null,
+        "description":  "500+款桌游任选，有专业DM带玩，适合4-8人聚会",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_006",
+        "suitable_scenes":  [
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "13:00-23:30",
+        "rating":  4.7,
+        "review_count":  2188,
+        "monthly_sales":  980,
+        "popularity_score":  86,
+        "recommended_duration_min":  180,
+        "stock_remaining":  16,
+        "booking_required":  true,
+        "reservation_notice":  "支持在线预约，请按可用时段下单",
+        "peak_hours":  [
+                           "18:00-22:00"
+                       ],
+        "refund_policy":  "预约开始前4小时可退",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  false,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "friends"
+                        ],
+        "lat":  28.6639,
+        "lng":  115.8417,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "九龙湖商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_007",
+        "name":  "什刹海胡同 Citywalk",
+        "category":  "citywalk",
+        "address":  "南昌市红谷滩区西站大街 · 什刹海胡同 Citywalk",
+        "distance_km":  2.8,
+        "avg_price":  0,
+        "tags":  [
+                     "户外",
+                     "散步",
+                     "拍照",
+                     "历史文化",
+                     "约会"
+                 ],
+        "scene":  "general",
+        "indoor":  false,
+        "suitable_age_min":  6,
+        "suitable_age_max":  99,
+        "child_friendly":  true,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  0,
+        "available_slots":  [
+
+                            ],
+        "bookable":  false,
+        "risk":  "全程约3公里步行，不适合推婴儿车；雨天路滑",
+        "description":  "经典北京胡同漫步路线，途经银锭桥、烟袋斜街和南锣鼓巷",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_007",
+        "suitable_scenes":  [
+                                "family",
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "全天开放",
+        "rating":  4.6,
+        "review_count":  4120,
+        "monthly_sales":  0,
+        "popularity_score":  82,
+        "recommended_duration_min":  150,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "无需在线预约或暂不支持预约",
+        "peak_hours":  [
+                           "15:00-19:00"
+                       ],
+        "refund_policy":  "公共路线，无需购买",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  false,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "couple",
+                            "family_elder",
+                            "family",
+                            "friends",
+                            "solo"
+                        ],
+        "lat":  28.6318,
+        "lng":  115.7927,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "南昌西站商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_008",
+        "name":  "合生汇寰映影城",
+        "category":  "影院",
+        "address":  "南昌市红谷滩区赣江南大道 · 合生汇寰映影城",
+        "distance_km":  5.6,
+        "avg_price":  75,
+        "tags":  [
+                     "室内",
+                     "观影",
+                     "约会",
+                     "娱乐"
+                 ],
+        "scene":  "general",
+        "indoor":  true,
+        "suitable_age_min":  6,
+        "suitable_age_max":  99,
+        "child_friendly":  true,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  10,
+        "available_slots":  [
+                                "13:30",
+                                "15:00",
+                                "16:30",
+                                "19:00",
+                                "20:30"
+                            ],
+        "bookable":  true,
+        "risk":  null,
+        "description":  "IMAX 激光影厅，支持在线选座，近期有亲子动画片排片",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_008",
+        "suitable_scenes":  [
+                                "family",
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-24:00",
+        "rating":  4.5,
+        "review_count":  3021,
+        "monthly_sales":  1560,
+        "popularity_score":  80,
+        "recommended_duration_min":  120,
+        "stock_remaining":  64,
+        "booking_required":  true,
+        "reservation_notice":  "支持在线预约，请按可用时段下单",
+        "peak_hours":  [
+                           "19:00-22:00"
+                       ],
+        "refund_policy":  "开场前30分钟可退改，以影院规则为准",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  true,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "couple",
+                            "friends",
+                            "solo",
+                            "family"
+                        ],
+        "lat":  28.6788,
+        "lng":  115.8665,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "赣江市民公园商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_009",
+        "name":  "纯K KTV",
+        "category":  "KTV",
+        "address":  "南昌市红谷滩区学府大道 · 纯K KTV",
+        "distance_km":  4,
+        "avg_price":  120,
+        "tags":  [
+                     "唱歌",
+                     "聚会",
+                     "社交",
+                     "拍照",
+                     "音乐"
+                 ],
+        "scene":  "friends",
+        "indoor":  true,
+        "suitable_age_min":  16,
+        "suitable_age_max":  99,
+        "child_friendly":  false,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  15,
+        "available_slots":  [
+                                "13:00",
+                                "14:00",
+                                "15:00",
+                                "19:00",
+                                "20:00",
+                                "21:00"
+                            ],
+        "bookable":  true,
+        "risk":  null,
+        "description":  "高品质KTV连锁，曲库全音响好，适合4-10人聚会，可点酒水和简餐",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_009",
+        "suitable_scenes":  [
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "12:00-06:00",
+        "rating":  4.6,
+        "review_count":  4520,
+        "monthly_sales":  2100,
+        "popularity_score":  88,
+        "recommended_duration_min":  180,
+        "stock_remaining":  15,
+        "booking_required":  true,
+        "reservation_notice":  "支持在线预约包厢，周末建议提前1天",
+        "peak_hours":  [
+                           "19:00-02:00"
+                       ],
+        "refund_policy":  "开场前2小时可退",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  false,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "friends",
+                            "couple"
+                        ],
+        "lat":  28.6921,
+        "lng":  115.8718,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "红角洲商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_010",
+        "name":  "猫空·撸猫咖啡馆",
+        "category":  "撸猫馆",
+        "address":  "南昌市红谷滩区庐山南大道 · 猫空·撸猫咖啡馆",
+        "distance_km":  2.5,
+        "avg_price":  68,
+        "tags":  [
+                     "撸猫",
+                     "治愈",
+                     "拍照",
+                     "约会",
+                     "咖啡"
+                 ],
+        "scene":  "friends",
+        "indoor":  true,
+        "suitable_age_min":  6,
+        "suitable_age_max":  99,
+        "child_friendly":  true,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  10,
+        "available_slots":  [
+                                "11:00",
+                                "12:30",
+                                "14:00",
+                                "15:30",
+                                "17:00"
+                            ],
+        "bookable":  true,
+        "risk":  "对猫毛过敏者慎入",
+        "description":  "撸猫+咖啡二合一，20+只品种猫咪，适合闺蜜打卡和亲子体验",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_010",
+        "suitable_scenes":  [
+                                "friends",
+                                "family",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:30-21:00",
+        "rating":  4.8,
+        "review_count":  3280,
+        "monthly_sales":  1420,
+        "popularity_score":  86,
+        "recommended_duration_min":  90,
+        "stock_remaining":  12,
+        "booking_required":  true,
+        "reservation_notice":  "支持在线预约时段，每场限流15人",
+        "peak_hours":  [
+                           "14:00-17:00"
+                       ],
+        "refund_policy":  "开场前1小时可退",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  false,
+                           "nursing_room":  false,
+                           "stroller_friendly":  true,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "couple",
+                            "friends",
+                            "solo",
+                            "family"
+                        ],
+        "lat":  28.7055,
+        "lng":  115.8606,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "庐山南大道商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_011",
+        "name":  "X先生密室逃脱",
+        "category":  "密室逃脱",
+        "address":  "南昌市红谷滩区会展路999号 · X先生密室逃脱",
+        "distance_km":  6.5,
+        "avg_price":  158,
+        "tags":  [
+                     "密室",
+                     "聚会",
+                     "社交",
+                     "解谜",
+                     "沉浸"
+                 ],
+        "scene":  "friends",
+        "indoor":  true,
+        "suitable_age_min":  12,
+        "suitable_age_max":  99,
+        "child_friendly":  false,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  20,
+        "available_slots":  [
+                                "10:00",
+                                "13:00",
+                                "14:30",
+                                "16:00",
+                                "19:00"
+                            ],
+        "bookable":  true,
+        "risk":  "密室逃脱需2人起订，不适合幽闭恐惧症者",
+        "description":  "沉浸式密室逃脱，多个主题房间，适合2-8人组队解谜",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_011",
+        "suitable_scenes":  [
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-22:00",
+        "rating":  4.7,
+        "review_count":  2180,
+        "monthly_sales":  890,
+        "popularity_score":  83,
+        "recommended_duration_min":  120,
+        "stock_remaining":  8,
+        "booking_required":  true,
+        "reservation_notice":  "需至少提前2小时预约，2人起订",
+        "peak_hours":  [
+                           "14:00-18:00",
+                           "19:00-21:00"
+                       ],
+        "refund_policy":  "开场前24小时可退",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  false,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "friends"
+                        ],
+        "lat":  28.6908,
+        "lng":  115.8584,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "红谷滩万达广场商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_012",
+        "name":  "电竞开黑基地",
+        "category":  "电竞馆",
+        "address":  "南昌市红谷滩区赣江中大道秋水广场 · 电竞开黑基地",
+        "distance_km":  4.8,
+        "avg_price":  60,
+        "tags":  [
+                     "游戏",
+                     "电竞",
+                     "聚会",
+                     "社交"
+                 ],
+        "scene":  "friends",
+        "indoor":  true,
+        "suitable_age_min":  12,
+        "suitable_age_max":  99,
+        "child_friendly":  false,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  5,
+        "available_slots":  [
+
+                            ],
+        "bookable":  false,
+        "risk":  null,
+        "description":  "专业电竞设备+高速网络，支持LOL/Valorant/APEX，可包房开黑",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_012",
+        "suitable_scenes":  [
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-02:00",
+        "rating":  4.4,
+        "review_count":  1650,
+        "monthly_sales":  980,
+        "popularity_score":  75,
+        "recommended_duration_min":  120,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "到店即可，无需预约",
+        "peak_hours":  [
+                           "18:00-23:00"
+                       ],
+        "refund_policy":  "到店消费",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  false,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "friends",
+                            "solo"
+                        ],
+        "lat":  28.6842,
+        "lng":  115.8579,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "秋水广场商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_013",
+        "name":  "MAO LiveHouse",
+        "category":  "LiveHouse",
+        "address":  "南昌市红谷滩区红谷中大道998号 · MAO LiveHouse",
+        "distance_km":  3.2,
+        "avg_price":  180,
+        "tags":  [
+                     "音乐",
+                     "现场",
+                     "乐队",
+                     "社交",
+                     "拍照",
+                     "演出"
+                 ],
+        "scene":  "friends",
+        "indoor":  true,
+        "suitable_age_min":  16,
+        "suitable_age_max":  99,
+        "child_friendly":  false,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  30,
+        "available_slots":  [
+                                "20:00"
+                            ],
+        "bookable":  true,
+        "risk":  "演出时间固定为20:00，不可改期；音量较大不推荐儿童",
+        "description":  "北京最知名的LiveHouse之一，每晚独立乐队和音乐人现场演出",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_013",
+        "suitable_scenes":  [
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "19:00-02:00",
+        "rating":  4.8,
+        "review_count":  5620,
+        "monthly_sales":  3200,
+        "popularity_score":  91,
+        "recommended_duration_min":  180,
+        "stock_remaining":  30,
+        "booking_required":  true,
+        "reservation_notice":  "需提前购票，不支持当天预约",
+        "peak_hours":  [
+                           "20:00-23:00"
+                       ],
+        "refund_policy":  "演出前72小时可退票",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  false,
+                           "nursing_room":  false,
+                           "stroller_friendly":  false,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "couple",
+                            "friends"
+                        ],
+        "lat":  28.6867,
+        "lng":  115.8621,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "绿地中心商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_014",
+        "name":  "弹力猩球蹦床公园",
+        "category":  "运动馆",
+        "address":  "南昌市红谷滩区世贸路 · 弹力猩球蹦床公园",
+        "distance_km":  5.8,
+        "avg_price":  128,
+        "tags":  [
+                     "运动",
+                     "蹦床",
+                     "亲子",
+                     "拍照",
+                     "聚会"
+                 ],
+        "scene":  "general",
+        "indoor":  true,
+        "suitable_age_min":  4,
+        "suitable_age_max":  99,
+        "child_friendly":  true,
+        "has_nursing_room":  true,
+        "has_kids_meal":  true,
+        "queue_minutes":  10,
+        "available_slots":  [
+                                "10:00",
+                                "12:00",
+                                "14:00",
+                                "16:00"
+                            ],
+        "bookable":  true,
+        "risk":  "需穿着防滑袜（可现场购买），心脏病/高血压者不宜",
+        "description":  "大型室内蹦床公园，含自由蹦跳区、扣篮区、海绵池和亲子专区",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_014",
+        "suitable_scenes":  [
+                                "family",
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-21:00",
+        "rating":  4.5,
+        "review_count":  1870,
+        "monthly_sales":  1320,
+        "popularity_score":  79,
+        "recommended_duration_min":  120,
+        "stock_remaining":  45,
+        "booking_required":  true,
+        "reservation_notice":  "支持在线预约时段，每场限流40人",
+        "peak_hours":  [
+                           "10:00-12:00",
+                           "14:00-17:00"
+                       ],
+        "refund_policy":  "开场前2小时可退",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  true,
+                           "stroller_friendly":  true,
+                           "kids_meal":  true,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "family_with_child",
+                            "friends"
+                        ],
+        "lat":  28.6745,
+        "lng":  115.8486,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "红谷滩中心区",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_015",
+        "name":  "瑰丽酒店云端下午茶",
+        "category":  "咖啡店",
+        "address":  "南昌市红谷滩区丰和北大道 · 瑰丽酒店云端下午茶",
+        "distance_km":  4.4,
+        "avg_price":  328,
+        "tags":  [
+                     "下午茶",
+                     "纪念日",
+                     "约会",
+                     "仪式感",
+                     "拍照",
+                     "高端",
+                     "安静",
+                     "室内",
+                     "商务"
+                 ],
+        "party_types":  [
+                            "couple",
+                            "business",
+                            "solo"
+                        ],
+        "scene":  "couple",
+        "indoor":  true,
+        "suitable_age_min":  12,
+        "suitable_age_max":  99,
+        "child_friendly":  false,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  5,
+        "available_slots":  [
+                                "10:30",
+                                "13:00",
+                                "15:30",
+                                "17:00"
+                            ],
+        "bookable":  true,
+        "risk":  null,
+        "description":  "高层景观酒店下午茶，适合纪念日、约会和商务轻会面",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_015",
+        "suitable_scenes":  [
+                                "couple",
+                                "business",
+                                "solo",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:30-18:00",
+        "rating":  4.8,
+        "review_count":  980,
+        "monthly_sales":  320,
+        "popularity_score":  88,
+        "recommended_duration_min":  90,
+        "stock_remaining":  18,
+        "booking_required":  true,
+        "reservation_notice":  "需提前预约窗边位",
+        "peak_hours":  [
+                           "15:00-17:00"
+                       ],
+        "refund_policy":  "到店前4小时可退",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  false,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "lat":  28.6993,
+        "lng":  115.8512,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "凤凰洲商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_016",
+        "name":  "木木美术馆香氛手作课",
+        "category":  "展览",
+        "address":  "南昌市红谷滩区九龙大道 · 木木美术馆香氛手作课",
+        "distance_km":  6.2,
+        "avg_price":  198,
+        "tags":  [
+                     "艺术",
+                     "手作",
+                     "香氛",
+                     "纪念日",
+                     "约会",
+                     "仪式感",
+                     "安静",
+                     "室内"
+                 ],
+        "party_types":  [
+                            "couple",
+                            "solo",
+                            "friends"
+                        ],
+        "scene":  "couple",
+        "indoor":  true,
+        "suitable_age_min":  12,
+        "suitable_age_max":  99,
+        "child_friendly":  false,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  0,
+        "available_slots":  [
+                                "10:00",
+                                "13:30",
+                                "16:00"
+                            ],
+        "bookable":  true,
+        "risk":  null,
+        "description":  "小班香氛手作体验，安静、有纪念感，适合作为约会活动",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_016",
+        "suitable_scenes":  [
+                                "couple",
+                                "solo",
+                                "friends",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-19:00",
+        "rating":  4.7,
+        "review_count":  520,
+        "monthly_sales":  180,
+        "popularity_score":  78,
+        "recommended_duration_min":  100,
+        "stock_remaining":  10,
+        "booking_required":  true,
+        "reservation_notice":  "小班制，建议提前1天预约",
+        "peak_hours":  [
+                           "13:30-16:00"
+                       ],
+        "refund_policy":  "开课前24小时可退",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  false,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "lat":  28.6639,
+        "lng":  115.8417,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "九龙湖商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_017",
+        "name":  "国博经典展厅慢逛",
+        "category":  "展览",
+        "address":  "南昌市红谷滩区西站大街 · 国博经典展厅慢逛",
+        "distance_km":  5.4,
+        "avg_price":  0,
+        "tags":  [
+                     "室内",
+                     "历史文化",
+                     "安静",
+                     "长辈友好",
+                     "少走路",
+                     "艺术",
+                     "好停车"
+                 ],
+        "party_types":  [
+                            "family_elder",
+                            "family",
+                            "business",
+                            "solo"
+                        ],
+        "scene":  "family_elder",
+        "indoor":  true,
+        "suitable_age_min":  8,
+        "suitable_age_max":  99,
+        "child_friendly":  false,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  5,
+        "available_slots":  [
+                                "09:30",
+                                "10:30",
+                                "13:30",
+                                "15:00"
+                            ],
+        "bookable":  true,
+        "risk":  "需提前实名预约，闭馆前1小时停止入场",
+        "description":  "适合带爸妈慢慢看的历史文化展厅，室内动线平缓，附近停车和打车都方便",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_017",
+        "suitable_scenes":  [
+                                "family_elder",
+                                "family",
+                                "business",
+                                "solo",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "09:00-17:00",
+        "rating":  4.9,
+        "review_count":  9360,
+        "monthly_sales":  0,
+        "popularity_score":  93,
+        "recommended_duration_min":  90,
+        "stock_remaining":  60,
+        "booking_required":  true,
+        "reservation_notice":  "需提前预约入馆时段，建议携带身份证件",
+        "peak_hours":  [
+                           "10:00-12:00",
+                           "14:00-16:00"
+                       ],
+        "refund_policy":  "免费预约，无费用退款",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  true,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "lat":  28.6318,
+        "lng":  115.7927,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "南昌西站商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_018",
+        "name":  "亮马河滨水轻松散步",
+        "category":  "公园",
+        "address":  "南昌市红谷滩区赣江南大道 · 亮马河滨水轻松散步",
+        "distance_km":  3.6,
+        "avg_price":  0,
+        "tags":  [
+                     "户外",
+                     "散步",
+                     "自然",
+                     "长辈友好",
+                     "少走路",
+                     "安静",
+                     "好停车",
+                     "拍照"
+                 ],
+        "party_types":  [
+                            "family_elder",
+                            "family",
+                            "couple",
+                            "solo"
+                        ],
+        "scene":  "family_elder",
+        "indoor":  false,
+        "suitable_age_min":  0,
+        "suitable_age_max":  99,
+        "child_friendly":  true,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  0,
+        "available_slots":  [
+
+                            ],
+        "bookable":  false,
+        "risk":  "户外步道受天气影响，雨天建议改为室内展馆",
+        "description":  "平缓滨水步道，适合带父母饭前饭后散步看城市夜景，沿线休息座椅较多",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_018",
+        "suitable_scenes":  [
+                                "family_elder",
+                                "family",
+                                "couple",
+                                "solo",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "06:00-22:00",
+        "rating":  4.7,
+        "review_count":  2860,
+        "monthly_sales":  0,
+        "popularity_score":  84,
+        "recommended_duration_min":  75,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "无需在线预约或暂不支持预约",
+        "peak_hours":  [
+                           "16:00-19:00"
+                       ],
+        "refund_policy":  "免费开放，无需购买",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  true,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "lat":  28.6788,
+        "lng":  115.8665,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "赣江市民公园商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_019",
+        "name":  "小小科学家探索馆",
+        "category":  "亲子乐园",
+        "address":  "南昌市红谷滩区学府大道 · 小小科学家探索馆",
+        "distance_km":  2.1,
+        "avg_price":  168,
+        "tags":  [
+                     "亲子",
+                     "室内",
+                     "科学",
+                     "手作",
+                     "安全",
+                     "低龄友好"
+                 ],
+        "scene":  "family",
+        "indoor":  true,
+        "suitable_age_min":  3,
+        "suitable_age_max":  8,
+        "child_friendly":  true,
+        "has_nursing_room":  true,
+        "has_kids_meal":  false,
+        "queue_minutes":  3,
+        "available_slots":  [
+                                "13:30",
+                                "14:00",
+                                "14:30",
+                                "15:30",
+                                "16:30"
+                            ],
+        "bookable":  true,
+        "risk":  null,
+        "description":  "适合3-8岁孩子的科学互动体验，含小实验、搭建和亲子协作任务，下午场排队少。",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_019",
+        "suitable_scenes":  [
+                                "family",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-20:30",
+        "rating":  4.8,
+        "review_count":  1540,
+        "monthly_sales":  620,
+        "popularity_score":  87,
+        "recommended_duration_min":  120,
+        "stock_remaining":  28,
+        "booking_required":  true,
+        "reservation_notice":  "支持在线预约，建议提前锁定下午场",
+        "peak_hours":  [
+                           "15:00-17:00"
+                       ],
+        "refund_policy":  "开场前2小时可退",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  true,
+                           "stroller_friendly":  true,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "family_with_child",
+                            "family"
+                        ],
+        "lat":  28.6921,
+        "lng":  115.8718,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "红角洲商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_020",
+        "name":  "三里屯潮流 Citywalk 小吃线",
+        "category":  "citywalk",
+        "address":  "南昌市红谷滩区庐山南大道 · 三里屯潮流 Citywalk 小吃线",
+        "distance_km":  3.6,
+        "avg_price":  20,
+        "tags":  [
+                     "citywalk",
+                     "散步",
+                     "拍照",
+                     "小吃",
+                     "市集",
+                     "社交",
+                     "朋友聚会"
+                 ],
+        "scene":  "friends",
+        "indoor":  false,
+        "suitable_age_min":  12,
+        "suitable_age_max":  99,
+        "child_friendly":  false,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  5,
+        "available_slots":  [
+
+                            ],
+        "bookable":  false,
+        "risk":  "户外路线受天气影响，热门摊位可能需要排队",
+        "description":  "适合朋友边逛边拍照的小吃街路线，可串联奶茶、潮牌店和轻食小店。",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_020",
+        "suitable_scenes":  [
+                                "friends",
+                                "couple",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "11:00-22:00",
+        "rating":  4.5,
+        "review_count":  980,
+        "monthly_sales":  0,
+        "popularity_score":  80,
+        "recommended_duration_min":  90,
+        "stock_remaining":  null,
+        "booking_required":  false,
+        "reservation_notice":  "开放街区，无需预约",
+        "peak_hours":  [
+                           "16:00-20:00"
+                       ],
+        "refund_policy":  "免费开放",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  false,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "friends",
+                            "couple",
+                            "solo"
+                        ],
+        "lat":  28.7055,
+        "lng":  115.8606,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "庐山南大道商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    },
+    {
+        "id":  "act_021",
+        "name":  "798周末轻展览市集",
+        "category":  "市集",
+        "address":  "南昌市红谷滩区会展路999号 · 798周末轻展览市集",
+        "distance_km":  6.6,
+        "avg_price":  68,
+        "tags":  [
+                     "展览",
+                     "艺术",
+                     "市集",
+                     "拍照",
+                     "室内",
+                     "社交",
+                     "小吃"
+                 ],
+        "scene":  "friends",
+        "indoor":  true,
+        "suitable_age_min":  8,
+        "suitable_age_max":  99,
+        "child_friendly":  false,
+        "has_nursing_room":  false,
+        "has_kids_meal":  false,
+        "queue_minutes":  10,
+        "available_slots":  [
+                                "13:00",
+                                "14:00",
+                                "15:00",
+                                "16:00"
+                            ],
+        "bookable":  true,
+        "risk":  null,
+        "description":  "轻量艺术展加创意市集，适合朋友拍照、逛摊和顺路吃小食。",
+        "poi_type":  "activity",
+        "meituan_poi_id":  "mt_act_021",
+        "suitable_scenes":  [
+                                "friends",
+                                "couple",
+                                "general"
+                            ],
+        "source":  "mock_meituan_local_life",
+        "poi_status":  "open",
+        "business_hours":  "10:00-19:30",
+        "rating":  4.6,
+        "review_count":  1120,
+        "monthly_sales":  530,
+        "popularity_score":  83,
+        "recommended_duration_min":  100,
+        "stock_remaining":  34,
+        "booking_required":  true,
+        "reservation_notice":  "支持在线预约，部分市集摊位现场消费",
+        "peak_hours":  [
+                           "14:00-17:00"
+                       ],
+        "refund_policy":  "开场前2小时可退",
+        "platform_notice":  "Mock 数据，仅用于 Demo，不代表真实平台库存或价格",
+        "facilities":  {
+                           "parking":  true,
+                           "nursing_room":  false,
+                           "stroller_friendly":  false,
+                           "kids_meal":  false,
+                           "restroom":  true
+                       },
+        "domain":  "play",
+        "party_types":  [
+                            "friends",
+                            "couple",
+                            "solo"
+                        ],
+        "lat":  28.6908,
+        "lng":  115.8584,
+        "city":  "南昌",
+        "district":  "红谷滩区",
+        "area":  "红谷滩万达广场商圈",
+        "image_url":  "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80",
+        "images":  [
+                       "https://images.unsplash.com/photo-1541961017774-22349e4a1262?auto=format\u0026fit=crop\u0026w=600\u0026q=80"
+                   ],
+        "image_source":  "mock_similar_unsplash_photo"
+    }
+]
