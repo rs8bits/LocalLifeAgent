@@ -1,117 +1,153 @@
 # LocalLife Agent
 
-本地短时活动规划与执行 Agent Demo（美团 AI 黑客松赛题「本地探索：周末闲时活动规划」）。
+<p align="center">
+  <strong>面向周末闲时场景的本地活动规划与执行 Agent</strong>
+</p>
 
-用户输入一句自然语言需求，系统可以理解意图、查询本地生活工具、生成活动方案，并在用户确认后模拟执行预约 / 下单。
+<p align="center">
+  用一句自然语言描述时间、同行人和偏好，系统自动完成意图理解、场所召回、行程组合、地图联动、方案反思，并在用户确认后执行 Mock 预约与下单。
+</p>
 
-## 当前交付范围（已完成）
+<p align="center">
+  <img alt="Next.js" src="https://img.shields.io/badge/Next.js-14-black">
+  <img alt="FastAPI" src="https://img.shields.io/badge/Backend-FastAPI-009688">
+  <img alt="LangGraph" src="https://img.shields.io/badge/Agent-LangGraph-2C3E50">
+  <img alt="DeepSeek" src="https://img.shields.io/badge/LLM-DeepSeek-4D6BFE">
+  <img alt="Amap" src="https://img.shields.io/badge/Map-高德地图-1677FF">
+</p>
 
-- **阶段 0**：项目骨架（FastAPI 后端、Next.js 前端、启动脚本）
-- **阶段 1**：Mock Data 与 Mock API（活动、餐厅、饮品、配送、路线、天气、团购券、记忆、订单）
-- **阶段 2**：Tool Interface 与基础规划（BaseTool、Intent Parser、Planner、Scorer）
-- **阶段 3**：Agent API 与 Human-in-the-loop（规划、确认、Session 管理）
-- **阶段 4**：可演示前端 Demo（流式过程、方案卡片、修改基准、确认执行、转发消息）
-- **阶段 5**：LangGraph 多 Agent 结构（输入安全、记忆、改写、意图、规划、反思、风控、执行、消息）
-- **阶段 6**：Reflection、Guardrails 与 Memory（质量检查、安全边界校验、用户记忆读取）
-- **阶段 7**：标签对齐 + LLM 方案组合器（吃/喝/玩/外卖闪送分类与标签解析 → 精准候选检索 → 严格 JSON action 输出）
-- **阶段 8**：多轮修改语义一致性（保留/替换/新增/删除槽位、人数修改、额外活动、配送和饮品 action 对齐、反思重试）
+<p align="center">
+  <img src="docs/images/product-planning.jpg" alt="LocalLife Agent 智能规划与地图联动" width="100%">
+</p>
+
+## 项目简介
+
+LocalLife Agent 是一个可运行的本地生活 Agent Demo，面向“周末下午有空，帮我安排一下”这类开放式需求。它不只返回搜索结果，而是把活动、餐厅、饮品、配送、路线、天气和团购券组合成有时间线、预算、风险提示和执行动作的完整方案。
+
+项目采用 **Planning + Tool Use + Reflection + Human-in-the-loop Execution**：
+
+1. 理解同行人、人数、时间、地点、预算和偏好。
+2. 将自然语言对齐到 `play`、`eat`、`drink`、`delivery` 四个业务领域。
+3. 从 Mock API 召回真实存在于本地数据集的候选。
+4. 使用 DeepSeek 组合方案，并通过本地规则校验 ID、时间线和 actions。
+5. Reflection 与 Guardrails 检查需求覆盖、可执行性和安全边界。
+6. 用户确认后才执行 Mock 预约、订位、团购券订单或配送订单。
+
+## 产品亮点
+
+| 能力 | 说明 |
+| --- | --- |
+| 自然语言规划 | 支持家庭、朋友、情侣、长辈、聚会、吃饭、饮品、外卖闪送等本地生活场景。 |
+| 多轮修改 | 支持“保留活动，只换晚餐”“再带上我老婆”“下午桌游，晚饭后喝酒”等增删改要求。 |
+| 语义一致性 | 统一处理保留、替换、新增、删除、锁定槽位和人数覆盖，避免针对单个商品或活动写死规则。 |
+| 地图联动 | 候选 POI 与高德地图标记联动，点击卡片可定位具体场所。 |
+| 可解释推荐 | 展示意图摘要、人数、推荐分、时间线、预算、团购券、推荐理由和风险提示。 |
+| 可观察 Agent | SSE 实时展示输入安全、意图解析、标签对齐、工具调用、方案组合、反思和风控过程。 |
+| 反思重试 | 明确需求缺失、隐藏 action 或顺序不合理时，可返回 Planner 重新生成一次。 |
+| 确认后执行 | 规划阶段只读；用户点击“确认并安排”后才执行 Mock 预约和订单。 |
+| LLM 降级 | DeepSeek 不可用或 JSON 不合法时，使用规则与本地组合器兜底。 |
+
+## 产品截图
+
+### 输入需求与地图
+
+<p align="center">
+  <img src="docs/images/product-home.jpg" alt="LocalLife Agent 输入需求与地图" width="100%">
+</p>
+
+### 候选方案与 POI 联动
+
+<p align="center">
+  <img src="docs/images/product-planning.jpg" alt="LocalLife Agent 候选方案" width="100%">
+</p>
+
+### 确认执行与转发消息
+
+<p align="center">
+  <img src="docs/images/product-execution.jpg" alt="LocalLife Agent 执行结果" width="100%">
+</p>
+
+## Agent 架构
+
+```mermaid
+flowchart LR
+    UI["Next.js 前端"] --> API["FastAPI / SSE"]
+    API --> Safety["Input Safety"]
+    Safety --> Memory["Memory"]
+    Memory --> Rewrite["Rewrite"]
+    Rewrite --> Intent["Intent"]
+    Intent --> Planner["Planner"]
+    Planner --> Tools["Tool Interface"]
+    Tools --> Data["Mock API / JSON Data"]
+    Planner --> Reflection["Reflection"]
+    Reflection -->|可修复问题| Planner
+    Reflection --> Guardrails["Guardrails"]
+    Guardrails --> Plans["候选方案"]
+    Plans -->|用户确认| Executor["Executor"]
+    Executor --> Message["Message Generator"]
+```
+
+### 规划链路
+
+```text
+输入安全
+→ 读取记忆与上下文改写
+→ 意图解析
+→ 标签对齐
+→ 天气 / 场所 / 配送商品召回
+→ LLM 方案组合
+→ 本地 JSON、ID、槽位和 action 校验
+→ 路线 / 团购券补全
+→ 评分
+→ Reflection
+→ Guardrails
+→ SSE 返回候选方案
+```
+
+### 确认链路
+
+```text
+用户选择 plan_id
+→ 活动 / 餐厅 / 饮品 Mock 预约
+→ 团购券 / 配送 Mock 订单
+→ 生成转发消息
+→ 消息 Guardrails
+→ 写回 Session
+```
+
+更完整的节点职责、工具调用和异常处理说明见 [设计文档](docs/design.md)。
 
 ## 技术栈
 
 | 层面 | 技术 |
-|------|------|
-| 前端 | Next.js + React + TypeScript + Tailwind CSS |
-| 后端 | FastAPI + Pydantic + Uvicorn |
-| Agent | LangGraph + DeepSeek API（无 Key 时规则兜底） |
+| --- | --- |
+| 前端 | Next.js 14、React 18、TypeScript、Tailwind CSS |
+| 地图 | 高德地图 Web 端 JavaScript API 2.0 |
+| 后端 | FastAPI、Pydantic、Uvicorn |
+| Agent | LangGraph、DeepSeek API、规则兜底 |
+| 通信 | REST API、Server-Sent Events |
 | 数据 | 本地 JSON Mock Data |
+| 测试 | Pytest、Next.js Build |
 
-## 本地 Python venv 启动方式
+## 快速开始
+
+### 1. 克隆项目
 
 ```bash
-# 1. 初始化虚拟环境并安装依赖
-./scripts/setup_backend.sh
-
-# 2. 启动后端
-./scripts/run_backend.sh
+git clone https://github.com/rs8bits/LocalLifeAgent.git
+cd LocalLifeAgent
 ```
 
-首次运行会自动创建 `.venv/`、升级 pip、安装所有依赖。
+### 2. 配置并启动后端
 
-## 后端启动命令
-
-```bash
-# 方式一：使用脚本
-./scripts/run_backend.sh
-
-# 方式二：手动启动
-source .venv/bin/activate
-.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
-```
-
-启动后访问：
-- 健康检查: http://127.0.0.1:8000/health
-- API 文档: http://127.0.0.1:8000/docs
-
-## Mock API 列表
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/health` | 健康检查 |
-| GET | `/api/mock/activities` | 查询活动（支持 party_type/radius_km/child_age/indoor/tag/tags_any，scene 仅兼容旧调用） |
-| GET | `/api/mock/restaurants` | 查询餐厅（支持 party_type/radius_km/party_size/tag/tags_any/available/max_queue_minutes，scene 仅兼容旧调用） |
-| GET | `/api/mock/routes` | 查询路线（支持 origin/destination/transport） |
-| GET | `/api/mock/weather` | 查询天气（支持 date/location） |
-| GET | `/api/mock/deals` | 查询团购券（支持 poi_id） |
-| GET | `/api/mock/drinks` | 查询饮品店（咖啡/奶茶/酒吧等） |
-| GET | `/api/mock/delivery/items` | 查询外卖/闪送商品 |
-| POST | `/api/mock/delivery/quote` | 估算外卖/闪送费用和时效 |
-| POST | `/api/mock/delivery/orders` | 创建 Mock 外卖/闪送订单 |
-| POST | `/api/mock/bookings/activity` | 预约活动 |
-| POST | `/api/mock/bookings/restaurant` | 预约餐厅 |
-| POST | `/api/mock/bookings/drink` | 预约饮品店 |
-| POST | `/api/mock/orders` | 创建 Mock 订单 |
-
-## 示例 curl
+macOS / Linux：
 
 ```bash
-# 健康检查
-curl http://127.0.0.1:8000/health
-
-# 查询亲子同行、5km内、适合5岁儿童的活动
-curl "http://127.0.0.1:8000/api/mock/activities?party_type=family_with_child&radius_km=5&child_age=5"
-
-# 查询情侣纪念日餐厅
-curl "http://127.0.0.1:8000/api/mock/restaurants?party_type=couple&tags_any=%E7%BA%AA%E5%BF%B5%E6%97%A5&available=true"
-
-# 预约活动
-curl -X POST http://127.0.0.1:8000/api/mock/bookings/activity \
-  -H "Content-Type: application/json" \
-  -d '{"activity_id":"act_001","user_id":"user_001","people":3,"time":"14:00"}'
-
-# 创建订单
-curl -X POST http://127.0.0.1:8000/api/mock/orders \
-  -H "Content-Type: application/json" \
-  -d '{"user_id":"user_001","order_type":"deal","payload":{"poi_id":"rest_001","deal_id":"deal_001","quantity":3}}'
-```
-
-## 运行测试
-
-```bash
-.venv/bin/pytest backend/tests -v
-```
-
-目前共 301 个后端测试，覆盖 Mock API、工具、输入安全、改写、意图解析、标签对齐、LLM 方案组合兜底、评分、规划、反思风控、流式 API 和确认执行。
-
-## DeepSeek 配置（可选）
-
-系统在不配置 DeepSeek API Key 时也能正常运行，会使用规则引擎兜底。如需启用 LLM 增强的意图解析：
-
-```bash
+bash scripts/setup_backend.sh
 cp .env.example .env
-# 编辑 .env 填入真实的 API Key
 ```
 
-`.env.example` 内容：
+编辑 `.env`：
 
 ```bash
 DEEPSEEK_API_KEY=your_deepseek_api_key
@@ -122,198 +158,137 @@ DEEPSEEK_MAX_RETRIES=2
 DEEPSEEK_RETRY_BACKOFF_SECONDS=0.8
 ```
 
-`.env` 已被 `.gitignore` 忽略，不会提交到仓库。
-网络瞬断、超时、429 或 5xx 会按 `DEEPSEEK_MAX_RETRIES` 自动重试；鉴权失败不会重试。
-
-## 已实现的 Agent 模块
-
-### Tool Interface (`backend/tools/`)
-
-统一工具基类 `BaseTool`，所有工具返回统一的 `ToolResult`。已实现：
-
-| 工具 | 说明 |
-|------|------|
-| `search_activities` | 搜索活动（支持 party_type/radius_km/child_age/indoor/tag/tags_any） |
-| `search_restaurants` | 搜索餐厅（支持 party_type/radius_km/party_size/tag/tags_any/available/max_queue_minutes） |
-| `estimate_route` | 估算路线（支持 origin/destination/transport） |
-| `get_weather` | 查询天气（支持 date/location） |
-| `get_deals` | 查询团购券（支持 poi_id） |
-| `get_tag_catalog` / `resolve_tags` | 查询标签目录并将自然语言/英文偏好对齐到业务标签 |
-| `search_places` | 统一搜索吃/喝/玩等场所候选 |
-| `search_delivery_items` | 搜索外卖/闪送商品 |
-| `estimate_delivery` | 估算配送费用和时效 |
-
-工具主路径使用 `party_type` + `tags` 检索；`scene` / `suitable_scenes` 只保留为旧调用兼容字段。
-
-### Intent Parser (`backend/agent/intent_parser.py`)
-
-从自然语言中提取结构化意图：同行人画像 `party_type`、统一 `tags`、时间窗口、人数、儿童年龄、距离偏好、饮食偏好、拍照需求、排队容忍度等。支持 LLM 优先解析 + 规则兜底。
-
-### Scorer (`backend/agent/scorer.py`)
-
-对候选方案进行可解释评分（0～1），家庭和朋友场景使用不同权重公式。每个方案的评分维度都会输出 `score_reasons`。
-
-### Planner / Plan Composer (`backend/agent/planner.py`, `backend/agent/plan_composer.py`)
-
-核心规划流程：
-1. 读取用户长期记忆，用户显式输入优先于记忆
-2. 解析意图并对齐到 `play` / `eat` / `drink` / `delivery` 领域标签
-3. 依次查询天气、场所/商品候选、路线、团购券
-4. LLM 输出严格 JSON 方案，本地校验 ID、槽位、timeline 和 actions
-5. LLM 失败或结果非法时使用本地兜底组合
-6. Reflection / Guardrails 对不合理方案触发一次可修复重试
-7. 对每个方案评分并排序，所有工具调用记录在 `tool_logs` 中
-
-Planner 不会调用预约、订位或下单工具。
-
-## Agent API
-
-基础 URL: `http://127.0.0.1:8000`
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/agent/plan` | 规划阶段：生成候选方案（不预约/不下单） |
-| POST | `/api/agent/plan/stream` | 规划阶段 SSE：实时输出节点事件、工具日志和候选方案 |
-| POST | `/api/agent/confirm` | 确认阶段：执行预约、订位、Mock 订单 |
-| POST | `/api/agent/confirm/stream` | 确认阶段 SSE：实时输出执行和消息生成事件 |
-| GET | `/api/agent/session/{session_id}` | 查询 session 详情 |
-
-### 规划示例
+启动后端：
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/agent/plan \
-  -H "Content-Type: application/json" \
-  -d '{"user_id":"user_001","message":"下午带老婆孩子去亲子乐园，孩子5岁，老婆减肥"}'
+bash scripts/run_backend.sh
 ```
 
-响应包含：`session_id`、`intent`、`plans`（候选方案）、`tool_logs`、`errors`。
+Windows PowerShell：
 
-### 确认示例
-
-```bash
-curl -X POST http://127.0.0.1:8000/api/agent/confirm \
-  -H "Content-Type: application/json" \
-  -d '{"session_id":"<session_id>","plan_id":"plan_001"}'
+```powershell
+.\scripts\run_backend_win.ps1
 ```
 
-确认后生成活动预约、餐厅订位和团购券 Mock 订单，返回 `share_message` 可转发消息。
+后端地址：
 
-### 约束
+- API：`http://127.0.0.1:8000`
+- 健康检查：`http://127.0.0.1:8000/health`
+- Swagger：`http://127.0.0.1:8000/docs`
 
-- `/api/agent/plan` 不写入 `bookings.json` / `orders.json`
-- `/api/agent/confirm` 才会执行预约和下单
-- 所有订单为 Mock 订单，不涉及真实支付
-- 重复确认同一 session 不会重复写入
+> DeepSeek Key 是可选项。未配置时系统仍可使用规则引擎和本地方案组合器运行。
 
-## 前端 Demo 启动
-
-前端是完整 Demo 界面，使用 Next.js + TypeScript + Tailwind CSS。
+### 3. 配置并启动前端
 
 ```bash
 cd frontend
 npm install
+cp .env.local.example .env.local
+```
+
+编辑 `frontend/.env.local`：
+
+```bash
+NEXT_PUBLIC_AMAP_JS_KEY=your_amap_js_api_key
+NEXT_PUBLIC_AMAP_SECURITY_CODE=your_amap_security_js_code
+```
+
+这里需要高德控制台中服务平台为 **Web端（JS API）** 的 Key，以及对应的安全密钥。未配置时页面会显示本地坐标预览。
+
+启动前端：
+
+```bash
 npm run dev
 ```
 
-访问 `http://127.0.0.1:3000`。
+打开 `http://127.0.0.1:3000`。
 
-## 完整 Demo 操作步骤
+## 推荐体验输入
 
-1. 启动后端：`./scripts/run_backend.sh`
-2. 新终端启动前端：`cd frontend && npm run dev`
-3. 浏览器打开 `http://127.0.0.1:3000`
-4. 点击示例输入，或直接输入家庭、朋友、约会、长辈、本地配送等需求
-5. 点击"开始规划"→ 看到实时流式过程（意图解析→工具调用→质量检查→安全校验）
-6. 查看候选方案卡片（含人数、分数、时间线、活动/餐饮/饮品/配送、推荐理由、风险提示）
-7. 点击某个方案的"确认并安排"→ 看到确认流式过程（预约→订位→订单）
-8. 查看执行结果和转发消息，可复制
-
-## LangGraph 多 Agent 结构
-
-系统使用 LangGraph 编排规划与确认两个阶段，流程如下：
-
-```
-input_safety → memory → rewrite → intent → planner → reflection → guardrails
-                                      ↑                         |
-                                      └──── retry when allowed ─┘
-
-确认阶段：executor → message_llm → guardrails
+```text
+周末下午空的，帮我安排一下
+明天两个朋友找我叙叙旧，想安静一点
+下午玩桌游，吃完晚饭后想喝点酒，我们有四个人
+带老婆和 5 岁孩子出去玩，别太远，晚餐清淡一点
+给国博的朋友送几杯奶茶过去
 ```
 
-| 节点 | 职责 | 流式事件 |
-|------|------|----------|
-| Input Safety Node | 输入安全检查，阻断违法/暴力/色情/仇恨/Prompt 注入等风险 | `input_safety_start`, `input_safety_done` |
-| Memory Node | 读取用户长期记忆（位置/孩子年龄/饮食偏好/距离偏好） | `memory_loaded` |
-| Rewrite Node | 合并原始输入与上下文，生成更稳定的规划输入 | `rewrite_start`, `rewrite_done` |
-| Intent Node | 解析自然语言意图（LLM 优先 + 规则兜底） | `intent_start`, `intent_done` |
-| Planner Node | 使用 Tag Resolver 输出的 `domain_specs` 只检索必要领域，交给 LLM 组合 JSON 方案，本地校验并兜底 | `tool_start`, `tool_done`, `planner_start`, `composer_start`, `composer_done`, `plan_delta` |
-| Reflection Node | 规则检查 + LLM 语义反思，检查方案是否真正满足用户意图，必要时触发重试 | `reflection_start`, `reflection_done` |
-| Guardrails Node | 安全校验（POI/action 来源、阶段检查、支付承诺、儿童安全） | `guardrails_start`, `guardrails_done` |
-| Executor Node | 确认阶段执行预约+订位+Mock 订单 | `booking_start`, `booking_done`, `order_start`, `order_done` |
-| Message LLM / Message Node | 生成并校验可转发消息 | `message_done` |
+生成方案后，可以继续输入：
 
-## Reflection 检查项
+```text
+带上我老婆一起去
+活动保留，只替换晚餐
+不要配送，饭后加一家精酿酒吧
+我们改成四个人
+```
 
-规划完成后对每个方案自动检查：规则层负责稳定结构化检查，LLM Reflection 负责语义层检查（例如“唱歌”是否真的匹配 KTV，“喝酒”是否真的匹配酒吧/精酿）。
+## API
 
-1. 是否满足用户明确要求的领域（活动/餐厅/饮品/外卖闪送）
-2. 总时长是否适合 4～6 小时
-3. 距离是否超过用户偏好半径（1.5 倍阈值）
-4. 家庭场景是否适合儿童年龄
-5. 减脂/低卡需求是否被满足
-6. 排队是否过久（超过容忍上限 2 倍）
-7. 天气不佳时是否优先室内
-8. 是否存在路线
-9. 活动/餐厅/饮品是否可预约/有位，配送时效是否过长
-10. 用户明确要求的活动/餐饮/饮品/配送是否出现在 timeline 和 actions 中
-11. 不可执行环节 → 写入风险提示；可修复的需求缺失 → 返回规划节点重新生成
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `POST` | `/api/agent/plan` | 生成候选方案，不执行预约和下单 |
+| `POST` | `/api/agent/plan/stream` | 通过 SSE 返回规划过程和候选方案 |
+| `POST` | `/api/agent/confirm` | 确认并执行 Mock 预约 / 订单 |
+| `POST` | `/api/agent/confirm/stream` | 通过 SSE 返回确认执行过程 |
+| `GET` | `/api/agent/session/{session_id}` | 查询 Session |
+| `GET` | `/health` | 健康检查与 LLM 配置状态 |
 
-## Guardrails 检查项
+Mock API 覆盖活动、餐厅、饮品、配送、路线、天气、团购券、预约和订单，完整接口可在启动后查看 Swagger。
 
-安全边界校验（显式代码检查，不依赖 prompt）：
+## 项目结构
 
-1. 所有 POI / 配送商品 / 团购券 ID 必须存在于对应 JSON 数据文件
-2. 规划阶段不得出现 booking_id / order_id
-3. share_message 不得包含"真实支付成功"等违规内容
-4. 家庭场景必须满足儿童年龄要求
+```text
+LocalLifeAgent/
+├── backend/
+│   ├── agent/           # LangGraph、Intent、Planner、Reflection、Guardrails
+│   ├── tools/           # Tool Interface 与 Mock 工具
+│   ├── mock_api/        # 本地生活 Mock API
+│   ├── data/            # 活动、餐厅、饮品、路线、团购券等 JSON
+│   └── tests/           # 后端测试
+├── frontend/
+│   ├── app/             # Next.js 页面
+│   ├── components/      # 方案卡片、高德地图等组件
+│   ├── lib/             # API 与 SSE 客户端
+│   └── types/           # TypeScript 类型
+├── docs/
+│   ├── design.md        # Agent 设计文档
+│   └── images/          # README 产品截图
+└── scripts/             # 前后端环境与启动脚本
+```
 
-检查不通过 → `blocked: true`，方案不返回给用户。
+## 测试
 
-## 流式 API (SSE)
+后端：
 
-### POST /api/agent/plan/stream
+```bash
+.venv/bin/pytest backend/tests -q
+```
 
-规划流式事件序列：`intent_start` → `intent_done` → `memory_loaded` → `tag_resolve_start`/`tag_resolve_done` → `place_search_start`/`place_search_done` → `composer_start`/`composer_done` → `plan_delta` → `reflection_start`/`reflection_done` → `guardrails_start`/`guardrails_done` → `plan_done`
+前端：
 
-### POST /api/agent/confirm/stream
+```bash
+cd frontend
+npm run build
+```
 
-确认流式事件序列：`confirm_start` → `booking_start`/`booking_done` → `order_start`/`order_done` → `message_done` → `confirm_done`
+当前测试覆盖输入安全、意图解析、标签对齐、工具、规划、LLM 兜底、多轮修改、Reflection、Guardrails、SSE 和确认执行。
 
-前端使用 `fetch()` + `ReadableStream` 读取 SSE，每个事件实时展示在"实时过程"区域。
+## 安全与边界
 
-## 数据文件说明
+- `.env` 与 `frontend/.env.local` 已加入 `.gitignore`，禁止提交真实 DeepSeek 或高德 API Key。
+- `.env.example` 与 `frontend/.env.local.example` 仅保留占位值。
+- 所有活动、餐厅、价格、库存、团购券、预约和订单均为 Mock Data。
+- 规划阶段禁止写入预约或订单；确认阶段才允许执行。
+- LLM 不能作为业务事实来源，所有 POI、商品和 action ID 都要经过本地校验。
+- 本项目不进行真实支付，不代表真实库存或预约结果。
 
-所有业务数据存放在 `backend/data/`，为本地 JSON 文件：
+## 文档
 
-| 文件 | 内容 | 数量 |
-|------|------|------|
-| `activities.json` | 活动（亲子乐园/公园/展览/KTV/密室/电竞/LiveHouse/citywalk/影院/酒店下午茶等） | 16 条 |
-| `restaurants.json` | 餐厅（健康轻食/云南菜/火锅/烤肉/日料/咖啡甜品/亲子/情侣纪念日/长辈包间/商务宴请等） | 13 条 |
-| `drinks.json` | 饮品店（奶茶/咖啡/茶饮/酒吧/酒店茶廊） | 7 条 |
-| `delivery_items.json` | 外卖/闪送商品（轻食/奶茶/蛋糕/鲜花/水果/礼盒/纪念日花束） | 8 条 |
-| `delivery_orders.json` | 外卖/闪送订单记录（运行时写入） | 初始为空 |
-| `tag_catalog.json` | 吃/喝/玩/外卖闪送标签目录与 aliases | 1 份 |
-| `routes.json` | 路线（开车/地铁/打车） | 5 条 |
-| `weather.json` | 天气（晴天/雨天 × 不同区域） | 4 条 |
-| `deals.json` | 团购券 | 13 条 |
-| `user_memory.json` | 用户记忆样例（家庭/朋友/聚会三种画像） | 3 条 |
-| `bookings.json` | 预约记录（运行时写入） | 初始为空 |
-| `orders.json` | 订单记录（运行时写入） | 初始为空 |
+- [产品与技术范围](PROJECT.md)
+- [开发计划与交付状态](PLAN.md)
+- [Agent 设计文档](docs/design.md)
+- [开发执行约束](AGENT.md)
 
-活动、餐厅和团购券数据已补充接近本地生活平台的业务字段，例如评分、评价数、月销量、营业时间、剩余库存、预约说明、排队状态、服务设施、退款规则和核销方式。所有字段仍然是 Mock Data，仅用于 Demo，不代表真实平台库存、价格或交易结果。
+## License
 
-## 当前交付状态
-
-- 后端 Agent、Mock API、Mock Data、前端 Demo、测试和设计文档均已完成。
-- 真实交易、真实地图、真实库存和真实支付未接入，当前仅作为本地 Demo。
-- 可选后续优化：接入真实业务 API/MCP、扩充更多城市和商圈数据、补充前端 E2E 测试、增加持久化数据库。
+本项目用于学习、演示与黑客松场景。地图数据及底图版权归高德地图所有。
